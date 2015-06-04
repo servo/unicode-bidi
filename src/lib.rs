@@ -7,10 +7,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+#[macro_use] extern crate matches;
+
 mod tables;
+
 pub use tables::UNICODE_VERSION;
 pub use tables::bidi::{BidiClass, bidi_class};
-
 use BidiClass::*;
 
 #[inline]
@@ -42,6 +44,180 @@ fn paragraph_level(classes: &[BidiClass]) -> u8 {
     }
     // P3. If no character is found in P2, set the embedding level to zero.
     0
+}
+
+/// 3.3.2 Explicit Levels and Directions
+///
+/// http://www.unicode.org/reports/tr9/#Explicit_Levels_and_Directions
+mod explicit {
+    use super::{BidiClass, is_rtl, paragraph_level};
+    use super::BidiClass::*;
+
+    /// Output of the explicit levels algorithm.
+    pub struct Result {
+        pub levels: Vec<u8>,
+        pub classes: Vec<BidiClass>,
+    }
+
+    /// Compute explicit embedding levels for one paragraph of text (X1-X8).
+    ///
+    /// `classes[i]` must contain the BidiClass of the char at byte index `i`,
+    /// for each char in `text`.
+    pub fn compute(text: &str, para_level: u8, classes: &[BidiClass]) -> Result {
+        assert!(text.len() == classes.len());
+
+        let mut result = Result {
+            levels: vec![para_level; text.len()],
+            classes: Vec::from(classes),
+        };
+
+        // http://www.unicode.org/reports/tr9/#X1
+        let mut stack = DirectionalStatusStack::new();
+        stack.push(para_level, OverrideStatus::Neutral);
+
+        let mut overflow_isolate_count = 0u32;
+        let mut overflow_embedding_count = 0u32;
+        let mut valid_isolate_count = 0u32;
+
+        for (i, c) in text.char_indices() {
+            match classes[i] {
+                // Rules X2-X5c
+                RLE | LRE | RLO | LRO | RLI | LRI | FSI => {
+                    let is_rtl = match classes[i] {
+                        RLE | RLO | RLI => true,
+                        FSI => {
+                            // TODO: Find the matching PDI.
+                            is_rtl(paragraph_level(&classes[i..]))
+                        }
+                        _ => false
+                    };
+
+                    let last_level = stack.last().level;
+                    let new_level = match is_rtl {
+                        true  => next_rtl_level(last_level),
+                        false => next_ltr_level(last_level)
+                    };
+
+                    // X5a-X5c: Isolate initiators get the level of the last entry on the stack.
+                    let is_isolate = matches!(classes[i], RLI | LRI | FSI);
+                    if is_isolate {
+                        result.levels[i] = last_level;
+                    }
+
+                    if valid(new_level) && overflow_isolate_count == 0 && overflow_embedding_count == 0 {
+                        stack.push(new_level, match classes[i] {
+                            RLO => OverrideStatus::RTL,
+                            LRO => OverrideStatus::LTR,
+                            RLI | LRI | FSI => OverrideStatus::Isolate,
+                            _ => OverrideStatus::Neutral
+                        });
+                        if is_isolate {
+                            valid_isolate_count += 1;
+                        } else {
+                            result.levels[i] = new_level;
+                        }
+                    } else if is_isolate {
+                        overflow_isolate_count += 1;
+                    } else if overflow_isolate_count == 0 {
+                        overflow_embedding_count += 1;
+                    }
+                }
+                // http://www.unicode.org/reports/tr9/#X6a
+                PDI => {
+                    if overflow_isolate_count > 0 {
+                        overflow_isolate_count -= 1;
+                        continue
+                    }
+                    if valid_isolate_count == 0 {
+                        continue
+                    }
+                    overflow_embedding_count = 0;
+                    loop {
+                        // Pop everything up to and including the last Isolate status.
+                        match stack.vec.pop() {
+                            Some(Status { status: OverrideStatus::Isolate, .. }) => break,
+                            None => break,
+                            _ => continue
+                        }
+                    }
+                    valid_isolate_count -= 1;
+                    result.levels[i] = stack.last().level;
+                }
+                // http://www.unicode.org/reports/tr9/#X7
+                PDF => {
+                    if overflow_isolate_count > 0 {
+                        continue
+                    }
+                    if overflow_embedding_count > 0 {
+                        overflow_embedding_count -= 1;
+                        continue
+                    }
+                    if stack.last().status != OverrideStatus::Isolate && stack.vec.len() >= 2 {
+                        stack.vec.pop();
+                    }
+                    result.levels[i] = stack.last().level;
+                }
+                // http://www.unicode.org/reports/tr9/#X6
+                B | BN => {}
+                _ => {
+                    let last = stack.last();
+                    result.levels[i] = last.level;
+                    match last.status {
+                        OverrideStatus::RTL => result.classes[i] = R,
+                        OverrideStatus::LTR => result.classes[i] = L,
+                        _ => {}
+                    }
+                }
+            }
+            // Handle multi-byte characters.
+            for j in 1..c.len_utf8() {
+                result.levels[i+j] = result.levels[i];
+                // TODO: Only do this if result.classes changed?
+                result.classes[i+j] = result.classes[i];
+            }
+        }
+        result
+    }
+
+    /// Maximum depth of the directional status stack.
+    pub const MAX_DEPTH: u8 = 125;
+
+    /// Levels from 0 through max_depth are valid at this stage.
+    /// http://www.unicode.org/reports/tr9/#X1
+    fn valid(level: u8) -> bool { level <= MAX_DEPTH }
+
+    /// The next odd level greater than `level`.
+    fn next_rtl_level(level: u8) -> u8 { (level + 1) |  1 }
+
+    /// The next odd level greater than `level`.
+    fn next_ltr_level(level: u8) -> u8 { (level + 2) & !1 }
+
+    /// Entries in the directional status stack:
+    struct Status {
+        level: u8,
+        status: OverrideStatus,
+    }
+
+    #[derive(PartialEq)]
+    enum OverrideStatus { Neutral, RTL, LTR, Isolate }
+
+    struct DirectionalStatusStack {
+        vec: Vec<Status>,
+    }
+
+    impl DirectionalStatusStack {
+        fn new() -> Self {
+            DirectionalStatusStack {
+                vec: Vec::with_capacity(MAX_DEPTH as usize + 2)
+            }
+        }
+        fn push(&mut self, level: u8, status: OverrideStatus) {
+            self.vec.push(Status { level: level, status: status });
+        }
+        fn last(&self) -> &Status {
+            self.vec.last().unwrap()
+        }
+    }
 }
 
 #[cfg(test)]

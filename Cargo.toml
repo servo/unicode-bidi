@@ -8,3 +8,6 @@ description = "Implementation of the Unicode Bidirectional Algorithm"
 [lib]
 name = "unicode_bidi"
 doctest = false
+
+[dependencies]
+matches = "0.1"
