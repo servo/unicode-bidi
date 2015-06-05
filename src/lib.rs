@@ -15,6 +15,23 @@ pub use tables::UNICODE_VERSION;
 pub use tables::bidi::{BidiClass, bidi_class};
 use BidiClass::*;
 
+use std::iter::repeat;
+
+/// Run the Unicode Bidirectional Algorithm.
+pub fn process(text: &str, mut para_level: u8) {
+    let initial_classes = classes(text);
+    if para_level == IMPLICIT_LEVEL {
+        para_level = paragraph_level(&initial_classes);
+    }
+    assert!(para_level <= 1);
+    let explicit = explicit::compute(text, para_level, &initial_classes);
+    let _sequences = prepare::isolating_run_sequences(para_level, &initial_classes,
+                                                     &explicit.levels);
+}
+
+/// Pass this to make `process` determine the paragraph level implicitly.
+pub const IMPLICIT_LEVEL: u8 = 2;
+
 #[inline]
 /// Even levels are left-to-right, and odd levels are right-to-left.
 ///
@@ -49,6 +66,19 @@ fn paragraph_level(classes: &[BidiClass]) -> u8 {
     }
     // P3. If no character is found in P2, set the embedding level to zero.
     0
+}
+
+/// Returns a vector containing the BidiClass for each byte in the input text.
+///
+/// A multi-byte input char will have its BidiClass repeated multiple times in the output.
+fn classes(text: &str) -> Vec<BidiClass> {
+    let mut classes = Vec::with_capacity(text.len());
+    for c in text.chars() {
+        let class = bidi_class(c);
+        classes.extend(repeat(class).take(c.len_utf8()));
+    }
+    assert!(classes.len() == text.len());
+    classes
 }
 
 /// 3.3.2 Explicit Levels and Directions
@@ -354,8 +384,19 @@ mod prepare {
 
 #[cfg(test)]
 mod test {
-    use super::{bidi_class, paragraph_level};
+    use super::{bidi_class, classes, paragraph_level};
     use super::BidiClass::*;
+
+    #[test]
+    fn test_classes() {
+        assert_eq!(classes(""), &[]);
+        assert_eq!(classes("a1"), &[L, EN]);
+
+        // multi-byte characters
+        let s = "\u{05D1} \u{0627}";
+        assert_eq!(classes(s), &[R, R, WS, AL, AL]);
+        assert_eq!(classes(s).len(), s.len());
+    }
 
     #[test]
     fn test_paragraph_level() {
