@@ -21,6 +21,11 @@ use BidiClass::*;
 /// http://www.unicode.org/reports/tr9/#BD2
 pub fn is_rtl(level: u8) -> bool { level % 2 == 1 }
 
+/// Generate a character type based on a level (as specified in steps X10 and N2).
+fn class_for_level(level: u8) -> BidiClass {
+    if is_rtl(level) { R } else { L }
+}
+
 /// The default embedding level for a paragraph.
 ///
 /// http://www.unicode.org/reports/tr9/#The_Paragraph_Level
@@ -217,6 +222,133 @@ mod explicit {
         fn last(&self) -> &Status {
             self.vec.last().unwrap()
         }
+    }
+}
+
+/// 3.3.3 Preparations for Implicit Processing
+///
+/// http://www.unicode.org/reports/tr9/#Preparations_for_Implicit_Processing
+mod prepare {
+    use super::{BidiClass, class_for_level};
+    use super::BidiClass::*;
+    use std::cmp::max;
+    use std::ops::Range;
+
+    /// Output of `isolating_run_sequences` (steps X9-X10)
+    pub struct IsolatingRunSequence {
+        pub runs: Vec<LevelRun>,
+        pub sos: BidiClass, // Start-of-sequence type.
+        pub eos: BidiClass, // End-of-sequence type.
+    }
+
+    /// A maximal substring of characters with the same embedding level.
+    ///
+    /// Represented as a range of byte indices within a paragraph.
+    pub type LevelRun = Range<usize>;
+
+    /// Compute the set of isolating run sequences.
+    ///
+    /// An isolating run sequence is a maximal sequence of level runs such that for all level runs
+    /// except the last one in the sequence, the last character of the run is an isolate initiator
+    /// whose matching PDI is the first character of the next level run in the sequence.
+    pub fn isolating_run_sequences(para_level: u8, initial_classes: &[BidiClass], levels: &[u8])
+        -> Vec<IsolatingRunSequence>
+    {
+        let runs = level_runs(levels, initial_classes);
+
+        // Compute the set of isolating run sequences.
+        // http://www.unicode.org/reports/tr9/#BD13
+        let mut sequences = Vec::new();
+        for run in runs {
+            // TODO: Actually check for isolate initiators and matching PDIs.
+            // For now this is just a stub that puts each level run in a separate sequence.
+            sequences.push(vec![run.clone()]);
+        }
+
+        // Determine the `sos` and `eos` types.
+        // http://www.unicode.org/reports/tr9/#X10
+        let mut result = Vec::new();
+        for sequence in sequences {
+            assert!(sequence.len() > 0);
+            let start = sequence[0].start;
+            let end = sequence[sequence.len() - 1].end;
+
+            // Get the level inside these level runs.
+            let level = levels[start];
+
+            // Get the level of the last non-removed char before the runs.
+            let pred_level = match initial_classes[..start].iter().rposition(not_removed_by_x9) {
+                Some(idx) => levels[idx],
+                None => para_level
+            };
+
+            // Get the level of the next non-removed char after the runs.
+            let succ_level = if matches!(initial_classes[end - 1], RLI|LRI|FSI) {
+                para_level
+            } else {
+                match initial_classes[end..].iter().position(not_removed_by_x9) {
+                    Some(idx) => levels[idx],
+                    None => para_level
+                }
+            };
+
+            // Compute the sos and eos types.
+            result.push(IsolatingRunSequence {
+                runs: sequence,
+                sos: class_for_level(max(level, pred_level)),
+                eos: class_for_level(max(level, succ_level)),
+            });
+        }
+        result
+    }
+
+    /// Finds the level runs in a paragraph.
+    ///
+    /// `levels[i]` and `classes[i]` must contain the explicit embedding level and the BidiClass,
+    /// respectively, of the char at byte index `i`.
+    ///
+    /// http://www.unicode.org/reports/tr9/#BD7
+    fn level_runs(levels: &[u8], classes: &[BidiClass]) -> Vec<LevelRun> {
+        assert!(levels.len() == classes.len());
+
+        let mut runs = Vec::new();
+        if levels.len() == 0 {
+            return runs
+        }
+
+        let mut current_run_level = levels[0];
+        let mut current_run_start = 0;
+
+        for i in 1..levels.len() {
+            if !removed_by_x9(classes[i]) {
+                if levels[i] != current_run_level {
+                    // End the last run and start a new one.
+                    runs.push(current_run_start..i);
+                    current_run_level = levels[i];
+                    current_run_start = i;
+                }
+            }
+        }
+        runs.push(current_run_start..levels.len());
+        runs
+    }
+
+    /// Should this character be ignored in steps after X9?
+    ///
+    /// http://www.unicode.org/reports/tr9/#X9
+    pub fn removed_by_x9(class: BidiClass) -> bool {
+        matches!(class, RLE | LRE | RLO | LRO | PDF | BN)
+    }
+
+    // For use as a predicate for `position` / `rposition`
+    fn not_removed_by_x9(class: &BidiClass) -> bool {
+        !removed_by_x9(*class)
+    }
+
+    #[cfg(test)] #[test]
+    fn test_level_runs() {
+        use super::prepare::level_runs;
+        assert_eq!(level_runs(&[0,0,0,1,1,2,0,0], &[L; 8]), &[0..3, 3..5, 5..6, 6..8]);
     }
 }
 
