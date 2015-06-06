@@ -288,17 +288,16 @@ mod prepare {
 
         // Compute the set of isolating run sequences.
         // http://www.unicode.org/reports/tr9/#BD13
-        let mut sequences = Vec::new();
+        let mut sequences = Vec::with_capacity(runs.len());
         for run in runs {
             // TODO: Actually check for isolate initiators and matching PDIs.
             // For now this is just a stub that puts each level run in a separate sequence.
             sequences.push(vec![run.clone()]);
         }
 
-        // Determine the `sos` and `eos` types.
+        // Determine the `sos` and `eos` class for each sequence.
         // http://www.unicode.org/reports/tr9/#X10
-        let mut result = Vec::new();
-        for sequence in sequences {
+        return sequences.into_iter().map(|sequence| {
             assert!(sequence.len() > 0);
             let start = sequence[0].start;
             let end = sequence[sequence.len() - 1].end;
@@ -322,14 +321,12 @@ mod prepare {
                 }
             };
 
-            // Compute the sos and eos types.
-            result.push(IsolatingRunSequence {
+            IsolatingRunSequence {
                 runs: sequence,
                 sos: class_for_level(max(level, pred_level)),
                 eos: class_for_level(max(level, succ_level)),
-            });
-        }
-        result
+            }
+        }).collect()
     }
 
     /// Finds the level runs in a paragraph.
