@@ -17,16 +17,40 @@ use BidiClass::*;
 
 use std::iter::repeat;
 
-/// Run the Unicode Bidirectional Algorithm.
-pub fn process(text: &str, mut para_level: u8) {
+/// Output of `process_paragraph`
+#[derive(Debug, PartialEq)]
+pub struct ParagraphInfo {
+    pub classes: Vec<BidiClass>,
+    pub levels: Vec<u8>,
+    pub max_level: u8,
+}
+
+/// Determine the bidirectional embedding levels for a single paragraph.
+///
+/// TODO: In early steps, check for special cases that allow later steps to be skipped. like text
+/// that is entirely LTR.  See the `nsBidi` class from Gecko for comparison.
+pub fn process_paragraph(text: &str, mut para_level: u8) -> ParagraphInfo {
     let initial_classes = classes(text);
     if para_level == IMPLICIT_LEVEL {
         para_level = paragraph_level(&initial_classes);
     }
     assert!(para_level <= 1);
-    let explicit = explicit::compute(text, para_level, &initial_classes);
-    let _sequences = prepare::isolating_run_sequences(para_level, &initial_classes,
-                                                     &explicit.levels);
+
+    let explicit::Result { mut classes, mut levels } =
+        explicit::compute(text, para_level, &initial_classes);
+
+    let sequences = prepare::isolating_run_sequences(para_level, &initial_classes, &levels);
+    for sequence in &sequences {
+        implicit::resolve_weak(sequence, &mut classes);
+        implicit::resolve_neutral(sequence, &levels, &mut classes);
+    }
+    let max_level = implicit::resolve_levels(&classes, &mut levels);
+
+    ParagraphInfo {
+        levels: levels,
+        classes: initial_classes,
+        max_level: max_level,
+    }
 }
 
 /// Pass this to make `process` determine the paragraph level implicitly.
@@ -379,13 +403,181 @@ mod prepare {
     }
 }
 
+/// 3.3.4 - 3.3.6. Resolve implicit levels and types.
+mod implicit {
+    use super::{BidiClass, class_for_level, is_rtl};
+    use super::BidiClass::*;
+    use super::prepare::IsolatingRunSequence;
+    use std::cmp::max;
+
+    /// 3.3.4 Resolving Weak Types
+    ///
+    /// http://www.unicode.org/reports/tr9/#Resolving_Weak_Types
+    pub fn resolve_weak(sequence: &IsolatingRunSequence, classes: &mut [BidiClass]) {
+        let mut prev_class = sequence.sos;
+        let mut last_strong_is_al = false;
+        let mut last_strong_is_l = false;
+        let mut et_run_indices = Vec::new(); // for W5
+
+        let mut indices = sequence.runs.iter().flat_map(Clone::clone).peekable();
+        while let Some(i) = indices.next() {
+            match classes[i] {
+                // http://www.unicode.org/reports/tr9/#W1
+                NSM => {
+                    classes[i] = match prev_class {
+                        RLI | LRI | FSI | PDI => ON,
+                        _ => prev_class
+                    };
+                }
+                EN => {
+                    if last_strong_is_al {
+                        // W2. If previous strong char was AL, change EN to AL.
+                        classes[i] = AN;
+                    } else {
+                        // W5. If a run of ETs is adjacent to an EN, change the ETs to EN.
+                        // W7. If the previous strong char was L, change all the ENs to L.
+                        if last_strong_is_l {
+                            classes[i] = L;
+                        }
+                        for j in &et_run_indices {
+                            classes[*j] = classes[i];
+                        }
+                        et_run_indices.clear();
+                    }
+                }
+                // http://www.unicode.org/reports/tr9/#W3
+                AL => classes[i] = R,
+
+                // http://www.unicode.org/reports/tr9/#W4
+                ES | CS => {
+                    let next_class = indices.peek().map(|j| classes[*j]);
+                    classes[i] = match (prev_class, classes[i], next_class) {
+                        (EN, ES, Some(EN)) |
+                        (EN, CS, Some(EN)) => EN,
+                        (AN, CS, Some(AN)) => AN,
+                        (_,  _,  _       ) => ON,
+                    }
+                }
+                // http://www.unicode.org/reports/tr9/#W5
+                ET => {
+                    match prev_class {
+                        EN => classes[i] = EN,
+                        _ => et_run_indices.push(i) // In case this is followed by an EN.
+                    }
+                }
+                _ => {}
+            }
+
+            prev_class = classes[i];
+            match prev_class {
+                L =>  { last_strong_is_al = false; last_strong_is_l = true;  }
+                R =>  { last_strong_is_al = false; last_strong_is_l = false; }
+                AL => { last_strong_is_al = true;  last_strong_is_l = false; }
+                _ => {}
+            }
+            if prev_class != ET {
+                // W6. If we didn't find an adjacent EN, turn any ETs into ON instead.
+                for j in &et_run_indices {
+                    classes[*j] = ON;
+                }
+                et_run_indices.clear();
+            }
+        }
+    }
+
+    /// 3.3.5 Resolving Neutral Types
+    ///
+    /// http://www.unicode.org/reports/tr9/#Resolving_Neutral_Types
+    pub fn resolve_neutral(sequence: &IsolatingRunSequence, levels: &[u8],
+                           classes: &mut [BidiClass])
+    {
+        let mut indices = sequence.runs.iter().flat_map(Clone::clone).peekable();
+        let mut prev_class = sequence.sos;
+
+        // http://www.unicode.org/reports/tr9/#NI
+        fn ni(class: BidiClass) -> bool {
+            matches!(class, B | S | WS | ON | FSI | LRI | RLI | PDI)
+        }
+
+        while let Some(i) = indices.next() {
+            // N0. Process bracket pairs.
+            // TODO
+
+            // Process sequences of NI characters.
+            let mut ni_run = Vec::new();
+            if ni(classes[i]) {
+                // Consume a run of consecutive NI characters.
+                let mut next_class;
+                loop {
+                    ni_run.push(i);
+                    next_class = match indices.peek() {
+                        Some(&j) => classes[j],
+                        None => sequence.eos
+                    };
+                    if !ni(next_class) {
+                        break
+                    }
+                    indices.next();
+                }
+
+                // N1-N2.
+                let new_class = match (prev_class, next_class) {
+                    (L,  L ) => L,
+                    (R,  R ) |
+                    (R,  AN) |
+                    (R,  EN) |
+                    (AN, R ) |
+                    (AN, AN) |
+                    (AN, EN) |
+                    (EN, R ) |
+                    (EN, AN) |
+                    (EN, EN) => R,
+                    (_,  _ ) => class_for_level(levels[i]),
+                };
+                for j in &ni_run {
+                    classes[*j] = new_class;
+                }
+                ni_run.clear();
+            }
+            prev_class = classes[i];
+        }
+    }
+
+    /// 3.3.6 Resolving Implicit Levels
+    ///
+    /// Returns the minimum and maximum level in the paragraph.
+    ///
+    /// http://www.unicode.org/reports/tr9/#Resolving_Implicit_Levels
+    pub fn resolve_levels(classes: &[BidiClass], levels: &mut [u8]) -> u8 {
+        let mut max_level = 0;
+
+        assert!(classes.len() == levels.len());
+        for i in 0..levels.len() {
+            match (is_rtl(levels[i]), classes[i]) {
+                // http://www.unicode.org/reports/tr9/#I1
+                (false, R)  => levels[i] += 1,
+                (false, AN) |
+                (false, EN) => levels[i] += 2,
+                // http://www.unicode.org/reports/tr9/#I2
+                (true, L)  |
+                (true, EN) |
+                (true, AN) => levels[i] += 1,
+                (_, _) => {}
+            }
+            max_level = max(max_level, levels[i]);
+        }
+        max_level
+    }
+}
+
 #[cfg(test)]
 mod test {
-    use super::{bidi_class, classes, paragraph_level};
     use super::BidiClass::*;
 
     #[test]
     fn test_classes() {
+        use super::classes;
+
         assert_eq!(classes(""), &[]);
         assert_eq!(classes("a1"), &[L, EN]);
 
@@ -397,6 +589,8 @@ mod test {
 
     #[test]
     fn test_paragraph_level() {
+        use super::paragraph_level;
+
         assert_eq!(paragraph_level(&[]), 0);
         assert_eq!(paragraph_level(&[WS]), 0);
         assert_eq!(paragraph_level(&[L, L, L]), 0);
@@ -414,8 +608,46 @@ mod test {
 
     #[test]
     fn test_bidi_class() {
+        use super::bidi_class;
+
         assert_eq!(bidi_class('c'), L);
         assert_eq!(bidi_class('\u{05D1}'), R);
         assert_eq!(bidi_class('\u{0627}'), AL);
+    }
+
+    #[test]
+    fn test_paragraph_info() {
+        use super::{IMPLICIT_LEVEL, ParagraphInfo, process_paragraph};
+
+        assert_eq!(process_paragraph("abc123", 0), ParagraphInfo {
+            levels:  vec![0, 0, 0, 0,  0,  0],
+            classes: vec![L, L, L, EN, EN, EN],
+            max_level: 0,
+        });
+        assert_eq!(process_paragraph("abc אבג", 0), ParagraphInfo {
+            levels:  vec![0, 0, 0, 0,  1,1, 1,1, 1,1],
+            classes: vec![L, L, L, WS, R,R, R,R, R,R],
+            max_level: 1,
+        });
+        assert_eq!(process_paragraph("abc אבג", 1), ParagraphInfo {
+            levels:  vec![2, 2, 2, 1,  1,1, 1,1, 1,1],
+            classes: vec![L, L, L, WS, R,R, R,R, R,R],
+            max_level: 2,
+        });
+        assert_eq!(process_paragraph("אבג abc", 0), ParagraphInfo {
+            levels:  vec![1,1, 1,1, 1,1, 0,  0, 0, 0],
+            classes: vec![R,R, R,R, R,R, WS, L, L, L],
+            max_level: 1,
+        });
+        assert_eq!(process_paragraph("אבג abc", IMPLICIT_LEVEL), ParagraphInfo {
+            levels:  vec![1,1, 1,1, 1,1, 1,  2, 2, 2],
+            classes: vec![R,R, R,R, R,R, WS, L, L, L],
+            max_level: 2,
+        });
+        assert_eq!(process_paragraph("غ2ظ א2ג", 0), ParagraphInfo {
+            levels:  vec![1, 1,  2,  1, 1,  1,  1,1, 2,  1,1],
+            classes: vec![AL,AL, EN, AL,AL, WS, R,R, EN, R,R],
+            max_level: 2,
+        });
     }
 }
