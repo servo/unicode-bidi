@@ -15,13 +15,17 @@ pub use tables::UNICODE_VERSION;
 pub use tables::bidi::{BidiClass, bidi_class};
 use BidiClass::*;
 
+use std::borrow::Cow;
+use std::cmp::{max, min};
 use std::iter::repeat;
+use std::ops::Range;
 
 /// Output of `process_paragraph`
 #[derive(Debug, PartialEq)]
 pub struct ParagraphInfo {
     pub classes: Vec<BidiClass>,
     pub levels: Vec<u8>,
+    pub para_level: u8,
     pub max_level: u8,
 }
 
@@ -49,6 +53,7 @@ pub fn process_paragraph(text: &str, mut para_level: u8) -> ParagraphInfo {
     ParagraphInfo {
         levels: levels,
         classes: initial_classes,
+        para_level: para_level,
         max_level: max_level,
     }
 }
@@ -90,6 +95,105 @@ fn paragraph_level(classes: &[BidiClass]) -> u8 {
     }
     // P3. If no character is found in P2, set the embedding level to zero.
     0
+}
+
+pub fn reorder_line<'a>(paragraph: &'a str, line: Range<usize>, info: &ParagraphInfo) -> Cow<'a, str> {
+    let runs = visual_runs(line.clone(), info);
+    if runs.len() == 1 && !is_rtl(info.levels[runs[0].start]) {
+        return paragraph.into()
+    }
+    let mut result = String::with_capacity(line.len());
+    for run in runs {
+        if is_rtl(info.levels[run.start]) {
+            result.extend(paragraph[run].chars().rev());
+        } else {
+            result.extend(paragraph[run].chars());
+        }
+    }
+    result.into()
+}
+
+/// A maximal substring of characters with the same embedding level.
+///
+/// Represented as a range of byte indices within a paragraph.
+pub type LevelRun = Range<usize>;
+
+/// Find the level runs within a line and return them in visual order.
+///
+/// `line` is a range of bytes indices with in a paragraph.
+pub fn visual_runs(line: Range<usize>, info: &ParagraphInfo) -> Vec<LevelRun> {
+    assert!(line.start <= info.levels.len());
+    assert!(line.end <= info.levels.len());
+
+    // TODO: Whitespace handling.
+    // http://www.unicode.org/reports/tr9/#L1
+
+    assert!(info.max_level >= info.para_level);
+    let mut runs = Vec::with_capacity((info.max_level - info.para_level) as usize + 1);
+
+    // Optimization: If there's only one level, just return a single run for the whole line.
+    if info.max_level == info.para_level || line.len() == 0 {
+        runs.push(line.clone());
+        return runs
+    }
+
+    // Find consecutive level runs.
+    let mut start = line.start;
+    let mut level = info.levels[start];
+    let mut min_level = level;
+    let mut max_level = level;
+
+    for i in (start + 1)..line.end {
+        let new_level = info.levels[i];
+        if new_level != level {
+            // End of the previous run, start of a new one.
+            runs.push(start..i);
+            start = i;
+            level = new_level;
+
+            min_level = min(level, min_level);
+            max_level = max(level, max_level);
+        }
+    }
+    runs.push(start..line.end);
+
+    let run_count = runs.len();
+
+    // Re-order the odd runs.
+    // http://www.unicode.org/reports/tr9/#L2
+
+    // Stop at the lowest *odd* level.
+    min_level |= 1;
+
+    while max_level >= min_level {
+        // Look for the start of a sequence of consecutive runs of max_level or higher.
+        let mut seq_start = 0;
+        while seq_start < run_count {
+            if info.levels[runs[seq_start].start] < max_level {
+                seq_start += 1;
+            }
+            if seq_start >= run_count {
+                break // No more runs found at this level.
+            }
+
+            // Found the start of a sequence. Now find the end.
+            let mut seq_end = seq_start + 1;
+            while seq_end < run_count {
+                if info.levels[runs[seq_end].start] < max_level {
+                    break
+                }
+                seq_end += 1;
+            }
+
+            // Reverse the runs within this sequence.
+            runs[seq_start..seq_end].reverse();
+
+            seq_start = seq_end;
+        }
+        max_level -= 1;
+    }
+
+    runs
 }
 
 /// Returns a vector containing the BidiClass for each byte in the input text.
@@ -283,10 +387,9 @@ mod explicit {
 ///
 /// http://www.unicode.org/reports/tr9/#Preparations_for_Implicit_Processing
 mod prepare {
-    use super::{BidiClass, class_for_level};
+    use super::{BidiClass, class_for_level, LevelRun};
     use super::BidiClass::*;
     use std::cmp::max;
-    use std::ops::Range;
 
     /// Output of `isolating_run_sequences` (steps X9-X10)
     pub struct IsolatingRunSequence {
@@ -294,11 +397,6 @@ mod prepare {
         pub sos: BidiClass, // Start-of-sequence type.
         pub eos: BidiClass, // End-of-sequence type.
     }
-
-    /// A maximal substring of characters with the same embedding level.
-    ///
-    /// Represented as a range of byte indices within a paragraph.
-    pub type LevelRun = Range<usize>;
 
     /// Compute the set of isolating run sequences.
     ///
@@ -622,32 +720,52 @@ mod test {
         assert_eq!(process_paragraph("abc123", 0), ParagraphInfo {
             levels:  vec![0, 0, 0, 0,  0,  0],
             classes: vec![L, L, L, EN, EN, EN],
+            para_level: 0,
             max_level: 0,
         });
         assert_eq!(process_paragraph("abc אבג", 0), ParagraphInfo {
             levels:  vec![0, 0, 0, 0,  1,1, 1,1, 1,1],
             classes: vec![L, L, L, WS, R,R, R,R, R,R],
+            para_level: 0,
             max_level: 1,
         });
         assert_eq!(process_paragraph("abc אבג", 1), ParagraphInfo {
             levels:  vec![2, 2, 2, 1,  1,1, 1,1, 1,1],
             classes: vec![L, L, L, WS, R,R, R,R, R,R],
+            para_level: 1,
             max_level: 2,
         });
         assert_eq!(process_paragraph("אבג abc", 0), ParagraphInfo {
             levels:  vec![1,1, 1,1, 1,1, 0,  0, 0, 0],
             classes: vec![R,R, R,R, R,R, WS, L, L, L],
+            para_level: 0,
             max_level: 1,
         });
         assert_eq!(process_paragraph("אבג abc", IMPLICIT_LEVEL), ParagraphInfo {
             levels:  vec![1,1, 1,1, 1,1, 1,  2, 2, 2],
             classes: vec![R,R, R,R, R,R, WS, L, L, L],
+            para_level: 1,
             max_level: 2,
         });
         assert_eq!(process_paragraph("غ2ظ א2ג", 0), ParagraphInfo {
             levels:  vec![1, 1,  2,  1, 1,  1,  1,1, 2,  1,1],
             classes: vec![AL,AL, EN, AL,AL, WS, R,R, EN, R,R],
+            para_level: 0,
             max_level: 2,
         });
+    }
+
+    #[test]
+    fn test_reorder_line() {
+        use super::{IMPLICIT_LEVEL, process_paragraph, reorder_line};
+        use std::borrow::Cow;
+
+        fn reorder(s: &str) -> Cow<str> {
+            reorder_line(s, 0..s.len(), &process_paragraph(s, IMPLICIT_LEVEL))
+        }
+
+        assert_eq!(reorder("abc123"), "abc123");
+        assert_eq!(reorder("abc אבג"), "abc גבא");
+        assert_eq!(reorder("אבג abc"), "abc גבא");
     }
 }
