@@ -507,7 +507,6 @@ mod prepare {
 
     #[cfg(test)] #[test]
     fn test_level_runs() {
-        use super::prepare::level_runs;
         assert_eq!(level_runs(&[0,0,0,1,1,2,0,0], &[L; 8]), &[0..3, 3..5, 5..6, 6..8]);
     }
 }
