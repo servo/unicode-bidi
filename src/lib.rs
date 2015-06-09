@@ -33,12 +33,8 @@ pub struct ParagraphInfo {
 ///
 /// TODO: In early steps, check for special cases that allow later steps to be skipped. like text
 /// that is entirely LTR.  See the `nsBidi` class from Gecko for comparison.
-pub fn process_paragraph(text: &str, mut para_level: u8) -> ParagraphInfo {
-    let initial_classes = classes(text);
-    if para_level == IMPLICIT_LEVEL {
-        para_level = paragraph_level(&initial_classes);
-    }
-    assert!(para_level <= 1);
+pub fn process_paragraph(text: &str, level: Option<u8>) -> ParagraphInfo {
+    let InitialProperties { para_level, initial_classes } = initial_scan(text, level);
 
     let explicit::Result { mut classes, mut levels } =
         explicit::compute(text, para_level, &initial_classes);
@@ -58,9 +54,6 @@ pub fn process_paragraph(text: &str, mut para_level: u8) -> ParagraphInfo {
     }
 }
 
-/// Pass this to make `process` determine the paragraph level implicitly.
-pub const IMPLICIT_LEVEL: u8 = 2;
-
 #[inline]
 /// Even levels are left-to-right, and odd levels are right-to-left.
 ///
@@ -70,31 +63,6 @@ pub fn is_rtl(level: u8) -> bool { level % 2 == 1 }
 /// Generate a character type based on a level (as specified in steps X10 and N2).
 fn class_for_level(level: u8) -> BidiClass {
     if is_rtl(level) { R } else { L }
-}
-
-/// The default embedding level for a paragraph.
-///
-/// http://www.unicode.org/reports/tr9/#The_Paragraph_Level
-fn paragraph_level(classes: &[BidiClass]) -> u8 {
-    // P2. Find the first character of type L, AL, or R, skipping characters between an isolate
-    // initiator and its matching PDI.
-    let mut isolate_level = 0u32;
-    for &class in classes {
-        match (isolate_level, class) {
-            (0, L) => return 0,
-            (0, R) => return 1,
-            (0, AL) => return 1,
-            // Push a directional isolate:
-            (_, LRI) | (_, RLI) | (_, FSI) => isolate_level += 1,
-            // Ignore an unmatched PDI:
-            (0, PDI) => continue,
-            // Pop a directional isolate:
-            (_, PDI) => isolate_level -= 1,
-            _ => continue
-        }
-    }
-    // P3. If no character is found in P2, set the embedding level to zero.
-    0
 }
 
 pub fn reorder_line<'a>(paragraph: &'a str, line: Range<usize>, info: &ParagraphInfo) -> Cow<'a, str> {
@@ -196,24 +164,71 @@ pub fn visual_runs(line: Range<usize>, info: &ParagraphInfo) -> Vec<LevelRun> {
     runs
 }
 
-/// Returns a vector containing the BidiClass for each byte in the input text.
+/// Output of `initial_scan`
+#[derive(PartialEq, Debug)]
+pub struct InitialProperties {
+    para_level: u8,
+    /// The BidiClass of the character at each byte in the paragraph.
+    /// If a character is multiple bytes, its class will appear multiple times in the vector.
+    initial_classes: Vec<BidiClass>,
+}
+
+/// Find the paragraph embedding level, and the BidiClass for each character.
 ///
-/// A multi-byte input char will have its BidiClass repeated multiple times in the output.
-fn classes(text: &str) -> Vec<BidiClass> {
-    let mut classes = Vec::with_capacity(text.len());
-    for c in text.chars() {
+/// http://www.unicode.org/reports/tr9/#The_Paragraph_Level
+///
+/// Also sets the class for each First Strong Isolate initiator (FSI) to LRI or RLI if a strong
+/// character is found before the matching PDI.  If no strong character is found, the class will
+/// remain FSI, and it's up to later stages to treat these as LRI when needed.
+pub fn initial_scan(paragraph: &str, mut para_level: Option<u8>) -> InitialProperties {
+    let mut classes = Vec::with_capacity(paragraph.len());
+
+    // The stack contains the starting byte index for each nested isolate we're inside.
+    let mut isolate_stack = Vec::new();
+
+    const FSI_CHAR: char = '\u{2069}';
+
+    for (i, c) in paragraph.char_indices() {
         let class = bidi_class(c);
         classes.extend(repeat(class).take(c.len_utf8()));
+        match class {
+            L | R | AL => match isolate_stack.last() {
+                Some(&start) => if classes[start] == FSI {
+                    // X5c. If the first strong character between FSI and its matching PDI is R
+                    // or AL, treat it as RLI. Otherwise, treat it as LRI.
+                    for j in 0..FSI_CHAR.len_utf8() {
+                        classes[start+j] = if class == L { LRI } else { RLI };
+                    }
+                },
+                None => if para_level.is_none() {
+                    // P2. Find the first character of type L, AL, or R, while skipping any
+                    // characters between an isolate initiator and its matching PDI.
+                    para_level = Some(if class == L { 0 } else { 1 });
+                }
+            },
+            RLI | LRI | FSI => {
+                isolate_stack.push(i);
+            }
+            PDI => {
+                isolate_stack.pop();
+            }
+            _ => {}
+        }
     }
-    assert!(classes.len() == text.len());
-    classes
+    assert!(classes.len() == paragraph.len());
+
+    InitialProperties {
+        // P3. If no character is found in p2, set the paragraph level to zero.
+        para_level: para_level.unwrap_or(0),
+        initial_classes: classes,
+    }
 }
 
 /// 3.3.2 Explicit Levels and Directions
 ///
 /// http://www.unicode.org/reports/tr9/#Explicit_Levels_and_Directions
 mod explicit {
-    use super::{BidiClass, is_rtl, paragraph_level};
+    use super::{BidiClass, is_rtl};
     use super::BidiClass::*;
 
     /// Output of the explicit levels algorithm.
@@ -248,10 +263,6 @@ mod explicit {
                 RLE | LRE | RLO | LRO | RLI | LRI | FSI => {
                     let is_rtl = match classes[i] {
                         RLE | RLO | RLI => true,
-                        FSI => {
-                            // TODO: Find the matching PDI.
-                            is_rtl(paragraph_level(&classes[i..]))
-                        }
                         _ => false
                     };
 
@@ -673,35 +684,26 @@ mod test {
     use super::BidiClass::*;
 
     #[test]
-    fn test_classes() {
-        use super::classes;
+    fn test_initial_scan() {
+        use super::{InitialProperties, initial_scan};
 
-        assert_eq!(classes(""), &[]);
-        assert_eq!(classes("a1"), &[L, EN]);
+        assert_eq!(initial_scan("a1", None), InitialProperties {
+            para_level: 0,
+            initial_classes: vec![L, EN],
+        });
+        assert_eq!(initial_scan("غ א", None), InitialProperties {
+            para_level: 1,
+            initial_classes: vec![AL, AL, WS, R, R],
+        });
 
-        // multi-byte characters
-        let s = "\u{05D1} \u{0627}";
-        assert_eq!(classes(s), &[R, R, WS, AL, AL]);
-        assert_eq!(classes(s).len(), s.len());
-    }
+        let fsi = '\u{2068}';
+        let pdi = '\u{2069}';
 
-    #[test]
-    fn test_paragraph_level() {
-        use super::paragraph_level;
-
-        assert_eq!(paragraph_level(&[]), 0);
-        assert_eq!(paragraph_level(&[WS]), 0);
-        assert_eq!(paragraph_level(&[L, L, L]), 0);
-        assert_eq!(paragraph_level(&[EN, EN]), 0);
-
-        assert_eq!(paragraph_level(&[R, L]), 1);
-        assert_eq!(paragraph_level(&[EN, EN, R, EN]), 1);
-        assert_eq!(paragraph_level(&[AL]), 1);
-        assert_eq!(paragraph_level(&[WS, WS, AL, L]), 1);
-
-        // Ignore characters between directional isolates:
-        assert_eq!(paragraph_level(&[LRI, L, PDI, R]), 1);
-        assert_eq!(paragraph_level(&[LRI, AL, R, PDI]), 0);
+        let s = format!("{}א{}a", fsi, pdi);
+        assert_eq!(initial_scan(&s, None), InitialProperties {
+            para_level: 0,
+            initial_classes: vec![RLI, RLI, RLI, R, R, PDI, PDI, PDI, L],
+        });
     }
 
     #[test]
@@ -715,39 +717,39 @@ mod test {
 
     #[test]
     fn test_paragraph_info() {
-        use super::{IMPLICIT_LEVEL, ParagraphInfo, process_paragraph};
+        use super::{ParagraphInfo, process_paragraph};
 
-        assert_eq!(process_paragraph("abc123", 0), ParagraphInfo {
+        assert_eq!(process_paragraph("abc123", Some(0)), ParagraphInfo {
             levels:  vec![0, 0, 0, 0,  0,  0],
             classes: vec![L, L, L, EN, EN, EN],
             para_level: 0,
             max_level: 0,
         });
-        assert_eq!(process_paragraph("abc אבג", 0), ParagraphInfo {
+        assert_eq!(process_paragraph("abc אבג", Some(0)), ParagraphInfo {
             levels:  vec![0, 0, 0, 0,  1,1, 1,1, 1,1],
             classes: vec![L, L, L, WS, R,R, R,R, R,R],
             para_level: 0,
             max_level: 1,
         });
-        assert_eq!(process_paragraph("abc אבג", 1), ParagraphInfo {
+        assert_eq!(process_paragraph("abc אבג", Some(1)), ParagraphInfo {
             levels:  vec![2, 2, 2, 1,  1,1, 1,1, 1,1],
             classes: vec![L, L, L, WS, R,R, R,R, R,R],
             para_level: 1,
             max_level: 2,
         });
-        assert_eq!(process_paragraph("אבג abc", 0), ParagraphInfo {
+        assert_eq!(process_paragraph("אבג abc", Some(0)), ParagraphInfo {
             levels:  vec![1,1, 1,1, 1,1, 0,  0, 0, 0],
             classes: vec![R,R, R,R, R,R, WS, L, L, L],
             para_level: 0,
             max_level: 1,
         });
-        assert_eq!(process_paragraph("אבג abc", IMPLICIT_LEVEL), ParagraphInfo {
+        assert_eq!(process_paragraph("אבג abc", None), ParagraphInfo {
             levels:  vec![1,1, 1,1, 1,1, 1,  2, 2, 2],
             classes: vec![R,R, R,R, R,R, WS, L, L, L],
             para_level: 1,
             max_level: 2,
         });
-        assert_eq!(process_paragraph("غ2ظ א2ג", 0), ParagraphInfo {
+        assert_eq!(process_paragraph("غ2ظ א2ג", Some(0)), ParagraphInfo {
             levels:  vec![1, 1,  2,  1, 1,  1,  1,1, 2,  1,1],
             classes: vec![AL,AL, EN, AL,AL, WS, R,R, EN, R,R],
             para_level: 0,
@@ -757,11 +759,11 @@ mod test {
 
     #[test]
     fn test_reorder_line() {
-        use super::{IMPLICIT_LEVEL, process_paragraph, reorder_line};
+        use super::{process_paragraph, reorder_line};
         use std::borrow::Cow;
 
         fn reorder(s: &str) -> Cow<str> {
-            reorder_line(s, 0..s.len(), &process_paragraph(s, IMPLICIT_LEVEL))
+            reorder_line(s, 0..s.len(), &process_paragraph(s, None))
         }
 
         assert_eq!(reorder("abc123"), "abc123");
