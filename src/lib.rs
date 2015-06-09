@@ -107,7 +107,7 @@ pub fn reorder_line<'a>(paragraph: &'a str, line: Range<usize>, info: &Paragraph
         if is_rtl(info.levels[run.start]) {
             result.extend(paragraph[run].chars().rev());
         } else {
-            result.extend(paragraph[run].chars());
+            result.push_str(&paragraph[run]);
         }
     }
     result.into()
