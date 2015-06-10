@@ -48,6 +48,8 @@
 //!
 //! [tr9]: http://www.unicode.org/reports/tr9/
 
+#![forbid(unsafe_code)]
+
 #[macro_use] extern crate matches;
 
 pub mod tables;
