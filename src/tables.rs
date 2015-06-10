@@ -10,6 +10,12 @@ pub use self::BidiClass::*;
 
     #[allow(non_camel_case_types)]
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    /// Represents the Unicode character property **Bidi_Class**, also known as
+    /// the *bidirectional character type*.
+    ///
+    /// Use the `bidi_class` function to look up the BidiClass of a code point.
+    ///
+    /// http://www.unicode.org/reports/tr9/#Bidirectional_Character_Types
     pub enum BidiClass {
         AL,
         AN,
