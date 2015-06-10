@@ -65,7 +65,15 @@ fn class_for_level(level: u8) -> BidiClass {
     if is_rtl(level) { R } else { L }
 }
 
-pub fn reorder_line<'a>(paragraph: &'a str, line: Range<usize>, info: &ParagraphInfo) -> Cow<'a, str> {
+/// Re-order a line based on resolved levels.
+///
+/// `info` is the result of calling `process_paragraph` on `paragraph`.
+/// `line` is a range of bytes indices within `paragraph`.
+///
+/// Returns the line in display order.
+pub fn reorder_line<'a>(paragraph: &'a str, line: Range<usize>, info: &ParagraphInfo)
+    -> Cow<'a, str>
+{
     let runs = visual_runs(line.clone(), info);
     if runs.len() == 1 && !is_rtl(info.levels[runs[0].start]) {
         return paragraph.into()
@@ -88,7 +96,9 @@ pub type LevelRun = Range<usize>;
 
 /// Find the level runs within a line and return them in visual order.
 ///
-/// `line` is a range of bytes indices with in a paragraph.
+/// `line` is a range of bytes indices within `paragraph`.
+///
+/// http://www.unicode.org/reports/tr9/#Reordering_Resolved_Levels
 pub fn visual_runs(line: Range<usize>, info: &ParagraphInfo) -> Vec<LevelRun> {
     assert!(line.start <= info.levels.len());
     assert!(line.end <= info.levels.len());
