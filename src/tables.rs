@@ -4,10 +4,9 @@
 #![allow(missing_docs, non_upper_case_globals, non_snake_case)]
 
 /// The version of [Unicode](http://www.unicode.org/)
-/// that the unicode parts of `CharExt` and `UnicodeStrPrelude` traits are based on.
+/// that the `bidi_class` function is based on.
 pub const UNICODE_VERSION: (u64, u64, u64) = (7, 0, 0);
-pub mod bidi {
-    pub use self::BidiClass::*;
+pub use self::BidiClass::*;
 
     #[allow(non_camel_case_types)]
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -48,10 +47,11 @@ pub mod bidi {
                 let (_, _, cat) = r[idx];
                 cat
             }
-            Err(_) => L
+            Err(_) => L // FIXME: Is there a better default behavior?
         }
     }
 
+    /// Find the BidiClass of a single char.
     pub fn bidi_class(c: char) -> BidiClass {
         bsearch_range_value_table(c, bidi_class_table)
     }
@@ -457,4 +457,3 @@ pub mod bidi {
         ('\u{f0000}', '\u{ffffd}', L), ('\u{100000}', '\u{10fffd}', L)
     ];
 
-}

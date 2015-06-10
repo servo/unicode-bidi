@@ -7,12 +7,52 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+//! This crate implements the [Unicode Bidirectional Algorithm][tr9] for display of mixed
+//! right-to-left and left-to-right text.  It is written in safe Rust, compatible with Rust 1.0 and
+//! later.
+//!
+//! ## Example
+//!
+//! ```rust
+//! use unicode_bidi::{process_paragraph, reorder_line};
+//!
+//! // This example text is defined using `concat!` because some browsers
+//! // and text editors have trouble displaying bidi strings.
+//! let paragraph = concat!["א",
+//!                         "ב",
+//!                         "ג",
+//!                         "a",
+//!                         "b",
+//!                         "c"];
+//!
+//! // Resolve embedding levels within a paragraph.  Pass `None` to detect the
+//! // paragraph level automatically.
+//! let info = process_paragraph(&paragraph, None);
+//!
+//! // This paragraph has embedding level 1 because its first strong character is RTL.
+//! assert_eq!(info.para_level, 1);
+//!
+//! // Re-ordering is done after wrapping the paragraph into a sequence of
+//! // lines. For this example, I'll just use a single line that spans the
+//! // entire paragraph.
+//! let line = 0..paragraph.len();
+//!
+//! let display = reorder_line(&paragraph, line, &info);
+//! assert_eq!(display, concat!["a",
+//!                             "b",
+//!                             "c",
+//!                             "ג",
+//!                             "ב",
+//!                             "א"]);
+//! ```
+//!
+//! [tr9]: http://www.unicode.org/reports/tr9/
+
 #[macro_use] extern crate matches;
 
-mod tables;
+pub mod tables;
 
-pub use tables::UNICODE_VERSION;
-pub use tables::bidi::{BidiClass, bidi_class};
+pub use tables::{BidiClass, bidi_class, UNICODE_VERSION};
 use BidiClass::*;
 
 use std::borrow::Cow;
@@ -21,11 +61,24 @@ use std::iter::repeat;
 use std::ops::Range;
 
 /// Output of `process_paragraph`
+///
+/// The `classes` and `levels` vectors are indexed by byte offsets into the paragraph text.  If a
+/// character is multiple bytes wide, then its class and level will appear multiple times in these
+/// vectors.
 #[derive(Debug, PartialEq)]
 pub struct ParagraphInfo {
+    /// The BidiClass of the character at each byte in the paragraph.
     pub classes: Vec<BidiClass>,
+
+    /// The directional embedding level of each byte in the paragraph.
     pub levels: Vec<u8>,
+
+    /// The paragraph embedding level.
+    ///
+    /// http://www.unicode.org/reports/tr9/#BD4
     pub para_level: u8,
+
+    /// The highest embedding level in the paragraph. (Can be used for optimizations.)
     pub max_level: u8,
 }
 
@@ -177,10 +230,12 @@ pub fn visual_runs(line: Range<usize>, info: &ParagraphInfo) -> Vec<LevelRun> {
 /// Output of `initial_scan`
 #[derive(PartialEq, Debug)]
 pub struct InitialProperties {
-    para_level: u8,
+    /// The paragraph embedding level.
+    pub para_level: u8,
+
     /// The BidiClass of the character at each byte in the paragraph.
     /// If a character is multiple bytes, its class will appear multiple times in the vector.
-    initial_classes: Vec<BidiClass>,
+    pub initial_classes: Vec<BidiClass>,
 }
 
 /// Find the paragraph embedding level, and the BidiClass for each character.

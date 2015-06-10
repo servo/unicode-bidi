@@ -186,8 +186,7 @@ def emit_table(f, name, t_data, t_type = "&'static [(char, char)]", is_pub=True,
     f.write("\n    ];\n\n")
 
 def emit_bidi_module(f, bidi_class, cats):
-    f.write("""pub mod bidi {
-    pub use self::BidiClass::*;
+    f.write("""pub use self::BidiClass::*;
 
     #[allow(non_camel_case_types)]
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -208,10 +207,11 @@ def emit_bidi_module(f, bidi_class, cats):
                 let (_, _, cat) = r[idx];
                 cat
             }
-            Err(_) => L // FIXME
+            Err(_) => L // FIXME: Is there a better default behavior?
         }
     }
 
+    /// Find the BidiClass of a single char.
     pub fn bidi_class(c: char) -> BidiClass {
         bsearch_range_value_table(c, bidi_class_table)
     }
@@ -221,7 +221,6 @@ def emit_bidi_module(f, bidi_class, cats):
     emit_table(f, "bidi_class_table", bidi_class, "&'static [(char, char, BidiClass)]",
         pfun=lambda x: "(%s,%s,%s)" % (escape_char(x[0]), escape_char(x[1]), x[2]),
         is_pub=False)
-    f.write("}\n")
 
 if __name__ == "__main__":
     r = "tables.rs"
@@ -238,7 +237,7 @@ if __name__ == "__main__":
             unicode_version = re.search(pattern, readme.read()).groups()
         rf.write("""
 /// The version of [Unicode](http://www.unicode.org/)
-/// that the unicode parts of `CharExt` and `UnicodeStrPrelude` traits are based on.
+/// that the `bidi_class` function is based on.
 pub const UNICODE_VERSION: (u64, u64, u64) = (%s, %s, %s);
 """ % unicode_version)
         (bidi_cats, bidi_class) = load_unicode_data("UnicodeData.txt")
