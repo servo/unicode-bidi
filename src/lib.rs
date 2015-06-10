@@ -761,7 +761,7 @@ mod implicit {
 
     /// 3.3.6 Resolving Implicit Levels
     ///
-    /// Returns the minimum and maximum level in the paragraph.
+    /// Returns the maximum embedding level in the paragraph.
     ///
     /// http://www.unicode.org/reports/tr9/#Resolving_Implicit_Levels
     pub fn resolve_levels(classes: &[BidiClass], levels: &mut [u8]) -> u8 {
