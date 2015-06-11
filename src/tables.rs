@@ -53,7 +53,9 @@ pub use self::BidiClass::*;
                 let (_, _, cat) = r[idx];
                 cat
             }
-            Err(_) => L // FIXME: Is there a better default behavior?
+            // UCD/extracted/DerivedBidiClass.txt: "All code points not explicitly listed
+            // for Bidi_Class have the value Left_To_Right (L)."
+            Err(_) => L
         }
     }
 

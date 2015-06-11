@@ -129,43 +129,6 @@ def format_table_content(f, content, indent):
             line = " "*indent + chunk
     f.write(line)
 
-def load_properties(f, interestingprops):
-    fetch(f)
-    props = {}
-    re1 = re.compile("^ *([0-9A-F]+) *; *(\w+)")
-    re2 = re.compile("^ *([0-9A-F]+)\.\.([0-9A-F]+) *; *(\w+)")
-
-    for line in fileinput.input(os.path.basename(f)):
-        prop = None
-        d_lo = 0
-        d_hi = 0
-        m = re1.match(line)
-        if m:
-            d_lo = m.group(1)
-            d_hi = m.group(1)
-            prop = m.group(2)
-        else:
-            m = re2.match(line)
-            if m:
-                d_lo = m.group(1)
-                d_hi = m.group(2)
-                prop = m.group(3)
-            else:
-                continue
-        if interestingprops and prop not in interestingprops:
-            continue
-        d_lo = int(d_lo, 16)
-        d_hi = int(d_hi, 16)
-        if prop not in props:
-            props[prop] = []
-        props[prop].append((d_lo, d_hi))
-
-    # optimize if possible
-    for prop in props:
-        props[prop] = group_cat(ungroup_cat(props[prop]))
-
-    return props
-
 def escape_char(c):
     return "'\\u{%x}'" % c
 
@@ -213,7 +176,9 @@ def emit_bidi_module(f, bidi_class, cats):
                 let (_, _, cat) = r[idx];
                 cat
             }
-            Err(_) => L // FIXME: Is there a better default behavior?
+            // UCD/extracted/DerivedBidiClass.txt: "All code points not explicitly listed
+            // for Bidi_Class have the value Left_To_Right (L)."
+            Err(_) => L
         }
     }
 
