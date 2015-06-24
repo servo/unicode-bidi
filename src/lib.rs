@@ -129,7 +129,7 @@ fn class_for_level(level: u8) -> BidiClass {
 pub fn reorder_line<'a>(paragraph: &'a str, line: Range<usize>, info: &ParagraphInfo)
     -> Cow<'a, str>
 {
-    let runs = visual_runs(line.clone(), info);
+    let runs = visual_runs(line.clone(), info.para_level, info.max_level, &info.levels);
     if runs.len() == 1 && !is_rtl(info.levels[runs[0].start]) {
         return paragraph.into()
     }
@@ -154,30 +154,33 @@ pub type LevelRun = Range<usize>;
 /// `line` is a range of bytes indices within `paragraph`.
 ///
 /// http://www.unicode.org/reports/tr9/#Reordering_Resolved_Levels
-pub fn visual_runs(line: Range<usize>, info: &ParagraphInfo) -> Vec<LevelRun> {
-    assert!(line.start <= info.levels.len());
-    assert!(line.end <= info.levels.len());
+pub fn visual_runs(line: Range<usize>,
+                   para_level: u8,
+                   max_level: u8,
+                   levels: &[u8]) -> Vec<LevelRun> {
+    assert!(line.start <= levels.len());
+    assert!(line.end <= levels.len());
 
     // TODO: Whitespace handling.
     // http://www.unicode.org/reports/tr9/#L1
 
-    assert!(info.max_level >= info.para_level);
-    let mut runs = Vec::with_capacity((info.max_level - info.para_level) as usize + 1);
+    assert!(max_level >= para_level);
+    let mut runs = Vec::with_capacity((max_level - para_level) as usize + 1);
 
     // Optimization: If there's only one level, just return a single run for the whole line.
-    if info.max_level == info.para_level || line.len() == 0 {
+    if max_level == para_level || line.len() == 0 {
         runs.push(line.clone());
         return runs
     }
 
     // Find consecutive level runs.
     let mut start = line.start;
-    let mut level = info.levels[start];
+    let mut level = levels[start];
     let mut min_level = level;
     let mut max_level = level;
 
     for i in (start + 1)..line.end {
-        let new_level = info.levels[i];
+        let new_level = levels[i];
         if new_level != level {
             // End of the previous run, start of a new one.
             runs.push(start..i);
@@ -202,7 +205,7 @@ pub fn visual_runs(line: Range<usize>, info: &ParagraphInfo) -> Vec<LevelRun> {
         // Look for the start of a sequence of consecutive runs of max_level or higher.
         let mut seq_start = 0;
         while seq_start < run_count {
-            if info.levels[runs[seq_start].start] < max_level {
+            if levels[runs[seq_start].start] < max_level {
                 seq_start += 1;
             }
             if seq_start >= run_count {
@@ -212,7 +215,7 @@ pub fn visual_runs(line: Range<usize>, info: &ParagraphInfo) -> Vec<LevelRun> {
             // Found the start of a sequence. Now find the end.
             let mut seq_end = seq_start + 1;
             while seq_end < run_count {
-                if info.levels[runs[seq_end].start] < max_level {
+                if levels[runs[seq_end].start] < max_level {
                     break
                 }
                 seq_end += 1;
