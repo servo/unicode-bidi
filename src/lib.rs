@@ -110,7 +110,12 @@ pub fn process_paragraph(text: &str, level: Option<u8>) -> ParagraphInfo {
 }
 
 #[inline]
-/// Even levels are left-to-right, and odd levels are right-to-left.
+/// Even embedding levels are left-to-right.
+///
+/// http://www.unicode.org/reports/tr9/#BD2
+pub fn is_ltr(level: u8) -> bool { level % 2 == 0 }
+
+/// Odd levels are right-to-left.
 ///
 /// http://www.unicode.org/reports/tr9/#BD2
 pub fn is_rtl(level: u8) -> bool { level % 2 == 1 }
