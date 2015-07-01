@@ -738,6 +738,9 @@ mod implicit {
                     match indices.next() {
                         Some(j) => {
                             i = j;
+                            if ::prepare::removed_by_x9(classes[i]) {
+                                continue
+                            }
                             next_class = classes[j];
                             if ni(next_class) {
                                 ni_run.push(i);
@@ -894,5 +897,7 @@ mod test {
         assert_eq!(reorder("אבג abc"), "abc גבא");
         assert_eq!(reorder("abc\u{2067}.-\u{2069}ghi"),
                            "abc\u{2067}-.\u{2069}ghi");
+        assert_eq!(reorder("Hello, \u{2068}\u{202E}world\u{202C}\u{2069}!"),
+                           "Hello, \u{2068}dlrow\u{202E}\u{202C}\u{2069}!");
     }
 }
