@@ -715,15 +715,16 @@ mod implicit {
     pub fn resolve_neutral(sequence: &IsolatingRunSequence, levels: &[u8],
                            classes: &mut [BidiClass])
     {
-        let mut indices = sequence.runs.iter().flat_map(Clone::clone).peekable();
+        let mut indices = sequence.runs.iter().flat_map(Clone::clone);
         let mut prev_class = sequence.sos;
 
+        // Neutral or Isolate formatting characters (NI).
         // http://www.unicode.org/reports/tr9/#NI
         fn ni(class: BidiClass) -> bool {
             matches!(class, B | S | WS | ON | FSI | LRI | RLI | PDI)
         }
 
-        while let Some(i) = indices.next() {
+        while let Some(mut i) = indices.next() {
             // N0. Process bracket pairs.
             // TODO
 
@@ -731,17 +732,24 @@ mod implicit {
             let mut ni_run = Vec::new();
             if ni(classes[i]) {
                 // Consume a run of consecutive NI characters.
+                ni_run.push(i);
                 let mut next_class;
                 loop {
-                    ni_run.push(i);
-                    next_class = match indices.peek() {
-                        Some(&j) => classes[j],
-                        None => sequence.eos
+                    match indices.next() {
+                        Some(j) => {
+                            i = j;
+                            next_class = classes[j];
+                            if ni(next_class) {
+                                ni_run.push(i);
+                            } else {
+                                break
+                            }
+                        }
+                        None => {
+                            next_class = sequence.eos;
+                            break
+                        }
                     };
-                    if !ni(next_class) {
-                        break
-                    }
-                    indices.next();
                 }
 
                 // N1-N2.
@@ -884,5 +892,7 @@ mod test {
         assert_eq!(reorder("abc123"), "abc123");
         assert_eq!(reorder("abc אבג"), "abc גבא");
         assert_eq!(reorder("אבג abc"), "abc גבא");
+        assert_eq!(reorder("abc\u{2067}.-\u{2069}ghi"),
+                           "abc\u{2067}-.\u{2069}ghi");
     }
 }
