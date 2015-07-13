@@ -134,7 +134,7 @@ fn class_for_level(level: u8) -> BidiClass {
 pub fn reorder_line<'a>(paragraph: &'a str, line: Range<usize>, info: &ParagraphInfo)
     -> Cow<'a, str>
 {
-    let runs = visual_runs(line.clone(), info.para_level, info.max_level, &info.levels);
+    let runs = visual_runs(line.clone(), info);
     if runs.len() == 1 && !is_rtl(info.levels[runs[0].start]) {
         return paragraph.into()
     }
@@ -159,33 +159,34 @@ pub type LevelRun = Range<usize>;
 /// `line` is a range of bytes indices within `paragraph`.
 ///
 /// http://www.unicode.org/reports/tr9/#Reordering_Resolved_Levels
-pub fn visual_runs(line: Range<usize>,
-                   para_level: u8,
-                   max_level: u8,
-                   levels: &[u8]) -> Vec<LevelRun> {
-    assert!(line.start <= levels.len());
-    assert!(line.end <= levels.len());
+pub fn visual_runs(line: Range<usize>, info: &ParagraphInfo) -> Vec<LevelRun> {
+    assert!(line.start <= line.end);
+    assert!(line.end <= info.levels.len());
 
     // TODO: Whitespace handling.
     // http://www.unicode.org/reports/tr9/#L1
 
-    assert!(max_level >= para_level);
-    let mut runs = Vec::with_capacity((max_level - para_level) as usize + 1);
+    assert!(info.max_level >= info.para_level);
+    let mut runs = Vec::with_capacity((info.max_level - info.para_level) as usize + 1);
 
     // Optimization: If there's only one level, just return a single run for the whole line.
-    if max_level == para_level || line.len() == 0 {
+    if info.max_level == info.para_level || line.len() == 0 {
         runs.push(line.clone());
         return runs
     }
 
     // Find consecutive level runs.
     let mut start = line.start;
-    let mut level = levels[start];
-    let mut min_level = level;
-    let mut max_level = level;
+    let mut level = info.levels[start];
+    let mut min_level = level;  // FIXME: Is this the same as info.max_level?
+    let mut max_level = level;  // FIXME: Is this the same as info.para_level?
 
+    // FIXME: Could this loop be replaced with a call to level_runs()?
     for i in (start + 1)..line.end {
-        let new_level = levels[i];
+        if prepare::removed_by_x9(info.classes[i]) {
+            continue
+        }
+        let new_level = info.levels[i];
         if new_level != level {
             // End of the previous run, start of a new one.
             runs.push(start..i);
@@ -210,8 +211,9 @@ pub fn visual_runs(line: Range<usize>,
         // Look for the start of a sequence of consecutive runs of max_level or higher.
         let mut seq_start = 0;
         while seq_start < run_count {
-            if levels[runs[seq_start].start] < max_level {
+            if info.levels[runs[seq_start].start] < max_level {
                 seq_start += 1;
+                // FIXME: `continue` here?
             }
             if seq_start >= run_count {
                 break // No more runs found at this level.
@@ -220,7 +222,7 @@ pub fn visual_runs(line: Range<usize>,
             // Found the start of a sequence. Now find the end.
             let mut seq_end = seq_start + 1;
             while seq_end < run_count {
-                if levels[runs[seq_end].start] < max_level {
+                if info.levels[runs[seq_end].start] < max_level {
                     break
                 }
                 seq_end += 1;
@@ -351,6 +353,11 @@ mod explicit {
                     let is_isolate = matches!(classes[i], RLI | LRI | FSI);
                     if is_isolate {
                         result.levels[i] = last_level;
+                        match stack.last().status {
+                            OverrideStatus::RTL => result.classes[i] = R,
+                            OverrideStatus::LTR => result.classes[i] = L,
+                            _ => {}
+                        }
                     }
 
                     if valid(new_level) && overflow_isolate_count == 0 && overflow_embedding_count == 0 {
@@ -362,8 +369,6 @@ mod explicit {
                         });
                         if is_isolate {
                             valid_isolate_count += 1;
-                        } else {
-                            result.levels[i] = new_level;
                         }
                     } else if is_isolate {
                         overflow_isolate_count += 1;
@@ -375,22 +380,25 @@ mod explicit {
                 PDI => {
                     if overflow_isolate_count > 0 {
                         overflow_isolate_count -= 1;
-                        continue
-                    }
-                    if valid_isolate_count == 0 {
-                        continue
-                    }
-                    overflow_embedding_count = 0;
-                    loop {
-                        // Pop everything up to and including the last Isolate status.
-                        match stack.vec.pop() {
-                            Some(Status { status: OverrideStatus::Isolate, .. }) => break,
-                            None => break,
-                            _ => continue
+                    } else if valid_isolate_count != 0 {
+                        overflow_embedding_count = 0;
+                        loop {
+                            // Pop everything up to and including the last Isolate status.
+                            match stack.vec.pop() {
+                                Some(Status { status: OverrideStatus::Isolate, .. }) => break,
+                                None => unreachable!(),
+                                _ => continue
+                            }
                         }
+                        valid_isolate_count -= 1;
                     }
-                    valid_isolate_count -= 1;
-                    result.levels[i] = stack.last().level;
+                    let last = stack.last();
+                    result.levels[i] = last.level;
+                    match last.status {
+                        OverrideStatus::RTL => result.classes[i] = R,
+                        OverrideStatus::LTR => result.classes[i] = L,
+                        _ => {}
+                    }
                 }
                 // http://www.unicode.org/reports/tr9/#X7
                 PDF => {
@@ -404,7 +412,6 @@ mod explicit {
                     if stack.last().status != OverrideStatus::Isolate && stack.vec.len() >= 2 {
                         stack.vec.pop();
                     }
-                    result.levels[i] = stack.last().level;
                 }
                 // http://www.unicode.org/reports/tr9/#X6
                 B | BN => {}
@@ -438,7 +445,7 @@ mod explicit {
     /// The next odd level greater than `level`.
     fn next_rtl_level(level: u8) -> u8 { (level + 1) |  1 }
 
-    /// The next odd level greater than `level`.
+    /// The next even level greater than `level`.
     fn next_ltr_level(level: u8) -> u8 { (level + 2) & !1 }
 
     /// Entries in the directional status stack:
@@ -603,7 +610,7 @@ mod prepare {
     }
 
     // For use as a predicate for `position` / `rposition`
-    fn not_removed_by_x9(class: &BidiClass) -> bool {
+    pub fn not_removed_by_x9(class: &BidiClass) -> bool {
         !removed_by_x9(*class)
     }
 
@@ -631,7 +638,8 @@ mod prepare {
 mod implicit {
     use super::{BidiClass, class_for_level, is_rtl};
     use super::BidiClass::*;
-    use super::prepare::IsolatingRunSequence;
+    use super::LevelRun;
+    use super::prepare::{IsolatingRunSequence, removed_by_x9, not_removed_by_x9};
     use std::cmp::max;
 
     /// 3.3.4 Resolving Weak Types
@@ -643,8 +651,17 @@ mod implicit {
         let mut last_strong_is_l = false;
         let mut et_run_indices = Vec::new(); // for W5
 
-        let mut indices = sequence.runs.iter().flat_map(Clone::clone).peekable();
+        // Like sequence.runs.iter().flat_map(Clone::clone), but make indices itself clonable.
+        fn id(x: LevelRun) -> LevelRun { x };
+        let mut indices = sequence.runs.iter().cloned().flat_map(id as fn(LevelRun) -> LevelRun);
+
         while let Some(i) = indices.next() {
+            // "Apply rules W1–W7, N0–N2, and I1–I2, in the order in which they appear below,
+            //  to each of the isolating run sequences, applying one rule to all the characters
+            //  in the sequence in the order in which they occur in the sequence
+            //  before applying another rule to any part of the sequence."
+            // At the moment we do all of W1-W7 in one pass. Is this OK?
+            // FIXME: If so, add a comment explaining why.
             match classes[i] {
                 // http://www.unicode.org/reports/tr9/#W1
                 NSM => {
@@ -674,11 +691,12 @@ mod implicit {
 
                 // http://www.unicode.org/reports/tr9/#W4
                 ES | CS => {
-                    let next_class = indices.peek().map(|j| classes[*j]);
+                    let next_class = indices.clone().map(|j| classes[j]).filter(not_removed_by_x9)
+                        .next().unwrap_or(sequence.eos);
                     classes[i] = match (prev_class, classes[i], next_class) {
-                        (EN, ES, Some(EN)) |
-                        (EN, CS, Some(EN)) => EN,
-                        (AN, CS, Some(AN)) => AN,
+                        (EN, ES, EN) |
+                        (EN, CS, EN) => EN,
+                        (AN, CS, AN) => AN,
                         (_,  _,  _       ) => ON,
                     }
                 }
@@ -689,7 +707,9 @@ mod implicit {
                         _ => et_run_indices.push(i) // In case this is followed by an EN.
                     }
                 }
-                _ => {}
+                class => if removed_by_x9(class) { 
+                    continue
+                }
             }
 
             prev_class = classes[i];
@@ -738,7 +758,7 @@ mod implicit {
                     match indices.next() {
                         Some(j) => {
                             i = j;
-                            if ::prepare::removed_by_x9(classes[i]) {
+                            if removed_by_x9(classes[i]) {
                                 continue
                             }
                             next_class = classes[j];
