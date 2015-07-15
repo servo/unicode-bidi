@@ -640,6 +640,11 @@ mod implicit {
     ///
     /// http://www.unicode.org/reports/tr9/#Resolving_Weak_Types
     pub fn resolve_weak(sequence: &IsolatingRunSequence, classes: &mut [BidiClass]) {
+        // FIXME (#8): This function applies steps W1-W7 in a single pass.  This can produce
+        // incorrect results in cases where a "later" rule changes the value of `prev_class` seen
+        // by an "earlier" rule.  We should either split this into separate passes, or preserve
+        // extra state so each rule can see the correct previous class.
+
         let mut prev_class = sequence.sos;
         let mut last_strong_is_al = false;
         let mut last_strong_is_l = false;
