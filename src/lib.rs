@@ -605,7 +605,7 @@ mod prepare {
     }
 
     // For use as a predicate for `position` / `rposition`
-    fn not_removed_by_x9(class: &BidiClass) -> bool {
+    pub fn not_removed_by_x9(class: &BidiClass) -> bool {
         !removed_by_x9(*class)
     }
 
@@ -631,9 +631,9 @@ mod prepare {
 
 /// 3.3.4 - 3.3.6. Resolve implicit levels and types.
 mod implicit {
-    use super::{BidiClass, class_for_level, is_rtl};
+    use super::{BidiClass, class_for_level, is_rtl, LevelRun};
     use super::BidiClass::*;
-    use super::prepare::IsolatingRunSequence;
+    use super::prepare::{IsolatingRunSequence, not_removed_by_x9, removed_by_x9};
     use std::cmp::max;
 
     /// 3.3.4 Resolving Weak Types
@@ -645,7 +645,10 @@ mod implicit {
         let mut last_strong_is_l = false;
         let mut et_run_indices = Vec::new(); // for W5
 
-        let mut indices = sequence.runs.iter().flat_map(Clone::clone).peekable();
+        // Like sequence.runs.iter().flat_map(Clone::clone), but make indices itself clonable.
+        fn id(x: LevelRun) -> LevelRun { x }
+        let mut indices = sequence.runs.iter().cloned().flat_map(id as fn(LevelRun) -> LevelRun);
+
         while let Some(i) = indices.next() {
             match classes[i] {
                 // http://www.unicode.org/reports/tr9/#W1
@@ -676,12 +679,13 @@ mod implicit {
 
                 // http://www.unicode.org/reports/tr9/#W4
                 ES | CS => {
-                    let next_class = indices.peek().map(|j| classes[*j]);
+                    let next_class = indices.clone().map(|j| classes[j]).filter(not_removed_by_x9)
+                        .next().unwrap_or(sequence.eos);
                     classes[i] = match (prev_class, classes[i], next_class) {
-                        (EN, ES, Some(EN)) |
-                        (EN, CS, Some(EN)) => EN,
-                        (AN, CS, Some(AN)) => AN,
-                        (_,  _,  _       ) => ON,
+                        (EN, ES, EN) |
+                        (EN, CS, EN) => EN,
+                        (AN, CS, AN) => AN,
+                        (_,  _,  _ ) => ON,
                     }
                 }
                 // http://www.unicode.org/reports/tr9/#W5
@@ -691,7 +695,9 @@ mod implicit {
                         _ => et_run_indices.push(i) // In case this is followed by an EN.
                     }
                 }
-                _ => {}
+                class => if removed_by_x9(class) {
+                    continue
+                }
             }
 
             prev_class = classes[i];
@@ -740,7 +746,7 @@ mod implicit {
                     match indices.next() {
                         Some(j) => {
                             i = j;
-                            if ::prepare::removed_by_x9(classes[i]) {
+                            if removed_by_x9(classes[i]) {
                                 continue
                             }
                             next_class = classes[j];
