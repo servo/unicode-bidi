@@ -362,6 +362,11 @@ mod explicit {
                     let is_isolate = matches!(classes[i], RLI | LRI | FSI);
                     if is_isolate {
                         result.levels[i] = last_level;
+                        match stack.last().status {
+                            OverrideStatus::RTL => result.classes[i] = R,
+                            OverrideStatus::LTR => result.classes[i] = L,
+                            _ => {}
+                        }
                     }
 
                     if valid(new_level) && overflow_isolate_count == 0 && overflow_embedding_count == 0 {
@@ -388,22 +393,25 @@ mod explicit {
                 PDI => {
                     if overflow_isolate_count > 0 {
                         overflow_isolate_count -= 1;
-                        continue
-                    }
-                    if valid_isolate_count == 0 {
-                        continue
-                    }
-                    overflow_embedding_count = 0;
-                    loop {
-                        // Pop everything up to and including the last Isolate status.
-                        match stack.vec.pop() {
-                            Some(Status { status: OverrideStatus::Isolate, .. }) => break,
-                            None => break,
-                            _ => continue
+                    } else if valid_isolate_count > 0 {
+                        overflow_embedding_count = 0;
+                        loop {
+                            // Pop everything up to and including the last Isolate status.
+                            match stack.vec.pop() {
+                                Some(Status { status: OverrideStatus::Isolate, .. }) => break,
+                                None => break,
+                                _ => continue
+                            }
                         }
+                        valid_isolate_count -= 1;
                     }
-                    valid_isolate_count -= 1;
-                    result.levels[i] = stack.last().level;
+                    let last = stack.last();
+                    result.levels[i] = last.level;
+                    match last.status {
+                        OverrideStatus::RTL => result.classes[i] = R,
+                        OverrideStatus::LTR => result.classes[i] = L,
+                        _ => {}
+                    }
                 }
                 // http://www.unicode.org/reports/tr9/#X7
                 PDF => {
