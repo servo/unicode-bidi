@@ -440,7 +440,7 @@ mod explicit {
     /// The next odd level greater than `level`.
     fn next_rtl_level(level: u8) -> u8 { (level + 1) |  1 }
 
-    /// The next odd level greater than `level`.
+    /// The next even level greater than `level`.
     fn next_ltr_level(level: u8) -> u8 { (level + 2) & !1 }
 
     /// Entries in the directional status stack:
@@ -657,7 +657,7 @@ mod implicit {
                 }
                 EN => {
                     if last_strong_is_al {
-                        // W2. If previous strong char was AL, change EN to AL.
+                        // W2. If previous strong char was AL, change EN to AN.
                         classes[i] = AN;
                     } else {
                         // W5. If a run of ETs is adjacent to an EN, change the ETs to EN.
