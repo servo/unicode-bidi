@@ -361,6 +361,8 @@ mod explicit {
                         if is_isolate {
                             valid_isolate_count += 1;
                         } else {
+                            // The spec doesn't explicitly mention this step, but it is necessary.
+                            // See the reference implementations for comparison.
                             result.levels[i] = new_level;
                         }
                     } else if is_isolate {
@@ -402,6 +404,8 @@ mod explicit {
                     if stack.last().status != OverrideStatus::Isolate && stack.vec.len() >= 2 {
                         stack.vec.pop();
                     }
+                    // The spec doesn't explicitly mention this step, but it is necessary.
+                    // See the reference implementations for comparison.
                     result.levels[i] = stack.last().level;
                 }
                 // http://www.unicode.org/reports/tr9/#X6
