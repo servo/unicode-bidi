@@ -12,3 +12,4 @@ name = "unicode_bidi"
 
 [dependencies]
 matches = "0.1"
+bitflags = "0.2"

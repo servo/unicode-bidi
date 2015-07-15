@@ -51,6 +51,7 @@
 #![forbid(unsafe_code)]
 
 #[macro_use] extern crate matches;
+#[macro_use] extern crate bitflags;
 
 pub mod tables;
 
@@ -86,13 +87,13 @@ pub struct ParagraphInfo {
 
 /// Determine the bidirectional embedding levels for a single paragraph.
 ///
-/// TODO: In early steps, check for special cases that allow later steps to be skipped. like text
-/// that is entirely LTR.  See the `nsBidi` class from Gecko for comparison.
+/// `level` should contain the paragraph embedding level if it is set
+/// explicitly, or `None` otherwise.
 pub fn process_paragraph(text: &str, level: Option<u8>) -> ParagraphInfo {
-    let InitialProperties { para_level, initial_classes } = initial_scan(text, level);
+    let InitialProperties { para_level, initial_classes, flags } = initial_scan(text, level);
 
     let explicit::Result { mut classes, mut levels } =
-        explicit::compute(text, para_level, &initial_classes);
+        explicit::compute(text, para_level, &initial_classes, flags);
 
     let sequences = prepare::isolating_run_sequences(para_level, &initial_classes, &levels);
     for sequence in &sequences {
@@ -240,12 +241,15 @@ pub fn visual_runs(line: Range<usize>,
 /// Output of `initial_scan`
 #[derive(PartialEq, Debug)]
 pub struct InitialProperties {
-    /// The paragraph embedding level.
-    pub para_level: u8,
-
     /// The BidiClass of the character at each byte in the paragraph.
     /// If a character is multiple bytes, its class will appear multiple times in the vector.
     pub initial_classes: Vec<BidiClass>,
+
+    /// The paragraph embedding level.
+    pub para_level: u8,
+
+    /// The paragraph direction; used for optimizations in later stages.
+    pub flags: Flags,
 }
 
 /// Find the paragraph embedding level, and the BidiClass for each character.
@@ -257,6 +261,8 @@ pub struct InitialProperties {
 /// remain FSI, and it's up to later stages to treat these as LRI when needed.
 pub fn initial_scan(paragraph: &str, mut para_level: Option<u8>) -> InitialProperties {
     let mut classes = Vec::with_capacity(paragraph.len());
+
+    let mut flags = Flags::empty();
 
     // The stack contains the starting byte index for each nested isolate we're inside.
     let mut isolate_stack = Vec::new();
@@ -289,6 +295,7 @@ pub fn initial_scan(paragraph: &str, mut para_level: Option<u8>) -> InitialPrope
             }
             _ => {}
         }
+        flags.insert(Flags::from_class(class));
     }
     assert!(classes.len() == paragraph.len());
 
@@ -296,14 +303,71 @@ pub fn initial_scan(paragraph: &str, mut para_level: Option<u8>) -> InitialPrope
         // P3. If no character is found in p2, set the paragraph level to zero.
         para_level: para_level.unwrap_or(0),
         initial_classes: classes,
+        flags: flags,
     }
+}
+
+/// Extra information about a paragraph, used to optimize later steps.
+bitflags! {
+    flags Flags: u8 {
+        const HAS_LTR              = 0x0001,
+        const HAS_RTL              = 0x0002,
+        const HAS_AN               = 0x0004,
+        const HAS_POSSIBLE_NEUTRAL = 0x0008,
+        const HAS_EXPLICIT         = 0x0010,
+    }
+}
+
+impl Flags {
+    #[inline]
+    fn from_class(class: BidiClass) -> Flags {
+        match class {
+            L | EN =>
+                HAS_LTR,
+            LRE | LRO | LRI =>
+                HAS_LTR | HAS_POSSIBLE_NEUTRAL | HAS_EXPLICIT,
+            R | AL =>
+                HAS_RTL,
+            RLE | RLO | RLI =>
+                HAS_RTL | HAS_POSSIBLE_NEUTRAL | HAS_EXPLICIT,
+            AN =>
+                HAS_AN | HAS_LTR,
+            ON | CS | ES | ET | B | S | WS | BN | FSI | PDI | PDF =>
+                HAS_POSSIBLE_NEUTRAL,
+            NSM => Flags::empty()
+        }
+    }
+
+    fn to_direction(self) -> Direction {
+        // If the text has both AN and neutrals, then some neutrals may become RTL.
+        let has_rtl = self.contains(HAS_RTL) || self.contains(HAS_AN | HAS_POSSIBLE_NEUTRAL);
+        let has_ltr = self.contains(HAS_LTR);
+
+        match (has_ltr, has_rtl) {
+            (true, true) => Direction::Mixed,
+            (false, true) => Direction::RTL,
+            (_, false) => Direction::LTR
+        }
+    }
+}
+
+
+/// The direction of a paragraph based on the classes of its characters.
+#[derive(PartialEq, Debug)]
+pub enum Direction {
+    /// All characters are RTL.
+    RTL,
+    /// All characters are LTR.
+    LTR,
+    /// The paragraph may contain both LTR and RTL characters.
+    Mixed
 }
 
 /// 3.3.2 Explicit Levels and Directions
 ///
 /// http://www.unicode.org/reports/tr9/#Explicit_Levels_and_Directions
 mod explicit {
-    use super::{BidiClass, is_rtl};
+    use super::{BidiClass, Direction, Flags, HAS_EXPLICIT, is_rtl};
     use super::BidiClass::*;
 
     /// Output of the explicit levels algorithm.
@@ -316,13 +380,32 @@ mod explicit {
     ///
     /// `classes[i]` must contain the BidiClass of the char at byte index `i`,
     /// for each char in `text`.
-    pub fn compute(text: &str, para_level: u8, classes: &[BidiClass]) -> Result {
+    pub fn compute(text: &str, para_level: u8, classes: &[BidiClass], flags: Flags)
+        -> Result
+    {
         assert!(text.len() == classes.len());
 
+        let direction = flags.to_direction();
+        let default_level = match direction {
+            Direction::RTL => para_level | 1, // make sure level is odd.
+            Direction::LTR => para_level + 1 & !1, // make sure level is even.
+            Direction::Mixed => para_level
+        };
+
         let mut result = Result {
-            levels: vec![para_level; text.len()],
+            levels: vec![default_level; text.len()],
             classes: Vec::from(classes),
         };
+
+        if direction != Direction::Mixed || !flags.contains(HAS_EXPLICIT) {
+            // Optimization: Skip the rest of this step and just return initial
+            // levels and classes.
+            return result
+        }
+
+        // TODO: Recompute Flags based on the classes and levels computed below,
+        // for use in optimization of later steps.  Add a flag for whether the
+        // levels vec contains multiple runs.
 
         // http://www.unicode.org/reports/tr9/#X1
         let mut stack = DirectionalStatusStack::new();
@@ -494,6 +577,9 @@ mod prepare {
     pub fn isolating_run_sequences(para_level: u8, initial_classes: &[BidiClass], levels: &[u8])
         -> Vec<IsolatingRunSequence>
     {
+        // TODO: If earlier steps detected that the text is unidirectional (has only one level),
+        // just return a single run of the entire paragraph.
+
         let runs = level_runs(levels, initial_classes);
 
         // Compute the set of isolating run sequences.
@@ -811,25 +897,26 @@ mod test {
 
     #[test]
     fn test_initial_scan() {
-        use super::{InitialProperties, initial_scan};
+        use super::{Direction, initial_scan};
 
-        assert_eq!(initial_scan("a1", None), InitialProperties {
-            para_level: 0,
-            initial_classes: vec![L, EN],
-        });
-        assert_eq!(initial_scan("غ א", None), InitialProperties {
-            para_level: 1,
-            initial_classes: vec![AL, AL, WS, R, R],
-        });
+        let props = initial_scan("a1", None);
+        assert_eq!(props.para_level, 0);
+        assert_eq!(props.initial_classes, &[L, EN]);
+        assert_eq!(props.flags.to_direction(), Direction::LTR);
+
+        let props = initial_scan("غ א", None);
+        assert_eq!(props.para_level, 1);
+        assert_eq!(props.initial_classes, &[AL, AL, WS, R, R]);
+        assert_eq!(props.flags.to_direction(), Direction::RTL);
 
         let fsi = '\u{2068}';
         let pdi = '\u{2069}';
 
         let s = format!("{}א{}a", fsi, pdi);
-        assert_eq!(initial_scan(&s, None), InitialProperties {
-            para_level: 0,
-            initial_classes: vec![RLI, RLI, RLI, R, R, PDI, PDI, PDI, L],
-        });
+        let props = initial_scan(&s, None);
+        assert_eq!(props.para_level, 0);
+        assert_eq!(props.initial_classes, &[RLI, RLI, RLI, R, R, PDI, PDI, PDI, L]);
+        assert_eq!(props.flags.to_direction(), Direction::Mixed);
     }
 
     #[test]
@@ -893,6 +980,7 @@ mod test {
         }
 
         assert_eq!(reorder("abc123"), "abc123");
+        assert_eq!(reorder("אבג"), "גבא");
         assert_eq!(reorder("abc אבג"), "abc גבא");
         assert_eq!(reorder("אבג abc"), "abc גבא");
         assert_eq!(reorder("abc\u{2067}.-\u{2069}ghi"),
