@@ -100,6 +100,7 @@ pub fn process_paragraph(text: &str, level: Option<u8>) -> ParagraphInfo {
         implicit::resolve_neutral(sequence, &levels, &mut classes);
     }
     let max_level = implicit::resolve_levels(&classes, &mut levels);
+    assign_levels_to_removed_chars(para_level, &initial_classes, &mut levels);
 
     ParagraphInfo {
         levels: levels,
@@ -294,6 +295,18 @@ pub fn initial_scan(paragraph: &str, mut para_level: Option<u8>) -> InitialPrope
         // P3. If no character is found in p2, set the paragraph level to zero.
         para_level: para_level.unwrap_or(0),
         initial_classes: classes,
+    }
+}
+
+/// Assign levels to characters removed by rule X9.
+///
+/// The levels assigned to these characters are not specified by the algorithm.  This function
+/// assigns each one the level of the previous character, to avoid breaking level runs.
+fn assign_levels_to_removed_chars(para_level: u8, classes: &[BidiClass], levels: &mut [u8]) {
+    for i in 0..levels.len() {
+        if prepare::removed_by_x9(classes[i]) {
+            levels[i] = if i > 0 { levels[i-1] } else { para_level };
+        }
     }
 }
 
@@ -911,6 +924,6 @@ mod test {
         assert_eq!(reorder("abc\u{2067}.-\u{2069}ghi"),
                            "abc\u{2067}-.\u{2069}ghi");
         assert_eq!(reorder("Hello, \u{2068}\u{202E}world\u{202C}\u{2069}!"),
-                           "Hello, \u{2068}dlrow\u{202E}\u{202C}\u{2069}!");
+                           "Hello, \u{2068}\u{202E}\u{202C}dlrow\u{2069}!");
     }
 }
