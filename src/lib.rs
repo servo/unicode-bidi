@@ -212,9 +212,7 @@ pub fn visual_runs(line: Range<usize>,
         while seq_start < run_count {
             if levels[runs[seq_start].start] < max_level {
                 seq_start += 1;
-            }
-            if seq_start >= run_count {
-                break // No more runs found at this level.
+                continue
             }
 
             // Found the start of a sequence. Now find the end.
