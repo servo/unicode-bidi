@@ -100,6 +100,7 @@ pub fn process_paragraph(text: &str, level: Option<u8>) -> ParagraphInfo {
         implicit::resolve_neutral(sequence, &levels, &mut classes);
     }
     let max_level = implicit::resolve_levels(&classes, &mut levels);
+    assign_levels_to_removed_chars(para_level, &initial_classes, &mut levels);
 
     ParagraphInfo {
         levels: levels,
@@ -212,9 +213,7 @@ pub fn visual_runs(line: Range<usize>,
         while seq_start < run_count {
             if levels[runs[seq_start].start] < max_level {
                 seq_start += 1;
-            }
-            if seq_start >= run_count {
-                break // No more runs found at this level.
+                continue
             }
 
             // Found the start of a sequence. Now find the end.
@@ -299,6 +298,18 @@ pub fn initial_scan(paragraph: &str, mut para_level: Option<u8>) -> InitialPrope
     }
 }
 
+/// Assign levels to characters removed by rule X9.
+///
+/// The levels assigned to these characters are not specified by the algorithm.  This function
+/// assigns each one the level of the previous character, to avoid breaking level runs.
+fn assign_levels_to_removed_chars(para_level: u8, classes: &[BidiClass], levels: &mut [u8]) {
+    for i in 0..levels.len() {
+        if prepare::removed_by_x9(classes[i]) {
+            levels[i] = if i > 0 { levels[i-1] } else { para_level };
+        }
+    }
+}
+
 /// 3.3.2 Explicit Levels and Directions
 ///
 /// http://www.unicode.org/reports/tr9/#Explicit_Levels_and_Directions
@@ -351,6 +362,11 @@ mod explicit {
                     let is_isolate = matches!(classes[i], RLI | LRI | FSI);
                     if is_isolate {
                         result.levels[i] = last_level;
+                        match stack.last().status {
+                            OverrideStatus::RTL => result.classes[i] = R,
+                            OverrideStatus::LTR => result.classes[i] = L,
+                            _ => {}
+                        }
                     }
 
                     if valid(new_level) && overflow_isolate_count == 0 && overflow_embedding_count == 0 {
@@ -363,6 +379,8 @@ mod explicit {
                         if is_isolate {
                             valid_isolate_count += 1;
                         } else {
+                            // The spec doesn't explicitly mention this step, but it is necessary.
+                            // See the reference implementations for comparison.
                             result.levels[i] = new_level;
                         }
                     } else if is_isolate {
@@ -375,22 +393,25 @@ mod explicit {
                 PDI => {
                     if overflow_isolate_count > 0 {
                         overflow_isolate_count -= 1;
-                        continue
-                    }
-                    if valid_isolate_count == 0 {
-                        continue
-                    }
-                    overflow_embedding_count = 0;
-                    loop {
-                        // Pop everything up to and including the last Isolate status.
-                        match stack.vec.pop() {
-                            Some(Status { status: OverrideStatus::Isolate, .. }) => break,
-                            None => break,
-                            _ => continue
+                    } else if valid_isolate_count > 0 {
+                        overflow_embedding_count = 0;
+                        loop {
+                            // Pop everything up to and including the last Isolate status.
+                            match stack.vec.pop() {
+                                Some(Status { status: OverrideStatus::Isolate, .. }) => break,
+                                None => break,
+                                _ => continue
+                            }
                         }
+                        valid_isolate_count -= 1;
                     }
-                    valid_isolate_count -= 1;
-                    result.levels[i] = stack.last().level;
+                    let last = stack.last();
+                    result.levels[i] = last.level;
+                    match last.status {
+                        OverrideStatus::RTL => result.classes[i] = R,
+                        OverrideStatus::LTR => result.classes[i] = L,
+                        _ => {}
+                    }
                 }
                 // http://www.unicode.org/reports/tr9/#X7
                 PDF => {
@@ -404,6 +425,8 @@ mod explicit {
                     if stack.last().status != OverrideStatus::Isolate && stack.vec.len() >= 2 {
                         stack.vec.pop();
                     }
+                    // The spec doesn't explicitly mention this step, but it is necessary.
+                    // See the reference implementations for comparison.
                     result.levels[i] = stack.last().level;
                 }
                 // http://www.unicode.org/reports/tr9/#X6
@@ -438,7 +461,7 @@ mod explicit {
     /// The next odd level greater than `level`.
     fn next_rtl_level(level: u8) -> u8 { (level + 1) |  1 }
 
-    /// The next odd level greater than `level`.
+    /// The next even level greater than `level`.
     fn next_ltr_level(level: u8) -> u8 { (level + 2) & !1 }
 
     /// Entries in the directional status stack:
@@ -603,7 +626,7 @@ mod prepare {
     }
 
     // For use as a predicate for `position` / `rposition`
-    fn not_removed_by_x9(class: &BidiClass) -> bool {
+    pub fn not_removed_by_x9(class: &BidiClass) -> bool {
         !removed_by_x9(*class)
     }
 
@@ -629,21 +652,29 @@ mod prepare {
 
 /// 3.3.4 - 3.3.6. Resolve implicit levels and types.
 mod implicit {
-    use super::{BidiClass, class_for_level, is_rtl};
+    use super::{BidiClass, class_for_level, is_rtl, LevelRun};
     use super::BidiClass::*;
-    use super::prepare::IsolatingRunSequence;
+    use super::prepare::{IsolatingRunSequence, not_removed_by_x9, removed_by_x9};
     use std::cmp::max;
 
     /// 3.3.4 Resolving Weak Types
     ///
     /// http://www.unicode.org/reports/tr9/#Resolving_Weak_Types
     pub fn resolve_weak(sequence: &IsolatingRunSequence, classes: &mut [BidiClass]) {
+        // FIXME (#8): This function applies steps W1-W7 in a single pass.  This can produce
+        // incorrect results in cases where a "later" rule changes the value of `prev_class` seen
+        // by an "earlier" rule.  We should either split this into separate passes, or preserve
+        // extra state so each rule can see the correct previous class.
+
         let mut prev_class = sequence.sos;
         let mut last_strong_is_al = false;
         let mut last_strong_is_l = false;
         let mut et_run_indices = Vec::new(); // for W5
 
-        let mut indices = sequence.runs.iter().flat_map(Clone::clone).peekable();
+        // Like sequence.runs.iter().flat_map(Clone::clone), but make indices itself clonable.
+        fn id(x: LevelRun) -> LevelRun { x }
+        let mut indices = sequence.runs.iter().cloned().flat_map(id as fn(LevelRun) -> LevelRun);
+
         while let Some(i) = indices.next() {
             match classes[i] {
                 // http://www.unicode.org/reports/tr9/#W1
@@ -655,7 +686,7 @@ mod implicit {
                 }
                 EN => {
                     if last_strong_is_al {
-                        // W2. If previous strong char was AL, change EN to AL.
+                        // W2. If previous strong char was AL, change EN to AN.
                         classes[i] = AN;
                     } else {
                         // W5. If a run of ETs is adjacent to an EN, change the ETs to EN.
@@ -674,12 +705,13 @@ mod implicit {
 
                 // http://www.unicode.org/reports/tr9/#W4
                 ES | CS => {
-                    let next_class = indices.peek().map(|j| classes[*j]);
+                    let next_class = indices.clone().map(|j| classes[j]).filter(not_removed_by_x9)
+                        .next().unwrap_or(sequence.eos);
                     classes[i] = match (prev_class, classes[i], next_class) {
-                        (EN, ES, Some(EN)) |
-                        (EN, CS, Some(EN)) => EN,
-                        (AN, CS, Some(AN)) => AN,
-                        (_,  _,  _       ) => ON,
+                        (EN, ES, EN) |
+                        (EN, CS, EN) => EN,
+                        (AN, CS, AN) => AN,
+                        (_,  _,  _ ) => ON,
                     }
                 }
                 // http://www.unicode.org/reports/tr9/#W5
@@ -689,7 +721,9 @@ mod implicit {
                         _ => et_run_indices.push(i) // In case this is followed by an EN.
                     }
                 }
-                _ => {}
+                class => if removed_by_x9(class) {
+                    continue
+                }
             }
 
             prev_class = classes[i];
@@ -738,7 +772,7 @@ mod implicit {
                     match indices.next() {
                         Some(j) => {
                             i = j;
-                            if ::prepare::removed_by_x9(classes[i]) {
+                            if removed_by_x9(classes[i]) {
                                 continue
                             }
                             next_class = classes[j];
@@ -898,6 +932,6 @@ mod test {
         assert_eq!(reorder("abc\u{2067}.-\u{2069}ghi"),
                            "abc\u{2067}-.\u{2069}ghi");
         assert_eq!(reorder("Hello, \u{2068}\u{202E}world\u{202C}\u{2069}!"),
-                           "Hello, \u{2068}dlrow\u{202E}\u{202C}\u{2069}!");
+                           "Hello, \u{2068}\u{202E}\u{202C}dlrow\u{2069}!");
     }
 }
