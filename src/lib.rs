@@ -14,30 +14,32 @@
 //! ## Example
 //!
 //! ```rust
-//! use unicode_bidi::{process_paragraph, reorder_line};
+//! use unicode_bidi::{process_text, reorder_line};
 //!
 //! // This example text is defined using `concat!` because some browsers
 //! // and text editors have trouble displaying bidi strings.
-//! let paragraph = concat!["א",
-//!                         "ב",
-//!                         "ג",
-//!                         "a",
-//!                         "b",
-//!                         "c"];
+//! let text = concat!["א",
+//!                    "ב",
+//!                    "ג",
+//!                    "a",
+//!                    "b",
+//!                    "c"];
 //!
-//! // Resolve embedding levels within a paragraph.  Pass `None` to detect the
+//! // Resolve embedding levels within the text.  Pass `None` to detect the
 //! // paragraph level automatically.
-//! let info = process_paragraph(&paragraph, None);
+//! let info = process_text(&text, None);
 //!
 //! // This paragraph has embedding level 1 because its first strong character is RTL.
-//! assert_eq!(info.para_level, 1);
+//! assert_eq!(info.paragraphs.len(), 1);
+//! let paragraph_info = &info.paragraphs[0];
+//! assert_eq!(paragraph_info.level, 1);
 //!
-//! // Re-ordering is done after wrapping the paragraph into a sequence of
+//! // Re-ordering is done after wrapping each paragraph into a sequence of
 //! // lines. For this example, I'll just use a single line that spans the
 //! // entire paragraph.
-//! let line = 0..paragraph.len();
+//! let line = paragraph_info.range.clone();
 //!
-//! let display = reorder_line(&paragraph, line, &info);
+//! let display = reorder_line(&text, line, &info.levels);
 //! assert_eq!(display, concat!["a",
 //!                             "b",
 //!                             "c",
@@ -62,51 +64,71 @@ use std::cmp::{max, min};
 use std::iter::repeat;
 use std::ops::Range;
 
-/// Output of `process_paragraph`
+/// Output of `process_text`
 ///
-/// The `classes` and `levels` vectors are indexed by byte offsets into the paragraph text.  If a
-/// character is multiple bytes wide, then its class and level will appear multiple times in these
-/// vectors.
+/// The `classes` and `levels` vectors are indexed by byte offsets into the text.  If a character
+/// is multiple bytes wide, then its class and level will appear multiple times in these vectors.
 #[derive(Debug, PartialEq)]
-pub struct ParagraphInfo {
-    /// The BidiClass of the character at each byte in the paragraph.
+pub struct BidiInfo {
+    /// The BidiClass of the character at each byte in the text.
     pub classes: Vec<BidiClass>,
 
-    /// The directional embedding level of each byte in the paragraph.
+    /// The directional embedding level of each byte in the text.
     pub levels: Vec<u8>,
 
-    /// The paragraph embedding level.
+    /// The boundaries and paragraph embedding level of each paragraph within the text.
     ///
-    /// http://www.unicode.org/reports/tr9/#BD4
-    pub para_level: u8,
+    /// TODO: Use SmallVec or similar to avoid overhead when there are only one or two paragraphs?
+    /// Or just don't include the first paragraph, which always starts at 0?
+    pub paragraphs: Vec<ParagraphInfo>,
+}
 
-    /// The highest embedding level in the paragraph. (Can be used for optimizations.)
-    pub max_level: u8,
+/// Info about a single paragraph 
+#[derive(Debug, PartialEq)]
+pub struct ParagraphInfo {
+    /// The paragraphs boundaries within the text, as byte indices.
+    ///
+    /// TODO: Shrink this to only include the starting index?
+    pub range: Range<usize>,
+
+    /// The paragraph embedding level. http://www.unicode.org/reports/tr9/#BD4
+    pub level: u8,
 }
 
 /// Determine the bidirectional embedding levels for a single paragraph.
 ///
 /// TODO: In early steps, check for special cases that allow later steps to be skipped. like text
 /// that is entirely LTR.  See the `nsBidi` class from Gecko for comparison.
-pub fn process_paragraph(text: &str, level: Option<u8>) -> ParagraphInfo {
-    let InitialProperties { para_level, initial_classes } = initial_scan(text, level);
+pub fn process_text(text: &str, level: Option<u8>) -> BidiInfo {
+    let InitialProperties { initial_classes, paragraphs } = initial_scan(text, level);
 
-    let explicit::Result { mut classes, mut levels } =
-        explicit::compute(text, para_level, &initial_classes);
+    let mut levels = Vec::with_capacity(text.len());
+    let mut classes = initial_classes.clone();
 
-    let sequences = prepare::isolating_run_sequences(para_level, &initial_classes, &levels);
-    for sequence in &sequences {
-        implicit::resolve_weak(sequence, &mut classes);
-        implicit::resolve_neutral(sequence, &levels, &mut classes);
+    for para in &paragraphs {
+        let text = &text[para.range.clone()];
+        let classes = &mut classes[para.range.clone()];
+        let initial_classes = &initial_classes[para.range.clone()];
+
+        // FIXME: Use `levels.resize(...)` when it becomes stable.
+        levels.extend(repeat(para.level).take(para.range.len()));
+        let levels = &mut levels[para.range.clone()];
+
+        explicit::compute(text, para.level, &initial_classes, levels, classes);
+
+        let sequences = prepare::isolating_run_sequences(para.level, &initial_classes, levels);
+        for sequence in &sequences {
+            implicit::resolve_weak(sequence, classes);
+            implicit::resolve_neutral(sequence, levels, classes);
+        }
+        implicit::resolve_levels(classes, levels);
+        assign_levels_to_removed_chars(para.level, &initial_classes, levels);
     }
-    let max_level = implicit::resolve_levels(&classes, &mut levels);
-    assign_levels_to_removed_chars(para_level, &initial_classes, &mut levels);
 
-    ParagraphInfo {
+    BidiInfo {
         levels: levels,
         classes: initial_classes,
-        para_level: para_level,
-        max_level: max_level,
+        paragraphs: paragraphs,
     }
 }
 
@@ -128,23 +150,23 @@ fn class_for_level(level: u8) -> BidiClass {
 
 /// Re-order a line based on resolved levels.
 ///
-/// `info` is the result of calling `process_paragraph` on `paragraph`.
-/// `line` is a range of bytes indices within `paragraph`.
+/// `info` is the result of calling `process_text` on `text`.
+/// `line` is a range of bytes indices within `text`.
 ///
 /// Returns the line in display order.
-pub fn reorder_line<'a>(paragraph: &'a str, line: Range<usize>, info: &ParagraphInfo)
+pub fn reorder_line<'a>(text: &'a str, line: Range<usize>, levels: &[u8])
     -> Cow<'a, str>
 {
-    let runs = visual_runs(line.clone(), info.para_level, info.max_level, &info.levels);
-    if runs.len() == 1 && !is_rtl(info.levels[runs[0].start]) {
-        return paragraph.into()
+    let runs = visual_runs(line.clone(), &levels);
+    if runs.len() == 1 && !is_rtl(levels[runs[0].start]) {
+        return text.into()
     }
     let mut result = String::with_capacity(line.len());
     for run in runs {
-        if is_rtl(info.levels[run.start]) {
-            result.extend(paragraph[run].chars().rev());
+        if is_rtl(levels[run.start]) {
+            result.extend(text[run].chars().rev());
         } else {
-            result.push_str(&paragraph[run]);
+            result.push_str(&text[run]);
         }
     }
     result.into()
@@ -152,32 +174,22 @@ pub fn reorder_line<'a>(paragraph: &'a str, line: Range<usize>, info: &Paragraph
 
 /// A maximal substring of characters with the same embedding level.
 ///
-/// Represented as a range of byte indices within a paragraph.
+/// Represented as a range of byte indices.
 pub type LevelRun = Range<usize>;
 
 /// Find the level runs within a line and return them in visual order.
 ///
-/// `line` is a range of bytes indices within `paragraph`.
+/// `line` is a range of bytes indices within `levels`.
 ///
 /// http://www.unicode.org/reports/tr9/#Reordering_Resolved_Levels
-pub fn visual_runs(line: Range<usize>,
-                   para_level: u8,
-                   max_level: u8,
-                   levels: &[u8]) -> Vec<LevelRun> {
+pub fn visual_runs(line: Range<usize>, levels: &[u8]) -> Vec<LevelRun> {
     assert!(line.start <= levels.len());
     assert!(line.end <= levels.len());
 
     // TODO: Whitespace handling.
     // http://www.unicode.org/reports/tr9/#L1
 
-    assert!(max_level >= para_level);
-    let mut runs = Vec::with_capacity((max_level - para_level) as usize + 1);
-
-    // Optimization: If there's only one level, just return a single run for the whole line.
-    if max_level == para_level || line.len() == 0 {
-        runs.push(line.clone());
-        return runs
-    }
+    let mut runs = Vec::new();
 
     // Find consecutive level runs.
     let mut start = line.start;
@@ -239,33 +251,51 @@ pub fn visual_runs(line: Range<usize>,
 /// Output of `initial_scan`
 #[derive(PartialEq, Debug)]
 pub struct InitialProperties {
-    /// The paragraph embedding level.
-    pub para_level: u8,
-
-    /// The BidiClass of the character at each byte in the paragraph.
+    /// The BidiClass of the character at each byte in the text.
     /// If a character is multiple bytes, its class will appear multiple times in the vector.
     pub initial_classes: Vec<BidiClass>,
+
+    /// The boundaries and level of each paragraph within the text.
+    pub paragraphs: Vec<ParagraphInfo>,
 }
 
-/// Find the paragraph embedding level, and the BidiClass for each character.
+/// Find the paragraphs and BidiClasses in a string of text.
 ///
 /// http://www.unicode.org/reports/tr9/#The_Paragraph_Level
 ///
 /// Also sets the class for each First Strong Isolate initiator (FSI) to LRI or RLI if a strong
 /// character is found before the matching PDI.  If no strong character is found, the class will
 /// remain FSI, and it's up to later stages to treat these as LRI when needed.
-pub fn initial_scan(paragraph: &str, mut para_level: Option<u8>) -> InitialProperties {
-    let mut classes = Vec::with_capacity(paragraph.len());
+pub fn initial_scan(text: &str, default_para_level: Option<u8>) -> InitialProperties {
+    let mut classes = Vec::with_capacity(text.len());
 
     // The stack contains the starting byte index for each nested isolate we're inside.
     let mut isolate_stack = Vec::new();
+    let mut paragraphs = Vec::new();
+
+    let mut para_start = 0;
+    let mut para_level = default_para_level;
 
     const FSI_CHAR: char = '\u{2069}';
 
-    for (i, c) in paragraph.char_indices() {
+    for (i, c) in text.char_indices() {
         let class = bidi_class(c);
         classes.extend(repeat(class).take(c.len_utf8()));
         match class {
+            B => {
+                // P1. Split the text into separate paragraphs. The paragraph separator is kept
+                // with the previous paragraph.
+                let para_end = i + 1;
+                paragraphs.push(ParagraphInfo {
+                    range: para_start..para_end,
+                    // P3. If no character is found in p2, set the paragraph level to zero.
+                    level: para_level.unwrap_or(0)
+                });
+                // Reset state for the start of the next paragraph.
+                para_start = para_end;
+                para_level = default_para_level;
+                isolate_stack.clear();
+            }
             L | R | AL => match isolate_stack.last() {
                 Some(&start) => if classes[start] == FSI {
                     // X5c. If the first strong character between FSI and its matching PDI is R
@@ -289,12 +319,17 @@ pub fn initial_scan(paragraph: &str, mut para_level: Option<u8>) -> InitialPrope
             _ => {}
         }
     }
-    assert!(classes.len() == paragraph.len());
+    if para_start < text.len() {
+        paragraphs.push(ParagraphInfo {
+            range: para_start..text.len(),
+            level: para_level.unwrap_or(0)
+        });
+    }
+    assert!(classes.len() == text.len());
 
     InitialProperties {
-        // P3. If no character is found in p2, set the paragraph level to zero.
-        para_level: para_level.unwrap_or(0),
         initial_classes: classes,
+        paragraphs: paragraphs,
     }
 }
 
@@ -317,23 +352,13 @@ mod explicit {
     use super::{BidiClass, is_rtl};
     use super::BidiClass::*;
 
-    /// Output of the explicit levels algorithm.
-    pub struct Result {
-        pub levels: Vec<u8>,
-        pub classes: Vec<BidiClass>,
-    }
-
     /// Compute explicit embedding levels for one paragraph of text (X1-X8).
     ///
     /// `classes[i]` must contain the BidiClass of the char at byte index `i`,
     /// for each char in `text`.
-    pub fn compute(text: &str, para_level: u8, classes: &[BidiClass]) -> Result {
-        assert!(text.len() == classes.len());
-
-        let mut result = Result {
-            levels: vec![para_level; text.len()],
-            classes: Vec::from(classes),
-        };
+    pub fn compute(text: &str, para_level: u8, initial_classes: &[BidiClass],
+                   levels: &mut [u8], classes: &mut [BidiClass]) {
+        assert!(text.len() == initial_classes.len());
 
         // http://www.unicode.org/reports/tr9/#X1
         let mut stack = DirectionalStatusStack::new();
@@ -344,10 +369,10 @@ mod explicit {
         let mut valid_isolate_count = 0u32;
 
         for (i, c) in text.char_indices() {
-            match classes[i] {
+            match initial_classes[i] {
                 // Rules X2-X5c
                 RLE | LRE | RLO | LRO | RLI | LRI | FSI => {
-                    let is_rtl = match classes[i] {
+                    let is_rtl = match initial_classes[i] {
                         RLE | RLO | RLI => true,
                         _ => false
                     };
@@ -359,18 +384,18 @@ mod explicit {
                     };
 
                     // X5a-X5c: Isolate initiators get the level of the last entry on the stack.
-                    let is_isolate = matches!(classes[i], RLI | LRI | FSI);
+                    let is_isolate = matches!(initial_classes[i], RLI | LRI | FSI);
                     if is_isolate {
-                        result.levels[i] = last_level;
+                        levels[i] = last_level;
                         match stack.last().status {
-                            OverrideStatus::RTL => result.classes[i] = R,
-                            OverrideStatus::LTR => result.classes[i] = L,
+                            OverrideStatus::RTL => classes[i] = R,
+                            OverrideStatus::LTR => classes[i] = L,
                             _ => {}
                         }
                     }
 
                     if valid(new_level) && overflow_isolate_count == 0 && overflow_embedding_count == 0 {
-                        stack.push(new_level, match classes[i] {
+                        stack.push(new_level, match initial_classes[i] {
                             RLO => OverrideStatus::RTL,
                             LRO => OverrideStatus::LTR,
                             RLI | LRI | FSI => OverrideStatus::Isolate,
@@ -381,7 +406,7 @@ mod explicit {
                         } else {
                             // The spec doesn't explicitly mention this step, but it is necessary.
                             // See the reference implementations for comparison.
-                            result.levels[i] = new_level;
+                            levels[i] = new_level;
                         }
                     } else if is_isolate {
                         overflow_isolate_count += 1;
@@ -406,10 +431,10 @@ mod explicit {
                         valid_isolate_count -= 1;
                     }
                     let last = stack.last();
-                    result.levels[i] = last.level;
+                    levels[i] = last.level;
                     match last.status {
-                        OverrideStatus::RTL => result.classes[i] = R,
-                        OverrideStatus::LTR => result.classes[i] = L,
+                        OverrideStatus::RTL => classes[i] = R,
+                        OverrideStatus::LTR => classes[i] = L,
                         _ => {}
                     }
                 }
@@ -427,28 +452,26 @@ mod explicit {
                     }
                     // The spec doesn't explicitly mention this step, but it is necessary.
                     // See the reference implementations for comparison.
-                    result.levels[i] = stack.last().level;
+                    levels[i] = stack.last().level;
                 }
                 // http://www.unicode.org/reports/tr9/#X6
                 B | BN => {}
                 _ => {
                     let last = stack.last();
-                    result.levels[i] = last.level;
+                    levels[i] = last.level;
                     match last.status {
-                        OverrideStatus::RTL => result.classes[i] = R,
-                        OverrideStatus::LTR => result.classes[i] = L,
+                        OverrideStatus::RTL => classes[i] = R,
+                        OverrideStatus::LTR => classes[i] = L,
                         _ => {}
                     }
                 }
             }
             // Handle multi-byte characters.
             for j in 1..c.len_utf8() {
-                result.levels[i+j] = result.levels[i];
-                // TODO: Only do this if result.classes changed?
-                result.classes[i+j] = result.classes[i];
+                levels[i+j] = levels[i];
+                classes[i+j] = classes[i];
             }
         }
-        result
     }
 
     /// Maximum depth of the directional status stack.
@@ -845,15 +868,15 @@ mod test {
 
     #[test]
     fn test_initial_scan() {
-        use super::{InitialProperties, initial_scan};
+        use super::{InitialProperties, initial_scan, ParagraphInfo};
 
         assert_eq!(initial_scan("a1", None), InitialProperties {
-            para_level: 0,
             initial_classes: vec![L, EN],
+            paragraphs: vec![ParagraphInfo { range: 0..2, level: 0 }],
         });
         assert_eq!(initial_scan("غ א", None), InitialProperties {
-            para_level: 1,
             initial_classes: vec![AL, AL, WS, R, R],
+            paragraphs: vec![ParagraphInfo { range: 0..5, level: 1 }],
         });
 
         let fsi = '\u{2068}';
@@ -861,8 +884,8 @@ mod test {
 
         let s = format!("{}א{}a", fsi, pdi);
         assert_eq!(initial_scan(&s, None), InitialProperties {
-            para_level: 0,
             initial_classes: vec![RLI, RLI, RLI, R, R, PDI, PDI, PDI, L],
+            paragraphs: vec![ParagraphInfo { range: 0..9, level: 0 }],
         });
     }
 
@@ -876,54 +899,56 @@ mod test {
     }
 
     #[test]
-    fn test_paragraph_info() {
-        use super::{ParagraphInfo, process_paragraph};
+    fn test_process_text() {
+        use super::{BidiInfo, ParagraphInfo, process_text};
 
-        assert_eq!(process_paragraph("abc123", Some(0)), ParagraphInfo {
+        assert_eq!(process_text("abc123", Some(0)), BidiInfo {
             levels:  vec![0, 0, 0, 0,  0,  0],
             classes: vec![L, L, L, EN, EN, EN],
-            para_level: 0,
-            max_level: 0,
+            paragraphs: vec![ParagraphInfo { range: 0..6, level: 0 }],
         });
-        assert_eq!(process_paragraph("abc אבג", Some(0)), ParagraphInfo {
+        assert_eq!(process_text("abc אבג", Some(0)), BidiInfo {
             levels:  vec![0, 0, 0, 0,  1,1, 1,1, 1,1],
             classes: vec![L, L, L, WS, R,R, R,R, R,R],
-            para_level: 0,
-            max_level: 1,
+            paragraphs: vec![ParagraphInfo { range: 0..10, level: 0 }],
         });
-        assert_eq!(process_paragraph("abc אבג", Some(1)), ParagraphInfo {
+        assert_eq!(process_text("abc אבג", Some(1)), BidiInfo {
             levels:  vec![2, 2, 2, 1,  1,1, 1,1, 1,1],
             classes: vec![L, L, L, WS, R,R, R,R, R,R],
-            para_level: 1,
-            max_level: 2,
+            paragraphs: vec![ParagraphInfo { range: 0..10, level: 1 }],
         });
-        assert_eq!(process_paragraph("אבג abc", Some(0)), ParagraphInfo {
+        assert_eq!(process_text("אבג abc", Some(0)), BidiInfo {
             levels:  vec![1,1, 1,1, 1,1, 0,  0, 0, 0],
             classes: vec![R,R, R,R, R,R, WS, L, L, L],
-            para_level: 0,
-            max_level: 1,
+            paragraphs: vec![ParagraphInfo { range: 0..10, level: 0 }],
         });
-        assert_eq!(process_paragraph("אבג abc", None), ParagraphInfo {
+        assert_eq!(process_text("אבג abc", None), BidiInfo {
             levels:  vec![1,1, 1,1, 1,1, 1,  2, 2, 2],
             classes: vec![R,R, R,R, R,R, WS, L, L, L],
-            para_level: 1,
-            max_level: 2,
+            paragraphs: vec![ParagraphInfo { range: 0..10, level: 1 }],
         });
-        assert_eq!(process_paragraph("غ2ظ א2ג", Some(0)), ParagraphInfo {
+        assert_eq!(process_text("غ2ظ א2ג", Some(0)), BidiInfo {
             levels:  vec![1, 1,  2,  1, 1,  1,  1,1, 2,  1,1],
             classes: vec![AL,AL, EN, AL,AL, WS, R,R, EN, R,R],
-            para_level: 0,
-            max_level: 2,
+            paragraphs: vec![ParagraphInfo { range: 0..11, level: 0 }],
+        });
+        assert_eq!(process_text("a א.\nג", None), BidiInfo {
+            classes: vec![L, WS, R,R, CS, B, R,R],
+            levels:  vec![0, 0,  1,1, 0,  0, 1,1],
+            paragraphs: vec![ParagraphInfo { range: 0..6, level: 0 },
+                             ParagraphInfo { range: 6..8, level: 1 }],
         });
     }
 
     #[test]
     fn test_reorder_line() {
-        use super::{process_paragraph, reorder_line};
+        use super::{process_text, reorder_line};
         use std::borrow::Cow;
 
         fn reorder(s: &str) -> Cow<str> {
-            reorder_line(s, 0..s.len(), &process_paragraph(s, None))
+            let info = process_text(s, None);
+            let para = &info.paragraphs[0];
+            reorder_line(s, para.range.clone(), &info.levels)
         }
 
         assert_eq!(reorder("abc123"), "abc123");
