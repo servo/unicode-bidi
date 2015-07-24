@@ -8,8 +8,8 @@
 // except according to those terms.
 
 //! This crate implements the [Unicode Bidirectional Algorithm][tr9] for display of mixed
-//! right-to-left and left-to-right text.  It is written in safe Rust, compatible with Rust 1.0 and
-//! later.
+//! right-to-left and left-to-right text.  It is written in safe Rust, compatible with the
+//! current stable release.
 //!
 //! ## Example
 //!
@@ -150,7 +150,7 @@ fn class_for_level(level: u8) -> BidiClass {
 
 /// Re-order a line based on resolved levels.
 ///
-/// `info` is the result of calling `process_text` on `text`.
+/// `levels` are the embedding levels returned by `process_text`.
 /// `line` is a range of bytes indices within `text`.
 ///
 /// Returns the line in display order.
