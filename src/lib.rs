@@ -684,14 +684,13 @@ mod implicit {
     ///
     /// http://www.unicode.org/reports/tr9/#Resolving_Weak_Types
     pub fn resolve_weak(sequence: &IsolatingRunSequence, classes: &mut [BidiClass]) {
-        // FIXME (#8): This function applies steps W1-W7 in a single pass.  This can produce
+        // FIXME (#8): This function applies steps W1-W6 in a single pass.  This can produce
         // incorrect results in cases where a "later" rule changes the value of `prev_class` seen
         // by an "earlier" rule.  We should either split this into separate passes, or preserve
         // extra state so each rule can see the correct previous class.
 
         let mut prev_class = sequence.sos;
         let mut last_strong_is_al = false;
-        let mut last_strong_is_l = false;
         let mut et_run_indices = Vec::new(); // for W5
 
         // Like sequence.runs.iter().flat_map(Clone::clone), but make indices itself clonable.
@@ -713,12 +712,8 @@ mod implicit {
                         classes[i] = AN;
                     } else {
                         // W5. If a run of ETs is adjacent to an EN, change the ETs to EN.
-                        // W7. If the previous strong char was L, change all the ENs to L.
-                        if last_strong_is_l {
-                            classes[i] = L;
-                        }
                         for j in &et_run_indices {
-                            classes[*j] = classes[i];
+                            classes[*j] = EN;
                         }
                         et_run_indices.clear();
                     }
@@ -751,9 +746,8 @@ mod implicit {
 
             prev_class = classes[i];
             match prev_class {
-                L =>  { last_strong_is_al = false; last_strong_is_l = true;  }
-                R =>  { last_strong_is_al = false; last_strong_is_l = false; }
-                AL => { last_strong_is_al = true;  last_strong_is_l = false; }
+                L | R => { last_strong_is_al = false; }
+                AL => { last_strong_is_al = true;  }
                 _ => {}
             }
             if prev_class != ET {
@@ -762,6 +756,19 @@ mod implicit {
                     classes[*j] = ON;
                 }
                 et_run_indices.clear();
+            }
+        }
+
+        // W7. If the previous strong char was L, change EN to L.
+        let mut last_strong_is_l = sequence.sos == L;
+        for run in &sequence.runs {
+            for i in run.clone() {
+                match classes[i] {
+                    EN if last_strong_is_l => { classes[i] = L; }
+                    L => { last_strong_is_l = true; }
+                    R | AL => { last_strong_is_l = false; }
+                    _ => {}
+                }
             }
         }
     }
@@ -952,6 +959,8 @@ mod test {
         }
 
         assert_eq!(reorder("abc123"), "abc123");
+        assert_eq!(reorder("1.-2"), "1.-2");
+        assert_eq!(reorder("1-.2"), "1-.2");
         assert_eq!(reorder("abc אבג"), "abc גבא");
         assert_eq!(reorder("אבג abc"), "abc גבא");
         assert_eq!(reorder("abc\u{2067}.-\u{2069}ghi"),
