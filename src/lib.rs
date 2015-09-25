@@ -285,7 +285,7 @@ pub fn initial_scan(text: &str, default_para_level: Option<u8>) -> InitialProper
             B => {
                 // P1. Split the text into separate paragraphs. The paragraph separator is kept
                 // with the previous paragraph.
-                let para_end = i + 1;
+                let para_end = i + c.len_utf8();
                 paragraphs.push(ParagraphInfo {
                     range: para_start..para_end,
                     // P3. If no character is found in p2, set the paragraph level to zero.
@@ -885,6 +885,14 @@ mod test {
             initial_classes: vec![AL, AL, WS, R, R],
             paragraphs: vec![ParagraphInfo { range: 0..5, level: 1 }],
         });
+        {
+            let para1 = ParagraphInfo { range: 0..4, level: 0 };
+            let para2 = ParagraphInfo { range: 4..5, level: 0 };
+            assert_eq!(initial_scan("a\u{2029}b", None), InitialProperties {
+                initial_classes: vec![L, B, B, B, L],
+                paragraphs: vec![para1, para2],
+            });
+        }
 
         let fsi = '\u{2068}';
         let pdi = '\u{2069}';
