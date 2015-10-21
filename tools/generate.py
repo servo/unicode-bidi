@@ -193,8 +193,14 @@ def emit_bidi_module(f, bidi_class, cats):
         pfun=lambda x: "(%s,%s,%s)" % (escape_char(x[0]), escape_char(x[1]), x[2]),
         is_pub=False)
 
-if __name__ == "__main__":
+    if __name__ == "__main__":
+        os.chdir("../src/") # changing download path to /unicode-bidi/src/
+    
     r = "tables.rs"
+    # downloading the test case files
+    fetch("BidiTest.txt")
+    fetch("BidiCharacterTest.txt")
+
     if os.path.exists(r):
         os.remove(r)
     with open(r, "w") as rf:
@@ -212,5 +218,4 @@ if __name__ == "__main__":
 pub const UNICODE_VERSION: (u64, u64, u64) = (%s, %s, %s);
 """ % unicode_version)
         (bidi_cats, bidi_class) = load_unicode_data("UnicodeData.txt")
-
         emit_bidi_module(rf, bidi_class, bidi_cats)
