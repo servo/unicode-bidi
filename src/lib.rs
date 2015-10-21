@@ -959,21 +959,66 @@ mod test {
     fn test_reorder_line() {
         use super::{process_text, reorder_line};
         use std::borrow::Cow;
-
         fn reorder(s: &str) -> Cow<str> {
             let info = process_text(s, None);
             let para = &info.paragraphs[0];
             reorder_line(s, para.range.clone(), &info.levels)
         }
-
         assert_eq!(reorder("abc123"), "abc123");
         assert_eq!(reorder("1.-2"), "1.-2");
         assert_eq!(reorder("1-.2"), "1-.2");
         assert_eq!(reorder("abc אבג"), "abc גבא");
+        //Numbers being weak LTR characters, cannot reorder strong RTL
+        assert_eq!(reorder("123 אבג"), "גבא 123");
+        //Testing for RLE Character
+        assert_eq!(reorder("\u{202B}abc אבג\u{202C}"), "\u{202B}\u{202C}גבא abc");
+        //Testing netral characters
+        assert_eq!(reorder("אבג? אבג"), "גבא ?גבא");
+        //Testing netral characters with special case
+        assert_eq!(reorder("A אבג?"), "A גבא?");
+        //Testing netral characters with Implicit RTL Marker
+        //assert_eq!(reorder("A אבג?\u{202f}"), "A \u{202f}?גבא");
+        //
         assert_eq!(reorder("אבג abc"), "abc גבא");
         assert_eq!(reorder("abc\u{2067}.-\u{2069}ghi"),
                            "abc\u{2067}-.\u{2069}ghi");
         assert_eq!(reorder("Hello, \u{2068}\u{202E}world\u{202C}\u{2069}!"),
                            "Hello, \u{2068}\u{202E}\u{202C}dlrow\u{2069}!");
+    }
+
+    #[test]
+    fn test_is_ltr() {
+        use super::is_ltr;
+        assert_eq!(is_ltr(10), true);
+        assert_eq!(is_ltr(11), false);
+        assert_eq!(is_ltr(20), true);
+    }
+
+     #[test]
+    fn test_is_rtl() {
+        use super::is_rtl;
+        assert_eq!(is_rtl(13), true);
+        assert_eq!(is_rtl(11), true);
+        assert_eq!(is_rtl(20), false);
+    }
+    #[test]
+    fn test_removed_by_x9() {
+        use prepare::removed_by_x9;
+        let rem_classes = &[RLE, LRE, RLO, LRO, PDF, BN];
+        let not_classes = &[L, RLI, AL, LRI, PDI];
+        for x in 0..rem_classes.len(){
+            assert_eq!(removed_by_x9(rem_classes[x]),true);
+        }
+        for x in 0..not_classes.len(){
+            assert_eq!(removed_by_x9(not_classes[x]),false);
+        }
+    }
+    #[test]
+    fn test_not_removed_by_x9() {
+        use prepare::not_removed_by_x9;
+        let non_x9_classes = &[L,R,AL,EN,ES,ET,AN,CS,NSM,B,S,WS,ON,LRI,RLI,FSI,PDI];
+        for x in 0..non_x9_classes.len(){
+            assert_eq!(not_removed_by_x9(&non_x9_classes[x]),true);
+        }
     }
 }

@@ -194,7 +194,12 @@ def emit_bidi_module(f, bidi_class, cats):
         is_pub=False)
 
 if __name__ == "__main__":
+    os.chdir("../src/") # Changing the path to /unicode-bidi/src/ so that it stores the file in the src folder rather than the current folder
     r = "tables.rs"
+#Downloading the conformance test suite: conformance testsuite: http://www.unicode.org/Public/UNIDATA/BidiTest.txt and http://www.unicode.org/Public/UNIDATA/BidiCharacterTest.txt
+    fetch("BidiTest.txt")
+    fetch("BidiCharacterTest.txt")
+
     if os.path.exists(r):
         os.remove(r)
     with open(r, "w") as rf:
@@ -212,5 +217,4 @@ if __name__ == "__main__":
 pub const UNICODE_VERSION: (u64, u64, u64) = (%s, %s, %s);
 """ % unicode_version)
         (bidi_cats, bidi_class) = load_unicode_data("UnicodeData.txt")
-
         emit_bidi_module(rf, bidi_class, bidi_cats)
