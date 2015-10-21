@@ -194,7 +194,14 @@ def emit_bidi_module(f, bidi_class, cats):
         is_pub=False)
 
 if __name__ == "__main__":
+    os.chdir("../src/") # Changing the path to /unicode-bidi/src/ so that it stores the file in the src folder rather than the current folder
     r = "tables.rs"
+
+	#Downloading the conformance test suite: conformance testsuite: http://www.unicode.org/Public/UNIDATA/BidiTest.txt and http://www.unicode.org/Public/UNIDATA/BidiCharacterTest.txt
+	
+    fetch("BidiTest.txt")
+    fetch("BidiCharacterTest.txt")
+
     if os.path.exists(r):
         os.remove(r)
     with open(r, "w") as rf:
