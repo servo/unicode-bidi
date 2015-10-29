@@ -976,4 +976,15 @@ mod test {
         assert_eq!(reorder("Hello, \u{2068}\u{202E}world\u{202C}\u{2069}!"),
                            "Hello, \u{2068}\u{202E}\u{202C}dlrow\u{2069}!");
     }
+
+    #[test]
+    fn test_is_ltr(){
+
+        use super::is_ltr;
+        
+        assert_eq!(is_ltr(10), true);
+        assert_eq!(is_ltr(11), false);
+        assert_eq!(is_ltr(20), true);
+
+    }
 }
