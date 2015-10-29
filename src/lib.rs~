@@ -993,9 +993,9 @@ mod test {
 
         use super::is_rtl;
         
-        assert_eq!(is_rtl(13), true);
-        assert_eq!(is_rtl(11), true);
-        assert_eq!(is_rtl(20), false);
+        assert_eq!(is_ltr(13), true);
+        assert_eq!(is_ltr(11), true);
+        assert_eq!(is_ltr(20), false);
 
     }
 }
