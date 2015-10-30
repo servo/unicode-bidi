@@ -989,13 +989,21 @@ mod test {
     }
 
     #[test]
-    fn test_is_rtl(){
+    fn test_removed_by_x9(){
 
-        use super::is_rtl;
-        
-        assert_eq!(is_rtl(13), true);
-        assert_eq!(is_rtl(11), true);
-        assert_eq!(is_rtl(20), false);
+        use prepare::removed_by_x9;
+
+        let rem_classes = &[RLE, LRE, RLO, LRO, PDF, BN];
+        let not_classes = &[L, RLI, AL, LRI, PDI];
+
+        for x in 0..rem_classes.len(){
+            assert_eq!(removed_by_x9(rem_classes[x]),true);
+        }
+
+        for x in 0..not_classes.len(){
+            assert_eq!(removed_by_x9(not_classes[x]),false);
+        }
+
 
     }
 }
