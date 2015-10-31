@@ -970,6 +970,10 @@ mod test {
         assert_eq!(reorder("1.-2"), "1.-2");
         assert_eq!(reorder("1-.2"), "1-.2");
         assert_eq!(reorder("abc אבג"), "abc גבא");
+
+        //Numbers being weak LTR characters, cannot reorder strong RTL
+        assert_eq!(reorder("123 אבג"), "גבא 123");
+        //
         assert_eq!(reorder("אבג abc"), "abc גבא");
         assert_eq!(reorder("abc\u{2067}.-\u{2069}ghi"),
                            "abc\u{2067}-.\u{2069}ghi");
@@ -1031,6 +1035,5 @@ mod test {
     }
 
     //resolve_neutral(sequence, levels, classes);
-
 
 }
