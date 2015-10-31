@@ -973,6 +973,14 @@ mod test {
 
         //Numbers being weak LTR characters, cannot reorder strong RTL
         assert_eq!(reorder("123 אבג"), "גבא 123");
+        //Testing for RLE Character
+        assert_eq!(reorder("\u{202B}abc אבג\u{202C}"), "\u{202B}\u{202C}גבא abc");
+        //Testing netral characters
+        assert_eq!(reorder("אבג? אבג"), "גבא ?גבא");
+        //Testing netral characters with special case
+        assert_eq!(reorder("A אבג?"), "A גבא?");
+        //Testing netral characters with Implicit RTL Marker
+        assert_eq!(reorder("A אבג?\u{202f}"), "A \u{202f}?גבא");
         //
         assert_eq!(reorder("אבג abc"), "abc גבא");
         assert_eq!(reorder("abc\u{2067}.-\u{2069}ghi"),
