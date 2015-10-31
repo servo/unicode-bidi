@@ -988,6 +988,17 @@ mod test {
 
     }
 
+     #[test]
+    fn test_is_rtl(){
+
+        use super::is_rtl;
+        
+        assert_eq!(is_rtl(13), true);
+        assert_eq!(is_rtl(11), true);
+        assert_eq!(is_rtl(20), false);
+
+    }
+
     #[test]
     fn test_removed_by_x9(){
 
