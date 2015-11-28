@@ -544,7 +544,6 @@ mod prepare {
 
         // Compute the set of isolating run sequences.
         // http://www.unicode.org/reports/tr9/#BD13
-
         let mut sequences = Vec::with_capacity(runs.len());
 
         // When we encounter an isolate initiator, we push the current sequence onto the
@@ -709,7 +708,7 @@ mod implicit {
                     classes[i] = match prev_class_w1 {
                         RLI | LRI | FSI | PDI => ON,
                         _ => prev_class_w1
-                    };
+                     };
                 }
                 EN => {
                     if last_strong_is_al {
@@ -740,7 +739,7 @@ mod implicit {
                 // http://www.unicode.org/reports/tr9/#W5
                 ET => {
                     match prev_class_w5 {
-                        EN => classes[i] = EN,
+                       EN => classes[i] = EN,
                         _ => et_run_indices.push(i) // In case this is followed by an EN.
                     }
                 }
@@ -751,12 +750,12 @@ mod implicit {
 
             prev_class_w5 = classes[i];
             match prev_class_w5 {
-                L | R => { last_strong_is_al = false; }
+              L | R => { last_strong_is_al = false; }
                 AL => { last_strong_is_al = true;  }
                 _ => {}
             }
             if prev_class_w6 != ET {
-                // W6. If we didn't find an adjacent EN, turn any ETs into ON instead.
+             // W6. If we didn't find an adjacent EN, turn any ETs into ON instead.
                 for j in &et_run_indices {
                     classes[*j] = ON;
                 }
