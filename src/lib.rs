@@ -690,66 +690,51 @@ mod implicit {
         // extra state so each rule can see the correct previous class.
 
         let mut prev_class = sequence.sos;
-        let mut prev_class_cur_state = prev_class;
-	let mut last_strong_is_al = false;
+        let mut last_strong_is_al = false;
         let mut et_run_indices = Vec::new(); // for W5
-	
+
         // Like sequence.runs.iter().flat_map(Clone::clone), but make indices itself clonable.
         fn id(x: LevelRun) -> LevelRun { x }
         let mut indices = sequence.runs.iter().cloned().flat_map(id as fn(LevelRun) -> LevelRun);
 
-	// http://www.unicode.org/reports/tr9/#W1
         while let Some(i) = indices.next() {
             match classes[i] {
-                                NSM => {
-                    classes[i] = match prev_class_cur_state {
+                // http://www.unicode.org/reports/tr9/#W1
+                NSM => {
+                    classes[i] = match prev_class {
                         RLI | LRI | FSI | PDI => ON,
-                        _ => prev_class_cur_state
+                        _ => prev_class
                     };
-                	}
-		}
-	}
-
-	// W2. If previous strong char was AL, change EN to AN.
-	while let Some(i) = indices.next() {
+                }
                 EN => {
                     if last_strong_is_al {
-                                                classes[i] = AN;
+                        // W2. If previous strong char was AL, change EN to AN.
+                        classes[i] = AN;
+                    } else {
+                        // W5. If a run of ETs is adjacent to an EN, change the ETs to EN.
+                        for j in &et_run_indices {
+                            classes[*j] = EN;
+                        }
+                        et_run_indices.clear();
                     }
-		}
-	}
+                }
+                // http://www.unicode.org/reports/tr9/#W3
+                AL => classes[i] = R,
 
-	 // http://www.unicode.org/reports/tr9/#W3
-	 while let Some(i) = indices.next() {
-	                AL => classes[i] = R,
-	}
-	
-	// http://www.unicode.org/reports/tr9/#W4
-	 while let Some(i) = indices.next() {
-	                 ES | CS => {
+                // http://www.unicode.org/reports/tr9/#W4
+                ES | CS => {
                     let next_class = indices.clone().map(|j| classes[j]).filter(not_removed_by_x9)
                         .next().unwrap_or(sequence.eos);
-                    classes[i] = match (prev_class_cur_state, classes[i], next_class) {
+                    classes[i] = match (prev_class, classes[i], next_class) {
                         (EN, ES, EN) |
                         (EN, CS, EN) => EN,
                         (AN, CS, AN) => AN,
                         (_,  _,  _ ) => ON,
                     }
                 }
-	}
-
-	 // W5. If a run of ETs is adjacent to an EN, change the ETs to EN.
-	 while let Some(i) = indices.next() {
-		if !last_strong_is_al {
-                    for j in &et_run_indices {
-                            classes[*j] = EN;
-                        }
-                        et_run_indices.clear();
-                    }
-               
-                     // http://www.unicode.org/reports/tr9/#W5
+                // http://www.unicode.org/reports/tr9/#W5
                 ET => {
-                    match prev_class_cur_state {
+                    match prev_class {
                         EN => classes[i] = EN,
                         _ => et_run_indices.push(i) // In case this is followed by an EN.
                     }
@@ -757,21 +742,17 @@ mod implicit {
                 class => if removed_by_x9(class) {
                     continue
                 }
-            
+            }
 
-            prev_class_cur_state = classes[i];
-            match prev_class_cur_state {
+            prev_class = classes[i];
+            match prev_class {
                 L | R => { last_strong_is_al = false; }
                 AL => { last_strong_is_al = true;  }
                 _ => {}
             }
-	}
-
-
-	 // W6. If we didn't find an adjacent EN, turn any ETs into ON instead.
-	 while let Some(i) = indices.next() {
-            if prev_class_cur_state != ET {
-                               for j in &et_run_indices {
+            if prev_class != ET {
+                // W6. If we didn't find an adjacent EN, turn any ETs into ON instead.
+                for j in &et_run_indices {
                     classes[*j] = ON;
                 }
                 et_run_indices.clear();
