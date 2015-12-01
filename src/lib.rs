@@ -988,6 +988,7 @@ mod test {
                            "abc\u{2067}-.\u{2069}ghi");
         assert_eq!(reorder("Hello, \u{2068}\u{202E}world\u{202C}\u{2069}!"),
                            "Hello, \u{2068}\u{202E}\u{202C}dlrow\u{2069}!");
+//The comments below help locate where to push Automated Test Cases. Do not remove.
 //BeginInsertedTestCases: Test cases from BidiTest.txt go here
 //EndInsertedTestCases: Test cases from BidiTest.txt go here
 //BeginInsertedTestCases: Test cases from BidiTest.txt go here
