@@ -1,3 +1,29 @@
+import os
+
+def delete_all_lines_between_markers(filename, opening_marker, closing_marker):
+    with open(filename, 'r') as file:
+        data = file.readlines()
+    i = 0
+    remove_statement = False
+    while i < len(data):
+        v = data[i]
+        #print("Here is ", v)
+        if v.startswith(closing_marker):
+            remove_statement = False
+            print(v, "Found")
+        if remove_statement == True:
+            print("Removing", v)
+            data.pop(i)
+            i=i-1
+        if v.startswith(opening_marker):
+            print(v, "Found")
+            remove_statement = True
+        i = i + 1
+    with open(filename, 'w') as file:
+        file.writelines(data)
+    file.close()
+#delete_all_lines_between_markers("target.txt", "//VickyStart", "//VickyEnd")
+
 def remove_newline_char(str):
     return str.replace("\n", "")
 def remove_newline_char_and_invalid_test_cases(l):
@@ -13,6 +39,7 @@ def remove_newline_char_and_invalid_test_cases(l):
         #print("\t\tAfter ", i,": ", l)
         i = i + 1
     return l
+
 def return_BidiCharacterTest_test_cases_in(filename):
     with open(filename, 'r') as file:
         data = file.readlines()
@@ -21,6 +48,7 @@ def return_BidiCharacterTest_test_cases_in(filename):
     #print(" before remove_newline_char_and_invalid_test_cases", data)
     return remove_newline_char_and_invalid_test_cases(data)
 #test_cases = return_BidiCharacterTest_test_cases_in("BidiCharacterTest.txt")
+
 class BidiCharacterTestCase(object):
     def return_unicode_string(self, stringArr):
         s = ""
@@ -66,6 +94,8 @@ def insert_list_into_file_after_marker(filename, array, marker):
 #insert_array_into_file_after_marker("target.txt", ["123\n", "456\n", "7890\n"], "//Vicky\n")
 
 def parse_all_test_cases_from_BidiCharacterTest_txt(marker):
+	#Delete TestCases inserted the last time to avoid inserting copies of test cases
+    delete_all_lines_between_markers("lib.rs", "//BeginInsertedTestCases", "//EndInsertedTestCases")
     #Read testcases from file BidiCharacterTest.txt and get an array from 'return_BidiCharacterTest_test_cases_in'
     unparsed_test_cases = return_BidiCharacterTest_test_cases_in("BidiCharacterTest.txt")
     #print(unparsed_test_cases)
@@ -73,7 +103,9 @@ def parse_all_test_cases_from_BidiCharacterTest_txt(marker):
     BidiTestCaseList = []
     for testcase in unparsed_test_cases:
         BidiTestCaseList.append(BidiCharacterTestCase(testcase).reorderline_assert_test())
-    #print(BidiTestCaseList)
+    print(BidiTestCaseList)
     #Write each test case to output file after some comment
     insert_list_into_file_after_marker("lib.rs", BidiTestCaseList, marker)
-#parse_all_test_cases_from_BidiCharacterTest_txt
+#Manual Testing of the code. Never Call this directly. Always call generate.py 
+os.chdir("../src/")
+parse_all_test_cases_from_BidiCharacterTest_txt("vv")
