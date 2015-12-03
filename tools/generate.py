@@ -206,11 +206,11 @@ if __name__ == "__main__":
     delete_all_lines_between_markers("lib.rs", "//BeginInsertedTestCases", "//EndInsertedTestCases")
     print("Deleted all previous test cases...")
     # parse all test cases from BidiCharacterTest.txt and place them in lib.rs after 'marker'
-    parse_all_test_cases_from_BidiCharacterTest_txt()
-    print("Inserted Test Cases from BidiCharacterTest.txt...")
+    #parse_all_test_cases_from_BidiCharacterTest_txt()
+    #print("Inserted Test Cases from BidiCharacterTest.txt...")
     # parse all test cases from BidiTest.txt and place them in lib.rs after 'marker'
-    fetch_BidiTestCases_from_file()
-    print("Inserted Test Cases from BidiTest.txt...")
+    #fetch_BidiTestCases_from_file()
+    #print("Inserted Test Cases from BidiTest.txt...")
 
     if os.path.exists(r):
         os.remove(r)

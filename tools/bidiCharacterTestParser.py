@@ -106,7 +106,3 @@ def parse_all_test_cases_from_BidiCharacterTest_txt():
 	#print(BidiTestCaseList)
     #Write each test case to output file after some comment
 	insert_list_into_file_after_marker("lib.rs", BidiTestCaseList, marker)
-#Manual Testing of the code. Never Call this directly. Always call generate.py 
-# os.chdir("../src/")
-# parse_all_test_cases_from_BidiCharacterTest_txt("vv")
-delete_all_lines_between_markers("test.rs", "//BeginInsertedTestCases", "//EndInsertedTestCases")
