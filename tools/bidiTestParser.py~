@@ -5,10 +5,7 @@ def fetch_BidiTestCases_from_file():
     with open(filename, 'rt') as f:
     	file_data = f.readlines()
     file_data = list(file_data)
-    file_data = remove_comments(file_data)
-    seperate_parse_data(file_data)
-    #print file_data
-    
+    return remove_comments(file_data)
 
 def remove_comments(fl_data):
 	i = 0
@@ -20,7 +17,7 @@ def remove_comments(fl_data):
 		else:
 			fl_data[i] = remove_new_line(fl_data[i])
 		i = i + 1
-	return fl_data
+	return seperate_parse_data(fl_data)
 
 def remove_new_line(rem_line):
 	new_file_data = rem_line.replace("\n", "")
@@ -55,7 +52,7 @@ def generate_final_output(levels, reorderVal, test_cases, para_level):
 	ans = []
 	final_oup = []
 	while i < len(test_cases):
-		print test_cases[i]
+		#print test_cases[i]
 		for j in range(0, len(test_cases[i])):
 			ans.append(generate_random_character(test_cases[i][j]))
 			j  = j + 1
@@ -103,12 +100,9 @@ def return_unicode_string(input_text):
 
 def return_array(input_text):
 	s = ""
-	#print "input_text", input_text
-	for e in input_text:
-		s = s + e + ","
-	#s = s + input_text[len(input_text)-1]
-	s = s[:-1]
-	#print "s", s
+	for i in range(0, len(input_text)-1):
+		s = s + input_text[i] + ","
+	s = s + input_text[len(input_text)-1]
 	return s
 
 def insert_into_process_text(levels, reorderVal, ans, bidi_classes,para_level):
@@ -116,6 +110,7 @@ def insert_into_process_text(levels, reorderVal, ans, bidi_classes,para_level):
 	#print "assert_eq!(process_text(, None), BidiInfo {levels: vec![],classes: vec![] ,paragraphs: vec![ParagraphInfo {}],});"
 	remove_x = 'x'
 	levels_final = return_array(levels)
+	#print s[1:]
 	for i in range(0, len(levels_final)):
 		if remove_x in levels_final:
 			bidi_classes = bidi_classes[:i] + bidi_classes[i+1:]
@@ -159,4 +154,4 @@ def delete_all_lines_between_markers(filename, opening_marker, closing_marker):
     file.close()	
 
 
-#fetch_BidiTestCases_from_file()
+fetch_BidiTestCases_from_file()

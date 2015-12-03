@@ -5,10 +5,10 @@ def fetch_BidiTestCases_from_file():
     with open(filename, 'rt') as f:
     	file_data = f.readlines()
     file_data = list(file_data)
-    file_data = remove_comments(file_data)
-    seperate_parse_data(file_data)
-    #print file_data
-    
+    fl_data = remove_comments(file_data)
+    #print fl_data
+    (levels,reorderVal,test_cases, para_level) = seperate_parse_data(fl_data)
+    generate_final_output(levels, reorderVal, test_cases, para_level)
 
 def remove_comments(fl_data):
 	i = 0
@@ -41,7 +41,7 @@ def seperate_parse_data(file_data2):
 			#print reorderVal
 		elif file_data2[j].startswith(countKeyword):
 			countVal = file_data2[j].lstrip(countKeyword).strip('\t').strip('\n').split(' ')
-			generate_final_output(levels,reorderVal,test_cases, para_level)
+			return (levels,reorderVal,test_cases, para_level)
 		else:
 			data_fields = file_data2[j].strip('\n').strip('\t').split(';')
 			test_cases.append(data_fields[0].strip('\n').split(' '))
@@ -49,13 +49,14 @@ def seperate_parse_data(file_data2):
 			#print para_level
 		j = j + 1
 
+
 def generate_final_output(levels, reorderVal, test_cases, para_level):
 	i = 0
 	j = 0 
 	ans = []
 	final_oup = []
 	while i < len(test_cases):
-		print test_cases[i]
+		#print test_cases[i]
 		for j in range(0, len(test_cases[i])):
 			ans.append(generate_random_character(test_cases[i][j]))
 			j  = j + 1
@@ -129,12 +130,12 @@ def insert_into_process_text(levels, reorderVal, ans, bidi_classes,para_level):
 	for i in range(0, len(ans)):
 		ans[i] = '\\'+"u{" + ans[i] + "}"
 
-
+	#print "bidi classes", bidi_classes
 	bidi_class_final = return_array(bidi_classes)
 	input_text_final = return_unicode_string(ans)
-	print bidi_class_final
-	print input_text_final
-	print levels_final
+	#print bidi_class_final
+	#print input_text_final
+	#print levels_final
 	range_final = str(len(bidi_classes))
 	
 	return "assert_eq!(process_text(\""+input_text_final+"\", None), BidiInfo { levels:  vec!["+levels_final+"], classes: vec!["+bidi_class_final+"],paragraphs: vec![ParagraphInfo { range: 0.."+range_final+", level: "+para_level+" }],});"
