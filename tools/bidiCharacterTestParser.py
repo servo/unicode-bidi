@@ -1,5 +1,3 @@
-import os
-
 def delete_all_lines_between_markers(filename, opening_marker, closing_marker):
     with open(filename, 'r') as file:
         data = file.readlines()
@@ -10,13 +8,13 @@ def delete_all_lines_between_markers(filename, opening_marker, closing_marker):
         #print("Here is ", v)
         if v.startswith(closing_marker):
             remove_statement = False
-            print(v, "Found")
+            #print(v, " : Completing Delete...")
         if remove_statement == True:
-            print("Removing", v)
+            #print("Removing", v)
             data.pop(i)
             i=i-1
         if v.startswith(opening_marker):
-            print(v, "Found")
+            #print(v, " : Starting Delete...")
             remove_statement = True
         i = i + 1
     with open(filename, 'w') as file:
@@ -31,7 +29,7 @@ def remove_newline_char_and_invalid_test_cases(l):
     while i < len(l):
         #print("before ", i,": ", l, end="")
         v = l[i]
-        if v.startswith("#") or v.startswith('\n'):
+        if v.startswith('\n') or v.startswith('\\\\') or v.startswith("#"):
             l.pop(i)
             i=i-1
         else:
@@ -59,25 +57,27 @@ class BidiCharacterTestCase(object):
         field = unformatted.split(';')
         inp_arr = field[0].split(' ')
         try:
-            oup_ind_and_line_marker = field[4].split("#")
+            oup_ind_and_line_marker = field[4].split("//-->")
         except IndexError:
             print("line which gave error: :", unformatted)
             print("field[4]:", field[4])
-        self.marker = oup_ind_and_line_marker[1]
+        #if len(oup_ind_and_line_marker) > 1:
+    	self.marker = oup_ind_and_line_marker[1]
         oup_ind = oup_ind_and_line_marker[0].split(' ')
         oup_arr = []
-        for index in range(0, len(oup_ind)):
-            inp_arr[index] = '\\'+"u{" + inp_arr[index] + "}"
+        for index in range(0, len(inp_arr)):
+            inp_arr[index] = "\\u{" + inp_arr[index] + "}"
         for index in range(0, len(oup_ind)):
             oup_arr.append(inp_arr[int(oup_ind[index])])
         self.inp = self.return_unicode_string(inp_arr)
         self.oup = self.return_unicode_string(oup_arr)
     def reorderline_assert_test(self):
         return "assert_eq!(reorder(\""+self.inp+"\"),\""+self.oup+"\");"+"//"+self.marker
-#b = BidiCharacterTestCase("0061 0062 0063 0020 0028 0064 0065 0066 0020 0627 0628 062C 0029 0020 05D0 05D1 05D2;0;0;0 0 0 0 0 0 0 0 0 1 1 1 0 0 1 1 1;0 1 2 3 4 5 6 7 8 11 10 9 12 13 16 15 14#-->BidiCharacterTest.txt Line Number:2")
-#print(b.inp)
-#print(b.oup)
-#print(b.reorderline_assert_test())
+#b = BidiCharacterTestCase("0061 0062 0063 0020 0028 0064 0065 0066 0020 0627 0628 062C 0029 0020 05D0 05D1 05D2;0;0;0 0 0 0 0 0 0 0 0 1 1 1 0 0 1 1 1;0 1 2 3 4 5 6 7 8 11 10 9 12 13 16 15 14//-->BidiCharacterTest.txt Line Number:2")
+# b = BidiCharacterTestCase("05D0 2067 202A 0041;1;1;1 1 x 4;3 1 0//-->BidiCharacterTest.txt Line Number:2")
+# print(b.inp)
+# print(b.oup)
+# print(b.reorderline_assert_test())
 def insert_list_into_file_after_marker(filename, array, marker):
     #Open File In read mode to read all lines
     with open(filename, 'r') as file:
@@ -93,19 +93,20 @@ def insert_list_into_file_after_marker(filename, array, marker):
     file.close()
 #insert_array_into_file_after_marker("target.txt", ["123\n", "456\n", "7890\n"], "//Vicky\n")
 
-def parse_all_test_cases_from_BidiCharacterTest_txt(marker):
+def parse_all_test_cases_from_BidiCharacterTest_txt():
+	marker = "//BeginInsertedTestCases: Test cases from BidiCharacterTest.txt go here\n"
 	#Delete TestCases inserted the last time to avoid inserting copies of test cases
-    delete_all_lines_between_markers("lib.rs", "//BeginInsertedTestCases", "//EndInsertedTestCases")
     #Read testcases from file BidiCharacterTest.txt and get an array from 'return_BidiCharacterTest_test_cases_in'
-    unparsed_test_cases = return_BidiCharacterTest_test_cases_in("BidiCharacterTest.txt")
+	unparsed_test_cases = return_BidiCharacterTest_test_cases_in("BidiCharacterTest.txt")
     #print(unparsed_test_cases)
     #Parse each test case and derive input and output and Convert each test case to assert_reorder_line format: assert_eq!(reorder(a, b))
-    BidiTestCaseList = []
-    for testcase in unparsed_test_cases:
-        BidiTestCaseList.append(BidiCharacterTestCase(testcase).reorderline_assert_test())
-    print(BidiTestCaseList)
+	BidiTestCaseList = []
+	for testcase in unparsed_test_cases:
+		BidiTestCaseList.append(BidiCharacterTestCase(testcase).reorderline_assert_test())
+	#print(BidiTestCaseList)
     #Write each test case to output file after some comment
-    insert_list_into_file_after_marker("lib.rs", BidiTestCaseList, marker)
+	insert_list_into_file_after_marker("lib.rs", BidiTestCaseList, marker)
 #Manual Testing of the code. Never Call this directly. Always call generate.py 
-os.chdir("../src/")
-parse_all_test_cases_from_BidiCharacterTest_txt("vv")
+# os.chdir("../src/")
+# parse_all_test_cases_from_BidiCharacterTest_txt("vv")
+delete_all_lines_between_markers("test.rs", "//BeginInsertedTestCases", "//EndInsertedTestCases")
