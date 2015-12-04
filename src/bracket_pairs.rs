@@ -84,11 +84,11 @@ fn locate_brackets(indexes: &[char]) -> Vec<bracket_pair::BracketPair>{
 	bracket_pair_list//return
 }
 
-pub fn is_strong_type_by_N0(class: tables::BidiClass) -> bool {
+pub fn is_strong_type_by_n0(class: tables::BidiClass) -> bool {
 	class == R || class == L
 }
 
-pub fn return_strong_type_by_N0(index: u8, indexes: &[char]) -> tables::BidiClass{
+pub fn return_strong_type_by_n0(index: u8, indexes: &[char]) -> tables::BidiClass{
 	let c=bidi_class(indexes[index as usize]);
 	match c {
 		EN => R,
@@ -104,9 +104,9 @@ pub fn classify_pair_content(indexes: &[char], curr_pair:
 	bracket_pair::BracketPair, dir_embed: tables::BidiClass) -> tables::BidiClass{
 	let mut dir_opposite = ON;
 	for pos in curr_pair.ich_opener+1..curr_pair.ich_closer{
-		//println!("return_strong_type_by_N0({}) is ON? {}", indexes[pos as usize], return_strong_type_by_N0(pos, indexes)==ON)
-		let dir_found = return_strong_type_by_N0(pos, indexes);
-		if is_strong_type_by_N0(dir_found){
+		//println!("return_strong_type_by_n0({}) is ON? {}", indexes[pos as usize], return_strong_type_by_n0(pos, indexes)==ON)
+		let dir_found = return_strong_type_by_n0(pos, indexes);
+		if is_strong_type_by_n0(dir_found){
 			if dir_found == dir_embed{
 				return dir_embed;
 			} 
@@ -121,7 +121,7 @@ pub fn classify_pair_content(indexes: &[char], curr_pair:
 pub fn first_strong_class_before_pair(indexes: &[char], curr_pair: bracket_pair::BracketPair) -> tables::BidiClass{
 	let mut dir_before = ON;
 	'for_loop: for index in (0..curr_pair.ich_closer).rev() {
-		let dir_found = return_strong_type_by_N0(index, indexes);
+		let dir_found = return_strong_type_by_n0(index, indexes);
 		if dir_found != ON{
 			dir_before = dir_found;
 			break 'for_loop;
@@ -179,10 +179,12 @@ pub fn resolve_all_paired_brackets(indexes: &[char], codes: &[u8], sos: &i8, lev
 }
 
 fn main(){
-	//println!("x {}", x);
+	//println!("x {}", x)
 	//something(2);
 	//					   [(, [, }, {, ], )];
 	//let indexes: [ char; 6] = [0, 1, 2, 3, 4, 5];
+	//let string = String::new("\u{0028}\u{0061}\u{005B}\u{005B}\u{005D}\u{05D0}\u{005D}\u{007B}\u{0028}\u{005B}\u{005D}\u{2680}\u{05D1}\u{007D}\u{0029}\u{0029}\u{05D2}");
+	//let indexes = string.char_indices();
 	let indexes = ['\u{0061}', '\u{0028}', '\u{05D0}', '\u{005B}', '\u{05D1}', '\u{005D}', '\u{0021}','\u{0029}','\u{0062}'];
 	//indexes[-1] = 1;
 	// indexes[1] = 2;
