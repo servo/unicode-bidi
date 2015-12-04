@@ -123,7 +123,7 @@ pub fn process_text(text: &str, level: Option<u8>) -> BidiInfo {
         }
         implicit::resolve_levels(classes, levels);
         resolve_white_space(para.level, &initial_classes, levels);
-        //assign_levels_to_removed_chars(para.level, &initial_classes, levels);
+        assign_levels_to_removed_chars(para.level, &initial_classes, levels);
     }
 
     BidiInfo {
@@ -336,56 +336,9 @@ pub fn initial_scan(text: &str, default_para_level: Option<u8>) -> InitialProper
 
 fn resolve_white_space(para_level: u8, classes: &[BidiClass], levels: &mut [u8])
 {   
-    let mut start = 0;
-    let line_end = levels.len();
-    let mut level = levels[start];
-
-     for i in start..line_end {
-
-        let new_level = levels[i];
-
-        if new_level != level {
-            let prev_start = start;
-            start = i;
-            level = new_level;
-            //Rule L1, clause 4
-            for k in (prev_start..start).rev()
-            {
-                if prepare::white_space(classes[k]) {
-                   levels[k] = para_level;
-                }
-                else if prepare::removed_by_x9(classes[k]) {
-                            levels[k] = if k > 0 { levels[k-1] } else { para_level };
-                            
-                        }
-                else {
-                    break;
-                }
-            } 
-        }
-        else {
-            //Rule L1, clauses 1 and 2
-            if prepare::is_segement_or_paragraph_separator(classes[i]) {
-                    levels[i] = para_level;
-
-                    //Rule L1, clause  3
-                    for j in (0..i).rev(){
-
-                        if prepare::white_space(classes[j]) {
-                           levels[j] = para_level;
-                        }
-                        else if prepare::removed_by_x9(classes[j]) {
-                            levels[j] = if j > 0 { levels[j-1] } else { para_level };
-                        }
-                        else {
-                             break;
-                        }
-                    }
-                    
-                } 
-        }
+    for  i in 0..levels.len() {
+        println!("{:?}", i);
     }
-
 }
 
 /// Assign levels to characters removed by rule X9.
@@ -393,13 +346,13 @@ fn resolve_white_space(para_level: u8, classes: &[BidiClass], levels: &mut [u8])
 /// The levels assigned to these characters are not specified by the algorithm.  This function
 /// assigns each one the level of the previous character, to avoid breaking level runs.
 
-//fn assign_levels_to_removed_chars(para_level: u8, classes: &[BidiClass], levels: &mut [u8]) {
-    //for i in 0..levels.len() {
-        //if prepare::removed_by_x9(classes[i]) {
-            //levels[i] = if i > 0 { levels[i-1] } else { para_level };
-        //}
-    //}
-//}
+fn assign_levels_to_removed_chars(para_level: u8, classes: &[BidiClass], levels: &mut [u8]) {
+    for i in 0..levels.len() {
+        if prepare::removed_by_x9(classes[i]) {
+            levels[i] = if i > 0 { levels[i-1] } else { para_level };
+        }
+    }
+}
 
 /// 3.3.2 Explicit Levels and Directions
 ///
@@ -703,18 +656,6 @@ mod prepare {
         matches!(class, RLE | LRE | RLO | LRO | PDF | BN)
     }
 
-    pub fn is_segement_or_paragraph_separator (class: BidiClass) -> bool {   
-    match class {
-         B | S => true,
-        _ => false,
-    }}
-
-    pub fn white_space(class: BidiClass) -> bool
-    {    match class {
-        WS  => true,
-        _ => false,
-    }}
-
     // For use as a predicate for `position` / `rposition`
     pub fn not_removed_by_x9(class: &BidiClass) -> bool {
         !removed_by_x9(*class)
@@ -762,12 +703,12 @@ mod implicit {
         // Like sequence.runs.iter().flat_map(Clone::clone), but make indices itself clonable.
         fn id(x: LevelRun) -> LevelRun { x }
         let mut indices = sequence.runs.iter().cloned().flat_map(id as fn(LevelRun) -> LevelRun);
-    
-    // Creating new variables to store the previous state of prev class for each rule
-    let prev_class_w1 = prev_class;
-    let prev_class_w4 = prev_class;
-    let mut prev_class_w5 = prev_class;
-    let prev_class_w6 = prev_class;
+	
+	// Creating new variables to store the previous state of prev class for each rule
+	let prev_class_w1 = prev_class;
+	let prev_class_w4 = prev_class;
+	let mut prev_class_w5 = prev_class;
+	let prev_class_w6 = prev_class;
 
         while let Some(i) = indices.next() {
             match classes[i] {
@@ -1042,29 +983,23 @@ mod test {
         assert_eq!(reorder("abc123"), "abc123");
         assert_eq!(reorder("1.-2"), "1.-2");
         assert_eq!(reorder("1-.2"), "1-.2");
-        assert_eq!(reorder("abc\u{2067}.-\u{2069}ghi"),
-                           "abc\u{2067}-.\u{2069}ghi");
         assert_eq!(reorder("abc אבג"), "abc גבא");
-        assert_eq!(reorder("אבג abc"), "abc גבא");
         //Numbers being weak LTR characters, cannot reorder strong RTL
         assert_eq!(reorder("123 אבג"), "גבא 123");
         //Testing for RLE Character
-        //assert_eq!(reorder("\u{202B}abc אבג\u{202C}"), "\u{202B}\u{202C}גבא abc");
-        //Testing neutral characters 
+        assert_eq!(reorder("\u{202B}abc אבג\u{202C}"), "\u{202B}\u{202C}גבא abc");
+        //Testing neutral characters
         assert_eq!(reorder("אבג? אבג"), "גבא ?גבא");
+        //Testing neutral characters with special case
         assert_eq!(reorder("A אבג?"), "A גבא?");
-        //Testing neutral characters with Implicit RTL Marker ---->
+        //Testing neutral characters with Implicit RTL Marker
         //The given test highlights a possible non-conformance issue that will perhaps be fixed in the subsequent steps.
         //assert_eq!(reorder("A אבג?\u{202f}"), "A \u{202f}?גבא");
         assert_eq!(reorder("אבג abc"), "abc גבא");
         assert_eq!(reorder("abc\u{2067}.-\u{2069}ghi"),
-                          "abc\u{2067}-.\u{2069}ghi");
-        //assert_eq!(reorder("Hello, \u{2068}\u{202E}world\u{202C}\u{2069}!"),
-                           //"Hello, \u{2068}\u{202E}\u{202C}dlrow\u{2069}!");
-
-       
-        
-
+                           "abc\u{2067}-.\u{2069}ghi");
+        assert_eq!(reorder("Hello, \u{2068}\u{202E}world\u{202C}\u{2069}!"),
+                           "Hello, \u{2068}\u{202E}\u{202C}dlrow\u{2069}!");
 //The comments below help locate where to push Automated Test Cases. Do not remove.
 //BeginInsertedTestCases: Test cases from BidiCharacterTest.txt go here
 //EndInsertedTestCases: Test cases from BidiCharacterTest.txt go here
