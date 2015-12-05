@@ -3,3 +3,4 @@ target
 src/ReadMe.txt
 src/UnicodeData.txt
 src/tmp*
+tools/*.pyc
