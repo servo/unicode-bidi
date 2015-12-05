@@ -133,22 +133,22 @@ def insert_list_into_file_after_marker(filename, array, marker):
     file.close()
 
 def fetch_BidiTest_txt_test_cases():
+	#Populate Unicode Data from UnicodeData.txt
 	populate_unicode_class_data()
-	# print len(unicode_class_dict)
+	#Read test cases from BidiTest.txt
 	filename = "BidiTest.txt"
 	with open(filename, 'rt') as f:
 		file_data = f.readlines()
-	#converting to a list
+	#clean the test cases
 	file_data = list(file_data)
-	#removing comments
 	file_data = remove_newline_char_and_invalid_test_cases(file_data)
-	#print("without comments:", file_data) #working
+	#convert test cases into rust assert test cases
 	test_case_object_list = return_test_case_object_list_from(file_data)
+	#collect all test cases
 	test_case_array = []
 	for tc in test_case_object_list:
 	 	test_case_array.append(tc.get_bidi_assert_test_case())
-	#print("test_case_object_list", test_case_object_list) #working
-	#insert test cases into lib.rs
+	#write rust assert test cases to the file
 	insert_list_into_file_after_marker("lib.rs", test_case_array, "//BeginInsertedTestCases: Test cases from BidiTest.txt go here\n")
 
 #fetch_BidiTest_txt_test_cases()

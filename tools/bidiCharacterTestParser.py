@@ -95,14 +95,11 @@ def insert_list_into_file_after_marker(filename, array, marker):
 
 def parse_all_test_cases_from_BidiCharacterTest_txt():
 	marker = "//BeginInsertedTestCases: Test cases from BidiCharacterTest.txt go here\n"
-	#Delete TestCases inserted the last time to avoid inserting copies of test cases
     #Read testcases from file BidiCharacterTest.txt and get an array from 'return_BidiCharacterTest_test_cases_in'
 	unparsed_test_cases = return_BidiCharacterTest_test_cases_in("BidiCharacterTest.txt")
-    #print(unparsed_test_cases)
     #Parse each test case and derive input and output and Convert each test case to assert_reorder_line format: assert_eq!(reorder(a, b))
 	BidiTestCaseList = []
 	for testcase in unparsed_test_cases:
 		BidiTestCaseList.append(BidiCharacterTestCase(testcase).reorderline_assert_test())
-	#print(BidiTestCaseList)
-    #Write each test case to output file after some comment
+    #Write each test case in the list to output file after marker
 	insert_list_into_file_after_marker("lib.rs", BidiTestCaseList, marker)
