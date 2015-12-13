@@ -763,11 +763,11 @@ mod implicit {
         fn id(x: LevelRun) -> LevelRun { x }
         let mut indices = sequence.runs.iter().cloned().flat_map(id as fn(LevelRun) -> LevelRun);
     
-    // Creating new variables to store the previous state of prev class for each rule
-    let prev_class_w1 = prev_class;
-    let prev_class_w4 = prev_class;
-    let mut prev_class_w5 = prev_class;
-    let prev_class_w6 = prev_class;
+        // Creating new variables to store the previous state of prev class for each rule
+        let prev_class_w1 = prev_class;
+        let prev_class_w4 = prev_class;
+        let mut prev_class_w5 = prev_class;
+        let prev_class_w6 = prev_class;
 
         while let Some(i) = indices.next() {
             match classes[i] {
