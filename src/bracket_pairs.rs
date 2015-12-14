@@ -1,13 +1,17 @@
-pub mod tables;
-pub mod brackets;
+//pub mod lib;
+//pub mod tables;
+
+//pub mod lib;
 
 mod bracket_pair_resolver{
 
-	pub use std::vec::Vec; //not int
+	pub use std::vec::Vec;
 	pub use tables::{BidiClass, bidi_class, UNICODE_VERSION};
 	pub use brackets::{BracketType, bracket_type, pair_id};
-	use tables::BidiClass::*;
-	use brackets::BracketType::*;
+	//pub use lib::prepare::IsolatingRunSequence;
+	use super::prepare::IsolatingRunSequence;
+	pub use tables::BidiClass::*;
+	pub use brackets::BracketType::*;
 
 	mod bracket_pair {
 		use std::cmp::Ordering;
@@ -121,7 +125,7 @@ mod bracket_pair_resolver{
 		dir_before
 	}
 
-	fn resolve_bracket_pair(indexes: &[char], codes: &[u8], dir_embed: BidiClass,
+	fn resolve_bracket_pair(indexes: &[char], classes: &mut [BidiClass], dir_embed: BidiClass,
 				 sos: &i8, curr_pair: bracket_pair::BracketPair) {
 		println!("Trying to resolve {}--{}", curr_pair.ich_opener, curr_pair.ich_closer);
 		let mut set_direction = true;
@@ -136,25 +140,17 @@ mod bracket_pair_resolver{
 			}
 		}
 		if set_direction == true{
-			set_dir_of_br_pair(codes, curr_pair, dir_of_pair);
+			set_dir_of_br_pair(classes, curr_pair, dir_of_pair);
 		}
 	}
 
-	fn set_dir_of_br_pair( codes: &[u8], br_pair: bracket_pair::BracketPair, 
-					dir_to_be_set: BidiClass) -> &[u8] {
-		//Insert into codes --> set codes[br_pair.ich_opener] = dir_to_be_set;
-		//Insert into codes --> set codes[br_pair.ich_closer] = dir_to_be_set;
-		let dir_str = match dir_to_be_set{
-			R  => "R",
-			L  => "L",
-			ON => "ON",
-			_  => "Error"
-		};
-		println!("Setting {}--{} as {}", br_pair.ich_opener, br_pair.ich_closer, dir_str);
-		codes
+	fn set_dir_of_br_pair( classes: &mut [BidiClass], br_pair: bracket_pair::BracketPair, 
+					dir_to_be_set: BidiClass) {
+		classes[br_pair.ich_opener as usize] = dir_to_be_set;
+		classes[br_pair.ich_closer as usize] = dir_to_be_set;
 	}
 
-	pub fn resolve_all_paired_brackets(indexes: &[char], codes: &[u8], 
+	pub fn resolve_all_paired_brackets(indexes: &[char], classes: &mut [BidiClass], 
 					sos: &i8, level: &i8) {
 		let bracket_pair_list= locate_brackets(indexes);
 		let dir_embed:BidiClass = 
@@ -165,27 +161,32 @@ mod bracket_pair_resolver{
 		};
 		for br_pair in bracket_pair_list {
 			println!("resolving {}--{}",br_pair.ich_opener, br_pair.ich_closer);
-			resolve_bracket_pair(indexes, codes, dir_embed, sos, br_pair);
+			resolve_bracket_pair(indexes, classes, dir_embed, sos, br_pair);
 		}
-		
+	}
+
+	pub fn resolve_n0(sequence: &IsolatingRunSequence, classes: &mut [BidiClass]
+			,level: &i8) {
+		resolve_all_paired_brackets(&sequence.runs.iter(), &mut classes,
+			&sequence.sos, &level);
 	}
 }
 
-fn main() {
-	//println!("x {}", x)
-	//something(2);
-	//					   [(, [, }, {, ], )];
-	//let indexes: [ char; 6] = [0, 1, 2, 3, 4, 5];
-	//let string = String::new("\u{0028}\u{0061}\u{005B}\u{005B}\u{005D}\u{05D0}\u{005D}\u{007B}\u{0028}\u{005B}\u{005D}\u{2680}\u{05D1}\u{007D}\u{0029}\u{0029}\u{05D2}");
-	//let indexes = string.char_indices();
-	let indexes = ['\u{0061}', '\u{0028}', '\u{05D0}', '\u{005B}', '\u{05D1}', '\u{005D}', '\u{0021}','\u{0029}','\u{0062}'];
-	//indexes[-1] = 1;
-	// indexes[1] = 2;
-	// something(&indexes);
-	let codes: [u8; 11] = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
-	let sos: i8 = 0;
-	let level: i8 = 0;
-	bracket_pair_resolver::resolve_all_paired_brackets(&indexes, &codes, &sos, &level);
-	//let c = bracket_type(indexes[0]);
-	//println!("c:{}", c==Open);
-}
+// fn main() {
+// 	//println!("x {}", x)
+// 	//something(2);
+// 	//					   [(, [, }, {, ], )];
+// 	//let indexes: [ char; 6] = [0, 1, 2, 3, 4, 5];
+// 	//let string = String::new("\u{0028}\u{0061}\u{005B}\u{005B}\u{005D}\u{05D0}\u{005D}\u{007B}\u{0028}\u{005B}\u{005D}\u{2680}\u{05D1}\u{007D}\u{0029}\u{0029}\u{05D2}");
+// 	//let indexes = string.char_indices();
+// 	let indexes = ['\u{0061}', '\u{0028}', '\u{05D0}', '\u{005B}', '\u{05D1}', '\u{005D}', '\u{0021}','\u{0029}','\u{0062}'];
+// 	//indexes[-1] = 1;
+// 	// indexes[1] = 2;
+// 	// something(&indexes);
+// 	let mut classes: [tables::BidiClass; 11] = [tables::BidiClass::R;11];// = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+// 	let sos: i8 = 0;
+// 	let level: i8 = 0;
+// 	bracket_pair_resolver::resolve_all_paired_brackets(&indexes, &mut classes, &sos, &level);
+// 	//let c = bracket_type(indexes[0]);
+// 	//println!("c:{}", c==Open);
+// }
