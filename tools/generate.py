@@ -199,16 +199,22 @@ def emit_bidi_module(f, bidi_class, cats):
 if __name__ == "__main__":
     os.chdir("../src/") # changing download path to /unicode-bidi/src/
     r = "tables.rs"
-    # downloading the test case files
-    fetch("BidiTest.txt")
-    fetch("BidiCharacterTest.txt")
     #Delete Pre-Inserted Test Cases
     delete_all_lines_between_markers("lib.rs", "//BeginInsertedTestCases", "//EndInsertedTestCases")
     print("Deleted all previous test cases...")
-    # parse all test cases from BidiCharacterTest.txt and place them in lib.rs after 'marker'
+    # *
+    # * Un-comment the next commands on the next six lines (excluding 
+    # * the descriptive) comments ("Download/Parse...") to automatically insert test cases 
+    # * from BidiTest.txt and BidiCharacterTest.txt
+    # * 
+    # * Download BidiCharacterTest.txt
+    #fetch("BidiCharacterTest.txt")
+    # * Parse all test cases from BidiCharacterTest.txt and place them in lib.rs after 'marker'
     #parse_all_test_cases_from_BidiCharacterTest_txt()
     #print("Inserted Test Cases from BidiCharacterTest.txt...")
-    # parse all test cases from BidiTest.txt and place them in lib.rs after 'marker'
+    # * Download BidiTest.txt
+    #fetch("BidiTest.txt")
+    # * Parse all test cases from BidiTest.txt and place them in lib.rs after 'marker'
     #fetch_BidiTest_txt_test_cases()
     #print("Inserted Test Cases from BidiTest.txt...")
 

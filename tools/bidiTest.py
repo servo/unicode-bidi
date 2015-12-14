@@ -2,6 +2,12 @@ import random
 
 unicode_class_dict = dict()
 
+# these are the surrogate codepoints, which are not valid rust characters
+surrogate_codepoints = (0xd800, 0xdfff)
+
+def is_surrogate(n):
+    return surrogate_codepoints[0] <= n <= surrogate_codepoints[1]
+
 def populate_unicode_class_data():
 	filename = "UnicodeData.txt"
 	line_list = []
@@ -10,6 +16,9 @@ def populate_unicode_class_data():
 		line_list = f.readlines()
 	for line in line_list:
 		field = line.split(';')
+		hex_val = int(field[0], 16);
+		if is_surrogate(hex_val):
+			continue
 		if field[4] in unicode_class_dict:
 			unicode_class_dict[field[4]].append(field[0])
 		else:
@@ -28,6 +37,8 @@ def remove_newline_char_and_invalid_test_cases(l):
             i=i-1
         else:
             l[i] = remove_newline_char(l[i])
+            if l[i].startswith('#Count:'):
+            	l[i] = l[i] + "//-->BidiTest.txt Line Number:"+str(i+1)
         #print("\t\tAfter ", i,": ", l)
         i = i + 1
     return l
@@ -49,7 +60,6 @@ def return_test_case_object_list_from(file_data2):
 			#print reorderVal
 		elif file_data2[j].startswith(countKeyword): #@Count
 			countVal = file_data2[j].lstrip(countKeyword).strip('\t').strip('\n').split(' ')
-			#return generate_final_output(levels,reorderVal,test_cases, para_level)
 			new_bidi_test_case = BidiTestCase(levels, reorderVal, bidi_classes, para_level)
 			if len(new_bidi_test_case.levels)!=0:
 				test_case_objects.append(new_bidi_test_case)

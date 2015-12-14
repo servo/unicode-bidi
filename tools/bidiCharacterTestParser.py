@@ -103,7 +103,9 @@ def parse_all_test_cases_from_BidiCharacterTest_txt():
     #Parse each test case and derive input and output and Convert each test case to assert_reorder_line format: assert_eq!(reorder(a, b))
 	BidiTestCaseList = []
 	for testcase in unparsed_test_cases:
-		#BidiTestCaseList.append(BidiCharacterTestCase(testcase).reorderline_assert_test_with_level())
-		BidiTestCaseList.append(BidiCharacterTestCase(testcase).reorderline_assert_test())
+		# * Build test cases by explicitly defining levels
+		BidiTestCaseList.append(BidiCharacterTestCase(testcase).reorderline_assert_test_with_level())
+		# * Build test cases by taking default levels
+		#BidiTestCaseList.append(BidiCharacterTestCase(testcase).reorderline_assert_test())
     #Write each test case in the list to output file after marker
 	insert_list_into_file_after_marker("lib.rs", BidiTestCaseList, marker)
