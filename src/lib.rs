@@ -122,7 +122,7 @@ pub fn process_text(text: &str, level: Option<u8>) -> BidiInfo {
         for sequence in &sequences {
             implicit::resolve_weak(sequence, classes);
 
-            // Step N0: 
+            //Step N0: 
             bracket_pair_resolver::resolve_n0(&text, &sequence.sos, classes, &levels[0]);
 
             implicit::resolve_neutral(sequence, levels, classes);
@@ -1036,7 +1036,6 @@ mod bracket_pair_resolver{
 
     fn return_strong_type_by_n0(character: char) -> BidiClass {
         let class_of_character=bidi_class(character);
-            //let char_vec: Vec<_> = word.chars().collect()[];
         match class_of_character {
             EN => R,
             AN => R,
@@ -1230,6 +1229,13 @@ mod test {
             let para = &info.paragraphs[0];
             reorder_line(s, para.range.clone(), &info.levels)
         }
+
+        fn reorder_with_para_level(s: &str, level: Option<u8>) -> Cow<str> {
+            let info = process_text(s, level);
+            let para = &info.paragraphs[0];
+            reorder_line(s, para.range.clone(), &info.levels)
+        }
+
         assert_eq!(reorder("abc123"), "abc123");
         assert_eq!(reorder("1.-2"), "1.-2");
         assert_eq!(reorder("1-.2"), "1-.2");
@@ -1255,7 +1261,18 @@ mod test {
 //The comments below help locate where to push Automated Test Cases. Do not remove.
 //BeginInsertedTestCases: Test cases from BidiCharacterTest.txt go here
 //EndInsertedTestCases: Test cases from BidiCharacterTest.txt go here
-assert_eq!(reorder("\u{05D0}\u{0028}\u{05D1}\u{0061}\u{2680}\u{0028}\u{005B}\u{0029}\u{005D}"),"\u{05D1}\u{0028}\u{05D0}\u{0061}\u{2680}\u{0028}\u{005B}\u{0029}\u{005D}");//BidiCharacterTest.txt Line Number:95961
+//assert_eq!(reorder("\u{05D0}\u{05D1}\u{0028}\u{05D2}\u{05D3}\u{005B}\u{0026}\u{0065}\u{0066}\u{005D}\u{002E}\u{0029}\u{0067}\u{0068}"),"\u{05D1}\u{05D0}\u{0028}\u{05D3}\u{05D2}\u{005B}\u{0026}\u{0065}\u{0066}\u{005D}\u{002E}\u{0029}\u{0067}\u{0068}");//BidiCharacterTest.txt Line Number:40
+////assert_eq!(reorder_with_para_level("\u{05D0}\u{05D1}\u{0028}\u{05D2}\u{05D3}\u{005B}\u{0026}\u{0065}\u{0066}\u{005D}\u{002E}\u{0029}\u{0067}\u{0068}", Some(0)),"\u{05D1}\u{05D0}\u{0028}\u{05D3}\u{05D2}\u{005B}\u{0026}\u{0065}\u{0066}\u{005D}\u{002E}\u{0029}\u{0067}\u{0068}");//BidiCharacterTest.txt Line Number:40
+assert_eq!(reorder("\u{061C}"),"\u{061C}");//BidiCharacterTest.txt Line Number:56
+assert_eq!(reorder("\u{2680}\u{0028}\u{0061}\u{0029}\u{0062}\u{05D0}\u{0028}\u{0029}"),"\u{2680}\u{0028}\u{0061}\u{0029}\u{0062}\u{05D0}\u{0028}\u{0029}");//BidiCharacterTest.txt Line Number:3315
+assert_eq!(reorder("\u{0061}\u{2680}\u{0028}\u{0028}\u{0029}\u{0029}"),"\u{0061}\u{2680}\u{0028}\u{0028}\u{0029}\u{0029}");//BidiCharacterTest.txt Line Number:7503
+assert_eq!(reorder("\u{2680}\u{0028}\u{0061}\u{05D0}\u{0062}\u{0028}\u{005B}\u{0029}\u{005D}"),"\u{2680}\u{0028}\u{0061}\u{05D0}\u{0062}\u{0028}\u{005B}\u{0029}\u{005D}");//BidiCharacterTest.txt Line Number:88169
+assert_eq!(reorder("\u{2680}\u{0028}\u{0061}\u{2681}\u{0062}\u{005B}\u{0029}\u{005D}"),"\u{2680}\u{0028}\u{0061}\u{2681}\u{0062}\u{005B}\u{0029}\u{005D}");//BidiCharacterTest.txt Line Number:27857
+assert_eq!(reorder("\u{0061}\u{2680}\u{0028}\u{0062}\u{2681}\u{005B}\u{0029}\u{005D}"),"\u{0061}\u{2680}\u{0028}\u{0062}\u{2681}\u{005B}\u{0029}\u{005D}");//BidiCharacterTest.txt Line Number:29109
+assert_eq!(reorder("\u{0061}\u{0028}\u{0062}\u{2680}\u{0063}\u{005B}\u{0029}\u{005D}"),"\u{0061}\u{0028}\u{0062}\u{2680}\u{0063}\u{005B}\u{0029}\u{005D}");//BidiCharacterTest.txt Line Number:29677
+assert_eq!(reorder("\u{0028}\u{0028}\u{0029}\u{0028}\u{0029}"),"\u{0028}\u{0028}\u{0029}\u{0028}\u{0029}");//BidiCharacterTest.txt Line Number:59325
+assert_eq!(reorder("\u{2680}\u{0028}\u{05D0}\u{0028}\u{0029}\u{0061}\u{05D1}\u{0028}\u{0029}"),"\u{0029}\u{0028}\u{05D1}\u{0061}\u{0029}\u{0028}\u{05D0}\u{0028}\u{2680}");//BidiCharacterTest.txt Line Number:64556
+//assert_eq!(reorder("\u{05D0}\u{2680}\u{0028}\u{0061}\u{0028}\u{0029}\u{0028}\u{0029}\u{2681}"),"\u{05D0}\u{2680}\u{0028}\u{0061}\u{0028}\u{0029}\u{0028}\u{0029}\u{2681}");//BidiCharacterTest.txt Line Number:68669
     }
 
     #[test]

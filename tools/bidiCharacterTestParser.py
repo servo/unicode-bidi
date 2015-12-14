@@ -70,9 +70,12 @@ class BidiCharacterTestCase(object):
         for index in range(0, len(oup_ind)):
             oup_arr.append(inp_arr[int(oup_ind[index])])
         self.inp = self.return_unicode_string(inp_arr)
+        self.para_level = field[1]
         self.oup = self.return_unicode_string(oup_arr)
     def reorderline_assert_test(self):
         return "assert_eq!(reorder(\""+self.inp+"\"),\""+self.oup+"\");"+"//"+self.marker
+    def reorderline_assert_test_with_level(self):
+        return "assert_eq!(reorder_with_para_level(\""+self.inp+"\", Some("+self.para_level+")),\""+self.oup+"\");"+"//"+self.marker
 #b = BidiCharacterTestCase("0061 0062 0063 0020 0028 0064 0065 0066 0020 0627 0628 062C 0029 0020 05D0 05D1 05D2;0;0;0 0 0 0 0 0 0 0 0 1 1 1 0 0 1 1 1;0 1 2 3 4 5 6 7 8 11 10 9 12 13 16 15 14//-->BidiCharacterTest.txt Line Number:2")
 # b = BidiCharacterTestCase("05D0 2067 202A 0041;1;1;1 1 x 4;3 1 0//-->BidiCharacterTest.txt Line Number:2")
 # print(b.inp)
@@ -100,6 +103,7 @@ def parse_all_test_cases_from_BidiCharacterTest_txt():
     #Parse each test case and derive input and output and Convert each test case to assert_reorder_line format: assert_eq!(reorder(a, b))
 	BidiTestCaseList = []
 	for testcase in unparsed_test_cases:
+		#BidiTestCaseList.append(BidiCharacterTestCase(testcase).reorderline_assert_test_with_level())
 		BidiTestCaseList.append(BidiCharacterTestCase(testcase).reorderline_assert_test())
     #Write each test case in the list to output file after marker
 	insert_list_into_file_after_marker("lib.rs", BidiTestCaseList, marker)
