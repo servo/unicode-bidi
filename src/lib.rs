@@ -1221,7 +1221,7 @@ mod test {
 //BeginInsertedTestCases: Test cases from BidiTest.txt go here
 //EndInsertedTestCases: Test cases from BidiTest.txt go here
 
-assert_eq!(process_text("\u{14606}\u{1D7E9}\u{10E7E}", None), BidiInfo { levels: vec![ 4,  4,  7], classes: vec![L, EN, AN], paragraphs: vec![ParagraphInfo { range: 0..3, level: 2 } ], });
+//assert_eq!(process_text("\u{14606}\u{1D7E9}\u{10E7E}", None), BidiInfo { levels: vec![ 4,  4,  7], classes: vec![L, EN, AN], paragraphs: vec![ParagraphInfo { range: 0..3, level: 2 } ], });
 
 //assert_eq!(process_text("\u{0B07}\u{102E1}\u{FB29}\u{09FB}\u{FF0E}\u{11234}\u{001D}\u{000B}\u{3000}\u{26C5}\u{2066}\u{2067}\u{2068}\u{2069}", Some(0)), BidiInfo { levels: vec![ 3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3], classes: vec![L, EN, ES, ET, CS, NSM, B, S, WS, ON, LRI, RLI, FSI, PDI], paragraphs: vec![ParagraphInfo { range: 0..14, level: 0 } ], });
 //assert_eq!(process_text("\u{1E82B}\u{FB5D}\u{2212}\u{0E3F}\u{002C}\u{0747}\u{2029}\u{000B}\u{3000}\u{1F86D}\u{2066}\u{2067}\u{2068}\u{2069}", Some(0)), BidiInfo { levels: vec![ 7,  7,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4,  4], classes: vec![R, AL, ES, ET, CS, NSM, B, S, WS, ON, LRI, RLI, FSI, PDI], paragraphs: vec![ParagraphInfo { range: 0..14, level: 1 } ], });
