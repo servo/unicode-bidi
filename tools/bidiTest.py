@@ -179,7 +179,7 @@ def fetch_BidiTest_txt_test_cases():
 	#Populate Unicode Data from UnicodeData.txt
 	populate_unicode_class_data()
 	#Read test cases from BidiTest.txt
-	filename = "BidiTestRed.txt"
+	filename = "BidiTest.txt"
 	with open(filename, 'rt') as f:
 		file_data = f.readlines()
 	#clean the test cases
