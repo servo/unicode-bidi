@@ -6,7 +6,7 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-
+//
 //! This crate implements the [Unicode Bidirectional Algorithm][tr9] for display of mixed
 //! right-to-left and left-to-right text.  It is written in safe Rust, compatible with the
 //! current stable release.
@@ -1134,6 +1134,7 @@ mod bracket_pair_resolver{
 #[cfg(test)]
 mod test {
     use super::BidiClass::*;
+    pub use tables::{BidiClass, bidi_class, UNICODE_VERSION};
 
     #[test]
     fn test_initial_scan() {
@@ -1179,6 +1180,35 @@ mod test {
     fn test_process_text() {
         use super::{BidiInfo, ParagraphInfo, process_text};
 
+        // * Helper functions to help ignore non visual characters
+        fn is_to_be_kept(class: BidiClass) -> bool {
+            match class {
+                R  => true,
+                L  => true,
+                WS => true,
+                EN => true,
+                AN => true,
+                _  => false,
+            }
+        }
+        // * Helper functions to help remove duplicate tupples
+        fn remove_duplicates(bidiInfo: &BidiInfo) -> (Vec<BidiClass>, Vec<u8>){
+            
+            let mut newClasses:Vec<BidiClass> = Vec::<BidiClass>::new();
+            let mut newLevels:Vec<u8> = Vec::<u8>::new();
+
+            for index in 0..bidiInfo.levels.len() {
+                if is_to_be_kept(bidiInfo.classes[index]){
+                    if (newClasses.contains(&bidiInfo.classes[index]) && newLevels.contains(&bidiInfo.levels[index])) == false {
+                        newClasses.push(bidiInfo.classes[index]);
+                        newLevels.push(bidiInfo.levels[index]);
+                    }
+                }
+            }
+            (newClasses, newLevels)
+        }
+
+
         assert_eq!(process_text("abc123", Some(0)), BidiInfo {
             levels:  vec![0, 0, 0, 0,  0,  0],
             classes: vec![L, L, L, EN, EN, EN],
@@ -1219,6 +1249,7 @@ mod test {
 // * The comments below help locate where to push Automated Test Cases. Do not remove or change indentation.
 // * 
 //BeginInsertedTestCases: Test cases from BidiTest.txt go here
+//assert_eq!(remove_duplicates(&process_text("\u{10603}\u{1D7FD}\u{FF0D}\u{20B8}\u{003A}\u{0352}\u{000D}\u{0009}\u{2002}\u{26DC}\u{2066}\u{2067}\u{2068}\u{2069}", Some(0))), ( vec![L, EN, WS] , vec![ 3,  3,  3] ) );
 //EndInsertedTestCases: Test cases from BidiTest.txt go here
 
 //assert_eq!(process_text("\u{14606}\u{1D7E9}\u{10E7E}", None), BidiInfo { levels: vec![ 4,  4,  7], classes: vec![L, EN, AN], paragraphs: vec![ParagraphInfo { range: 0..3, level: 2 } ], });
@@ -1273,6 +1304,9 @@ mod test {
 // assert_eq!(process_text("\u{2066}\u{10CEA}\u{2066}\u{FC29}", Some(0)), BidiInfo { levels: vec![ 3,  3], classes: vec![LRI, R, LRI, AL], paragraphs: vec![ParagraphInfo { range: 0..2, level: 0 } ], });
 // assert_eq!(process_text("\u{2066}\u{10E74}\u{2068}\u{0605}", Some(0)), BidiInfo { levels: vec![ 3,  3], classes: vec![LRI, AN, FSI, AN], paragraphs: vec![ParagraphInfo { range: 0..2, level: 0 } ], });
 // assert_eq!(process_text("\u{109C7}\u{2C57}\u{109F7}\u{12049}\u{10B28}\u{1475}\u{10C0E}\u{1723}\u{10885}\u{AA76}\u{109FC}\u{0254}\u{10C3E}\u{FF0D}\u{10857}\u{208B}\u{10CFE}\u{207B}\u{1E889}\u{FE63}\u{10B6C}\u{002D}\u{109EA}\u{002D}\u{0856}\u{A839}\u{10A40}\u{00A4}\u{10A24}\u{FE69}\u{05EA}\u{20A1}\u{10B33}\u{20BA}\u{109BC}\u{00A5}\u{10A61}\u{FF0E}\u{05E7}\u{FF0C}\u{1E82A}\u{00A0}\u{0845}\u{FF0E}\u{10903}\u{FE50}\u{1E8C9}\u{2044}\u{1E84F}\u{001F}\u{10890}\u{001F}\u{109F9}\u{000B}\u{1092D}\u{000B}\u{1086E}\u{000B}\u{10B4C}\u{0009}\u{1085C}\u{2007}\u{10A61}\u{205F}\u{0844}\u{2028}\u{109A4}\u{000C}\u{1E801}\u{2004}\u{1E829}\u{2008}\u{109A1}\u{2947}\u{10A42}\u{1F460}\u{FB3B}\u{2A39}\u{1E8B7}\u{2B73}\u{109D3}\u{1D327}\u{1E8C0}\u{10B3C}\u{10891}\u{2066}\u{1E853}\u{2066}\u{10A88}\u{2066}\u{10A66}\u{2066}\u{10815}\u{2066}\u{10859}\u{2066}\u{1E80C}\u{2067}\u{109B6}\u{2067}\u{109A5}\u{2067}\u{10C28}\u{2067}\u{1087B}\u{2067}\u{1E839}\u{2067}\u{1E81E}\u{2068}\u{10A45}\u{2068}\u{05D2}\u{2068}\u{1E8C7}\u{2068}\u{109C4}\u{2068}\u{1098E}\u{2068}\u{1E8B7}\u{2069}\u{1E801}\u{2069}\u{10871}\u{2069}\u{07D6}\u{2069}\u{10A8E}\u{2069}\u{0801}\u{2069}\u{FC43}\u{1148C}\u{FBA2}\u{1D922}\u{FBA7}\u{16C4}\u{FCB4}\u{3125}\u{FC88}\u{16F03}\u{FC4C}\u{121CF}\u{1EEA7}\u{FE63}\u{FD94}\u{FF0B}\u{FCBF}\u{207A}\u{FEAD}\u{FF0D}\u{FCAD}\u{208B}\u{0694}\u{208A}\u{063E}\u{2033}\u{FCB5}\u{FFE1}\u{FE90}\u{20A5}\u{FEB9}\u{FFE6}\u{0778}\u{09FB}\u{FD82}\u{20A6}\u{FD31}\u{FF1A}\u{06FB}\u{FF1A}\u{FB60}\u{FF1A}\u{0684}\u{060C}\u{072B}\u{060C}\u{FBC1}\u{FE55}\u{FBD3}\u{000B}\u{FC18}\u{0009}\u{06AA}\u{0009}\u{FD71}\u{000B}\u{FD95}\u{000B}\u{06E5}\u{001F}\u{FC6E}\u{2004}\u{FB6D}\u{2003}\u{06BC}\u{205F}\u{FB68}\u{3000}\u{FEC5}\u{2009}\u{FD02}\u{200A}\u{FD50}\u{22DA}\u{1EE9B}\u{22B1}\u{FD95}\u{1F83C}\u{06A1}\u{10157}\u{FCBD}\u{269C}\u{FD10}\u{2398}\u{FD80}\u{2066}\u{FBE1}\u{2066}\u{FB95}\u{2066}\u{068D}\u{2066}\u{FDB4}\u{2066}\u{FD3B}\u{2066}\u{FBD8}\u{2067}\u{FE77}\u{2067}\u{FEE2}\u{2067}\u{078D}\u{2067}\u{1EEB7}\u{2067}\u{079D}\u{2067}\u{FCA7}\u{2068}\u{FCA3}\u{2068}\u{FC6A}\u{2068}\u{FE70}\u{2068}\u{FBD6}\u{2068}\u{1EE8C}\u{2068}\u{0721}\u{2069}\u{078F}\u{2069}\u{FBAD}\u{2069}\u{1EE10}\u{2069}\u{FBB2}\u{2069}\u{FB64}\u{2069}", Some(0)), BidiInfo { levels: vec![ 2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2], classes: vec![R, L, R, L, R, L, R, L, R, L, R, L, R, ES, R, ES, R, ES, R, ES, R, ES, R, ES, R, ET, R, ET, R, ET, R, ET, R, ET, R, ET, R, CS, R, CS, R, CS, R, CS, R, CS, R, CS, R, S, R, S, R, S, R, S, R, S, R, S, R, WS, R, WS, R, WS, R, WS, R, WS, R, WS, R, ON, R, ON, R, ON, R, ON, R, ON, R, ON, R, LRI, R, LRI, R, LRI, R, LRI, R, LRI, R, LRI, R, RLI, R, RLI, R, RLI, R, RLI, R, RLI, R, RLI, R, FSI, R, FSI, R, FSI, R, FSI, R, FSI, R, FSI, R, PDI, R, PDI, R, PDI, R, PDI, R, PDI, R, PDI, AL, L, AL, L, AL, L, AL, L, AL, L, AL, L, AL, ES, AL, ES, AL, ES, AL, ES, AL, ES, AL, ES, AL, ET, AL, ET, AL, ET, AL, ET, AL, ET, AL, ET, AL, CS, AL, CS, AL, CS, AL, CS, AL, CS, AL, CS, AL, S, AL, S, AL, S, AL, S, AL, S, AL, S, AL, WS, AL, WS, AL, WS, AL, WS, AL, WS, AL, WS, AL, ON, AL, ON, AL, ON, AL, ON, AL, ON, AL, ON, AL, LRI, AL, LRI, AL, LRI, AL, LRI, AL, LRI, AL, LRI, AL, RLI, AL, RLI, AL, RLI, AL, RLI, AL, RLI, AL, RLI, AL, FSI, AL, FSI, AL, FSI, AL, FSI, AL, FSI, AL, FSI, AL, PDI, AL, PDI, AL, PDI, AL, PDI, AL, PDI, AL, PDI], paragraphs: vec![ParagraphInfo { range: 0..132, level: 1 } ], })
+
+//assert_eq!(process_text("\u{05D0}\u{2067}\u{0061}\u{2066}\u{0061}\u{202B}\u{0061}\u{202C}\u{0061}\u{2069}\u{0061}\u{2069}\u{0061}", Some(1)), BidiInfo { levels: vec![ 2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2,  2], classes: vec![R, L, R, L, R, L, R, L, R, L, R, L, R, ES, R, ES, R, ES, R, ES, R, ES, R, ES, R, ET, R, ET, R, ET, R, ET, R, ET, R, ET, R, CS, R, CS, R, CS, R, CS, R, CS, R, CS, R, S, R, S, R, S, R, S, R, S, R, S, R, WS, R, WS, R, WS, R, WS, R, WS, R, WS, R, ON, R, ON, R, ON, R, ON, R, ON, R, ON, R, LRI, R, LRI, R, LRI, R, LRI, R, LRI, R, LRI, R, RLI, R, RLI, R, RLI, R, RLI, R, RLI, R, RLI, R, FSI, R, FSI, R, FSI, R, FSI, R, FSI, R, FSI, R, PDI, R, PDI, R, PDI, R, PDI, R, PDI, R, PDI, AL, L, AL, L, AL, L, AL, L, AL, L, AL, L, AL, ES, AL, ES, AL, ES, AL, ES, AL, ES, AL, ES, AL, ET, AL, ET, AL, ET, AL, ET, AL, ET, AL, ET, AL, CS, AL, CS, AL, CS, AL, CS, AL, CS, AL, CS, AL, S, AL, S, AL, S, AL, S, AL, S, AL, S, AL, WS, AL, WS, AL, WS, AL, WS, AL, WS, AL, WS, AL, ON, AL, ON, AL, ON, AL, ON, AL, ON, AL, ON, AL, LRI, AL, LRI, AL, LRI, AL, LRI, AL, LRI, AL, LRI, AL, RLI, AL, RLI, AL, RLI, AL, RLI, AL, RLI, AL, RLI, AL, FSI, AL, FSI, AL, FSI, AL, FSI, AL, FSI, AL, FSI, AL, PDI, AL, PDI, AL, PDI, AL, PDI, AL, PDI, AL, PDI], paragraphs: vec![ParagraphInfo { range: 0..132, level: 1 } ], })
+ //assert_eq!(process_text("\u{05D0}\u{2067}\u{0061}\u{2066}\u{0061}\u{202B}\u{0061}\u{202C}\u{0061}\u{2069}\u{0061}\u{2069}\u{0061}", Some(0));
     }
 
     #[test]
@@ -1340,6 +1374,14 @@ assert_eq!(reorder_with_para_level("\u{0061}\u{2680}\u{0028}\u{0062}\u{2681}\u{0
 assert_eq!(reorder_with_para_level("\u{0061}\u{0028}\u{0062}\u{2680}\u{0063}\u{005B}\u{0029}\u{005D}", Some(0)),"\u{0061}\u{0028}\u{0062}\u{2680}\u{0063}\u{005B}\u{0029}\u{005D}");//BidiCharacterTest.txt Line Number:29677
 assert_eq!(reorder_with_para_level("\u{0028}\u{0028}\u{0029}\u{0028}\u{0029}", Some(0)),"\u{0028}\u{0028}\u{0029}\u{0028}\u{0029}");//BidiCharacterTest.txt Line Number:59325
 assert_eq!(reorder_with_para_level("\u{2680}\u{0028}\u{05D0}\u{0028}\u{0029}\u{0061}\u{05D1}\u{0028}\u{0029}", Some(1)),"\u{0029}\u{0028}\u{05D1}\u{0061}\u{0029}\u{0028}\u{05D0}\u{0028}\u{2680}");//BidiCharacterTest.txt Line Number:64556
+
+
+//let x:super::BidiInfo = process_text("\u{05D0}\u{2067}\u{0061}\u{2066}\u{0061}\u{202B}\u{0061}\u{202C}\u{0061}\u{2069}\u{0061}\u{2069}\u{0061}", Some(0));
+
+//BidiInfo { levels: vec![ 4,  4,  7], classes: vec![L, EN, AN], paragraphs: vec![ParagraphInfo { range: 0..3, level: 2 } ], });
+
+//print_vec(x.levels);
+
     }
 
     #[test]

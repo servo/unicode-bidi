@@ -1,4 +1,5 @@
 import random
+import os
 
 unicode_class_dict = dict()
 
@@ -98,10 +99,42 @@ class BidiTestCase(object):
 	#a, b, c, d, e, f
 	def tupple_rep(self, some_list):
 		return str(some_list).replace("'", "").replace("[", "").replace("]", "")
-
 	def get_bidi_assert_test_case(self):
 		return "assert_eq!(process_text(\""+self.str_rep(self.unicode_chars_list)+"\", Some("+self.reorderVal[0]+")), BidiInfo { levels: vec!["+self.tupple_rep(self.para_level)+"], classes: vec!["+self.tupple_rep(self.bidi_classes)+"], paragraphs: vec![ParagraphInfo { range: 0.."+str(len(self.bidi_classes))+", level: "+self.levels[0]+" } ], });"
+
+	def return_merged_classes_list(self):
+		merged_classes_list = []
+		for each_list in self.bidi_classes:
+			merged_classes_list = merged_classes_list + each_list
+		return merged_classes_list
+
+	def eliminate_duplicates(self):
+		#self.para_level
+		#self.bidi_classes
+		merged_classes_list = self.return_merged_classes_list()
+		#print(merged_classes_list)
+		new_bidi_classes = []
+		new_para_level = []
+		for index in range(0, len(self.bidi_classes)):
+			if self.tupple_rep(self.bidi_classes[index]) in ['R', 'L', 'WS', 'EN', 'AN']:
+				if (self.bidi_classes[index] in new_bidi_classes and self.para_level[index] in new_para_level)==False:
+					new_bidi_classes.append(self.bidi_classes[index])
+					new_para_level.append(self.para_level[index])
+			# else:
+			# 	print("not considering:", self.bidi_classes[index])
+		return (new_bidi_classes, new_para_level)
+
 	
+	def get_bidi_assert_test_case_2(self):
+		(new_bidi_classes, new_para_level) = self.eliminate_duplicates()
+		print("new bidi_classes:", new_bidi_classes)
+		print("new_para_level:", new_para_level)
+		#print(self.bidi_classes)
+		#print(self.para_level)
+		#print(self.levels)
+		#return "assert_eq!(process_text(\""+self.str_rep(self.unicode_chars_list)+"\", Some("+self.reorderVal[0]+")), BidiInfo { levels: vec!["+self.tupple_rep(self.para_level)+"], classes: vec!["+self.tupple_rep(self.bidi_classes)+"], paragraphs: vec![ParagraphInfo { range: 0.."+str(len(self.bidi_classes))+", level: "+self.levels[0]+" } ], });"
+		return "assert_eq!(remove_duplicates(process_text(\""+self.str_rep(self.unicode_chars_list)+"\", Some("+self.reorderVal[0]+"))), ( vec!["+self.tupple_rep(new_bidi_classes)+"] , vec!["+self.tupple_rep(new_para_level)+"] ) );"
+
 	def replace_bidi_classes_with_random_chars(self, bidi_classes, levels):
 		random_char_lists = []
 		for bidi_class_list in bidi_classes:
@@ -146,7 +179,7 @@ def fetch_BidiTest_txt_test_cases():
 	#Populate Unicode Data from UnicodeData.txt
 	populate_unicode_class_data()
 	#Read test cases from BidiTest.txt
-	filename = "BidiTest.txt"
+	filename = "BidiTestRed.txt"
 	with open(filename, 'rt') as f:
 		file_data = f.readlines()
 	#clean the test cases
@@ -157,10 +190,12 @@ def fetch_BidiTest_txt_test_cases():
 	#collect all test cases
 	test_case_array = []
 	for tc in test_case_object_list:
-	 	test_case_array.append(tc.get_bidi_assert_test_case())
+	 	test_case_array.append(tc.get_bidi_assert_test_case_2())
+	 	print(tc.get_bidi_assert_test_case())
 	#write rust assert test cases to the file
 	insert_list_into_file_after_marker("lib.rs", test_case_array, "//BeginInsertedTestCases: Test cases from BidiTest.txt go here\n")
 
+#os.chdir("../src/") # changing download path to /unicode-bidi/src/
 #fetch_BidiTest_txt_test_cases()
 # a = ["abc", "def", "ghi", "jkl"]
 # print()

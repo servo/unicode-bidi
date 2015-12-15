@@ -213,10 +213,10 @@ if __name__ == "__main__":
     #parse_all_test_cases_from_BidiCharacterTest_txt()
     #print("Inserted Test Cases from BidiCharacterTest.txt...")
     # * Download BidiTest.txt
-    #fetch("BidiTest.txt")
+    fetch("BidiTest.txt")
     # * Parse all test cases from BidiTest.txt and place them in lib.rs after 'marker'
-    #fetch_BidiTest_txt_test_cases()
-    #print("Inserted Test Cases from BidiTest.txt...")
+    fetch_BidiTest_txt_test_cases()
+    print("Inserted Test Cases from BidiTest.txt...")
 
     if os.path.exists(r):
         os.remove(r)
