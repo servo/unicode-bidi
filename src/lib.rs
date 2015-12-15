@@ -717,7 +717,7 @@ mod prepare {
 
     pub fn white_space(class: BidiClass) -> bool
     {    match class {
-        WS  => true,
+        WS | LRI | PDI | RLI | FSI => true,
         _ => false,
     }}
 
