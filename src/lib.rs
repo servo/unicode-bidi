@@ -350,7 +350,7 @@ fn assign_levels_to_removed_chars(para_level: u8, classes: &[BidiClass], levels:
 ///
 /// http://www.unicode.org/reports/tr9/#Explicit_Levels_and_Directions
 mod explicit {
-    use super::{BidiClass, is_rtl};
+    use super::{BidiClass};
     use super::BidiClass::*;
 
     /// Compute explicit embedding levels for one paragraph of text (X1-X8).
