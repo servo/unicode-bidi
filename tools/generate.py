@@ -23,7 +23,7 @@ preamble = '''// NOTE:
 '''
 
 # these are the surrogate codepoints, which are not valid rust characters
-surrogate_codepoints = (0xd800, 0xdfff)
+surrogate_codepoints = (0xD800, 0xDFFF)
 
 def fetch(f):
     if not os.path.exists(os.path.basename(f)):
@@ -75,11 +75,11 @@ def load_unicode_data(f):
     default_ranges = [
             (0x0600, 0x07BF, "AL"), (0x08A0, 0x08FF, "AL"),
             (0xFB50, 0xFDCF, "AL"), (0xFDF0, 0xFDFF, "AL"),
-            (0xFE70, 0xFEFF, "AL"), (0x1EE00, 0x0001EEFF, "AL"),
+            (0xFE70, 0xFEFF, "AL"), (0x1EE00, 0x1EEFF, "AL"),
 
             (0x0590, 0x05FF, "R"), (0x07C0, 0x089F, "R"),
-            (0xFB1D, 0xFB4F, "R"), (0x00010800, 0x00010FFF, "R"),
-            (0x0001E800, 0x0001EDFF, "R"), (0x0001EF00, 0x0001EFFF, "R"),
+            (0xFB1D, 0xFB4F, "R"), (0x10800, 0x10FFF, "R"),
+            (0x1E800, 0x1EDFF, "R"), (0x1EF00, 0x1EFFF, "R"),
 
             (0x20A0, 0x20CF, "ET")]
 
@@ -137,7 +137,7 @@ def emit_table(f, name, t_data, t_type = "&'static [(char, char)]", is_pub=True,
     pub_string = ""
     if is_pub:
         pub_string = "pub "
-    f.write("    %sconst %s: %s = &[\n" % (pub_string, name, t_type))
+    f.write("%sconst %s: %s = &[\n" % (pub_string, name, t_type))
     data = ""
     first = True
     for dat in t_data:
@@ -145,47 +145,47 @@ def emit_table(f, name, t_data, t_type = "&'static [(char, char)]", is_pub=True,
             data += ","
         first = False
         data += pfun(dat)
-    format_table_content(f, data, 8)
-    f.write("\n    ];\n\n")
+    format_table_content(f, data, 4)
+    f.write("\n];\n\n")
 
 def emit_bidi_module(f, bidi_class, cats):
     f.write("""pub use self::BidiClass::*;
 
-    #[allow(non_camel_case_types)]
-    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-    /// Represents the Unicode character property **Bidi_Class**, also known as
-    /// the *bidirectional character type*.
-    ///
-    /// Use the `bidi_class` function to look up the BidiClass of a code point.
-    ///
-    /// http://www.unicode.org/reports/tr9/#Bidirectional_Character_Types
-    pub enum BidiClass {
+#[allow(non_camel_case_types)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Represents the Unicode character property **Bidi_Class**, also known as
+/// the *bidirectional character type*.
+///
+/// Use the `bidi_class` function to look up the BidiClass of a code point.
+///
+/// http://www.unicode.org/reports/tr9/#Bidirectional_Character_Types
+pub enum BidiClass {
 """)
     for cat in cats:
-        f.write("        " + cat + ",\n")
-    f.write("""    }
+        f.write("    " + cat + ",\n")
+    f.write("""}
 
-    fn bsearch_range_value_table(c: char, r: &'static [(char, char, BidiClass)]) -> BidiClass {
-        use ::std::cmp::Ordering::{Equal, Less, Greater};
-        match r.binary_search_by(|&(lo, hi, _)| {
-            if lo <= c && c <= hi { Equal }
-            else if hi < c { Less }
-            else { Greater }
-        }) {
-            Ok(idx) => {
-                let (_, _, cat) = r[idx];
-                cat
-            }
-            // UCD/extracted/DerivedBidiClass.txt: "All code points not explicitly listed
-            // for Bidi_Class have the value Left_To_Right (L)."
-            Err(_) => L
+fn bsearch_range_value_table(c: char, r: &'static [(char, char, BidiClass)]) -> BidiClass {
+    use ::std::cmp::Ordering::{Equal, Less, Greater};
+    match r.binary_search_by(|&(lo, hi, _)| {
+        if lo <= c && c <= hi { Equal }
+        else if hi < c { Less }
+        else { Greater }
+    }) {
+        Ok(idx) => {
+            let (_, _, cat) = r[idx];
+            cat
         }
+        // UCD/extracted/DerivedBidiClass.txt: "All code points not explicitly listed
+        // for Bidi_Class have the value Left_To_Right (L)."
+        Err(_) => L
     }
+}
 
-    /// Find the BidiClass of a single char.
-    pub fn bidi_class(c: char) -> BidiClass {
-        bsearch_range_value_table(c, bidi_class_table)
-    }
+/// Find the BidiClass of a single char.
+pub fn bidi_class(c: char) -> BidiClass {
+    bsearch_range_value_table(c, bidi_class_table)
+}
 
 """)
 
