@@ -14,7 +14,7 @@
 //! ## Example
 //!
 //! ```rust
-//! use unicode_bidi::{process_text, reorder_line, Level};
+//! use unicode_bidi::{process_text, reorder_line};
 //!
 //! // This example text is defined using `concat!` because some browsers
 //! // and text editors have trouble displaying bidi strings.
@@ -32,7 +32,7 @@
 //! // This paragraph has embedding level 1 because its first strong character is RTL.
 //! assert_eq!(info.paragraphs.len(), 1);
 //! let paragraph_info = &info.paragraphs[0];
-//! assert_eq!(paragraph_info.level, Level(1));
+//! assert_eq!(paragraph_info.level.is_rtl(), true);
 //!
 //! // Re-ordering is done after wrapping each paragraph into a sequence of
 //! // lines. For this example, I'll just use a single line that spans the
