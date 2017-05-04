@@ -55,7 +55,7 @@
 #[macro_use]
 extern crate matches;
 
-pub mod tables;
+mod tables;
 mod levels;
 
 pub use tables::{BidiClass, bidi_class, UNICODE_VERSION};
@@ -206,7 +206,7 @@ pub fn visual_runs(line: Range<usize>, levels: &[Level]) -> Vec<LevelRun> {
     // http://www.unicode.org/reports/tr9/#L2
 
     // Stop at the lowest *odd* level.
-    min_level = min_level.get_lowest_rtl_level_ge();
+    min_level = min_level.get_lowest_odd_level_le();
 
     while max_level >= min_level {
         // Look for the start of a sequence of consecutive runs of max_level or higher.
@@ -400,7 +400,7 @@ mod explicit {
                         }
                     }
 
-                    if new_level.is_valid() && overflow_isolate_count == 0 &&
+                    if new_level.valid() && overflow_isolate_count == 0 &&
                        overflow_embedding_count == 0 {
                         stack.push(
                             new_level,
