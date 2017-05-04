@@ -52,7 +52,8 @@
 
 #![forbid(unsafe_code)]
 
-#[macro_use] extern crate matches;
+#[macro_use]
+extern crate matches;
 
 pub mod tables;
 
@@ -83,7 +84,7 @@ pub struct BidiInfo {
     pub paragraphs: Vec<ParagraphInfo>,
 }
 
-/// Info about a single paragraph 
+/// Info about a single paragraph
 #[derive(Debug, PartialEq)]
 pub struct ParagraphInfo {
     /// The paragraphs boundaries within the text, as byte indices.
@@ -100,7 +101,10 @@ pub struct ParagraphInfo {
 /// TODO: In early steps, check for special cases that allow later steps to be skipped. like text
 /// that is entirely LTR.  See the `nsBidi` class from Gecko for comparison.
 pub fn process_text(text: &str, level: Option<u8>) -> BidiInfo {
-    let InitialProperties { initial_classes, paragraphs } = initial_scan(text, level);
+    let InitialProperties {
+        initial_classes,
+        paragraphs,
+    } = initial_scan(text, level);
 
     let mut levels = Vec::with_capacity(text.len());
     let mut classes = initial_classes.clone();
@@ -136,13 +140,17 @@ pub fn process_text(text: &str, level: Option<u8>) -> BidiInfo {
 /// Even embedding levels are left-to-right.
 ///
 /// http://www.unicode.org/reports/tr9/#BD2
-pub fn is_ltr(level: u8) -> bool { level % 2 == 0 }
+pub fn is_ltr(level: u8) -> bool {
+    level % 2 == 0
+}
 
 #[inline]
 /// Odd levels are right-to-left.
 ///
 /// http://www.unicode.org/reports/tr9/#BD2
-pub fn is_rtl(level: u8) -> bool { level % 2 == 1 }
+pub fn is_rtl(level: u8) -> bool {
+    level % 2 == 1
+}
 
 /// Generate a character type based on a level (as specified in steps X10 and N2).
 fn class_for_level(level: u8) -> BidiClass {
@@ -155,12 +163,10 @@ fn class_for_level(level: u8) -> BidiClass {
 /// `line` is a range of bytes indices within `text`.
 ///
 /// Returns the line in display order.
-pub fn reorder_line<'a>(text: &'a str, line: Range<usize>, levels: &[u8])
-    -> Cow<'a, str>
-{
+pub fn reorder_line<'a>(text: &'a str, line: Range<usize>, levels: &[u8]) -> Cow<'a, str> {
     let runs = visual_runs(line.clone(), &levels);
     if runs.len() == 1 && !is_rtl(levels[runs[0].start]) {
-        return text.into()
+        return text.into();
     }
     let mut result = String::with_capacity(line.len());
     for run in runs {
@@ -226,14 +232,14 @@ pub fn visual_runs(line: Range<usize>, levels: &[u8]) -> Vec<LevelRun> {
         while seq_start < run_count {
             if levels[runs[seq_start].start] < max_level {
                 seq_start += 1;
-                continue
+                continue;
             }
 
             // Found the start of a sequence. Now find the end.
             let mut seq_end = seq_start + 1;
             while seq_end < run_count {
                 if levels[runs[seq_end].start] < max_level {
-                    break
+                    break;
                 }
                 seq_end += 1;
             }
@@ -287,30 +293,38 @@ pub fn initial_scan(text: &str, default_para_level: Option<u8>) -> InitialProper
                 // P1. Split the text into separate paragraphs. The paragraph separator is kept
                 // with the previous paragraph.
                 let para_end = i + c.len_utf8();
-                paragraphs.push(ParagraphInfo {
-                    range: para_start..para_end,
-                    // P3. If no character is found in p2, set the paragraph level to zero.
-                    level: para_level.unwrap_or(0)
-                });
+                paragraphs.push(
+                    ParagraphInfo {
+                        range: para_start..para_end,
+                        // P3. If no character is found in p2, set the paragraph level to zero.
+                        level: para_level.unwrap_or(0),
+                    },
+                );
                 // Reset state for the start of the next paragraph.
                 para_start = para_end;
                 para_level = default_para_level;
                 isolate_stack.clear();
             }
-            L | R | AL => match isolate_stack.last() {
-                Some(&start) => if classes[start] == FSI {
-                    // X5c. If the first strong character between FSI and its matching PDI is R
-                    // or AL, treat it as RLI. Otherwise, treat it as LRI.
-                    for j in 0..FSI_CHAR.len_utf8() {
-                        classes[start+j] = if class == L { LRI } else { RLI };
+            L | R | AL => {
+                match isolate_stack.last() {
+                    Some(&start) => {
+                        if classes[start] == FSI {
+                            // X5c. If the first strong character between FSI and its matching PDI
+                            // is R or AL, treat it as RLI. Otherwise, treat it as LRI.
+                            for j in 0..FSI_CHAR.len_utf8() {
+                                classes[start + j] = if class == L { LRI } else { RLI };
+                            }
+                        }
                     }
-                },
-                None => if para_level.is_none() {
-                    // P2. Find the first character of type L, AL, or R, while skipping any
-                    // characters between an isolate initiator and its matching PDI.
-                    para_level = Some(if class == L { 0 } else { 1 });
+                    None => {
+                        if para_level.is_none() {
+                            // P2. Find the first character of type L, AL, or R, while skipping any
+                            // characters between an isolate initiator and its matching PDI.
+                            para_level = Some(if class == L { 0 } else { 1 });
+                        }
+                    }
                 }
-            },
+            }
             RLI | LRI | FSI => {
                 isolate_stack.push(i);
             }
@@ -321,10 +335,12 @@ pub fn initial_scan(text: &str, default_para_level: Option<u8>) -> InitialProper
         }
     }
     if para_start < text.len() {
-        paragraphs.push(ParagraphInfo {
-            range: para_start..text.len(),
-            level: para_level.unwrap_or(0)
-        });
+        paragraphs.push(
+            ParagraphInfo {
+                range: para_start..text.len(),
+                level: para_level.unwrap_or(0),
+            },
+        );
     }
     assert!(classes.len() == text.len());
 
@@ -341,7 +357,7 @@ pub fn initial_scan(text: &str, default_para_level: Option<u8>) -> InitialProper
 fn assign_levels_to_removed_chars(para_level: u8, classes: &[BidiClass], levels: &mut [u8]) {
     for i in 0..levels.len() {
         if prepare::removed_by_x9(classes[i]) {
-            levels[i] = if i > 0 { levels[i-1] } else { para_level };
+            levels[i] = if i > 0 { levels[i - 1] } else { para_level };
         }
     }
 }
@@ -350,15 +366,20 @@ fn assign_levels_to_removed_chars(para_level: u8, classes: &[BidiClass], levels:
 ///
 /// http://www.unicode.org/reports/tr9/#Explicit_Levels_and_Directions
 mod explicit {
-    use super::{BidiClass};
+    use super::BidiClass;
     use super::BidiClass::*;
 
     /// Compute explicit embedding levels for one paragraph of text (X1-X8).
     ///
     /// `classes[i]` must contain the BidiClass of the char at byte index `i`,
     /// for each char in `text`.
-    pub fn compute(text: &str, para_level: u8, initial_classes: &[BidiClass],
-                   levels: &mut [u8], classes: &mut [BidiClass]) {
+    pub fn compute(
+        text: &str,
+        para_level: u8,
+        initial_classes: &[BidiClass],
+        levels: &mut [u8],
+        classes: &mut [BidiClass],
+    ) {
         assert!(text.len() == initial_classes.len());
 
         // http://www.unicode.org/reports/tr9/#X1
@@ -375,13 +396,13 @@ mod explicit {
                 RLE | LRE | RLO | LRO | RLI | LRI | FSI => {
                     let is_rtl = match initial_classes[i] {
                         RLE | RLO | RLI => true,
-                        _ => false
+                        _ => false,
                     };
 
                     let last_level = stack.last().level;
                     let new_level = match is_rtl {
-                        true  => next_rtl_level(last_level),
-                        false => next_ltr_level(last_level)
+                        true => next_rtl_level(last_level),
+                        false => next_ltr_level(last_level),
                     };
 
                     // X5a-X5c: Isolate initiators get the level of the last entry on the stack.
@@ -395,13 +416,17 @@ mod explicit {
                         }
                     }
 
-                    if valid(new_level) && overflow_isolate_count == 0 && overflow_embedding_count == 0 {
-                        stack.push(new_level, match initial_classes[i] {
-                            RLO => OverrideStatus::RTL,
-                            LRO => OverrideStatus::LTR,
-                            RLI | LRI | FSI => OverrideStatus::Isolate,
-                            _ => OverrideStatus::Neutral
-                        });
+                    if valid(new_level) && overflow_isolate_count == 0 &&
+                       overflow_embedding_count == 0 {
+                        stack.push(
+                            new_level,
+                            match initial_classes[i] {
+                                RLO => OverrideStatus::RTL,
+                                LRO => OverrideStatus::LTR,
+                                RLI | LRI | FSI => OverrideStatus::Isolate,
+                                _ => OverrideStatus::Neutral,
+                            },
+                        );
                         if is_isolate {
                             valid_isolate_count += 1;
                         } else {
@@ -426,7 +451,7 @@ mod explicit {
                             match stack.vec.pop() {
                                 Some(Status { status: OverrideStatus::Isolate, .. }) => break,
                                 None => break,
-                                _ => continue
+                                _ => continue,
                             }
                         }
                         valid_isolate_count -= 1;
@@ -442,11 +467,11 @@ mod explicit {
                 // http://www.unicode.org/reports/tr9/#X7
                 PDF => {
                     if overflow_isolate_count > 0 {
-                        continue
+                        continue;
                     }
                     if overflow_embedding_count > 0 {
                         overflow_embedding_count -= 1;
-                        continue
+                        continue;
                     }
                     if stack.last().status != OverrideStatus::Isolate && stack.vec.len() >= 2 {
                         stack.vec.pop();
@@ -469,8 +494,8 @@ mod explicit {
             }
             // Handle multi-byte characters.
             for j in 1..c.len_utf8() {
-                levels[i+j] = levels[i];
-                classes[i+j] = classes[i];
+                levels[i + j] = levels[i];
+                classes[i + j] = classes[i];
             }
         }
     }
@@ -480,13 +505,19 @@ mod explicit {
 
     /// Levels from 0 through max_depth are valid at this stage.
     /// http://www.unicode.org/reports/tr9/#X1
-    fn valid(level: u8) -> bool { level <= MAX_DEPTH }
+    fn valid(level: u8) -> bool {
+        level <= MAX_DEPTH
+    }
 
     /// The next odd level greater than `level`.
-    fn next_rtl_level(level: u8) -> u8 { (level + 1) |  1 }
+    fn next_rtl_level(level: u8) -> u8 {
+        (level + 1) | 1
+    }
 
     /// The next even level greater than `level`.
-    fn next_ltr_level(level: u8) -> u8 { (level + 2) & !1 }
+    fn next_ltr_level(level: u8) -> u8 {
+        (level + 2) & !1
+    }
 
     /// Entries in the directional status stack:
     struct Status {
@@ -495,7 +526,12 @@ mod explicit {
     }
 
     #[derive(PartialEq)]
-    enum OverrideStatus { Neutral, RTL, LTR, Isolate }
+    enum OverrideStatus {
+        Neutral,
+        RTL,
+        LTR,
+        Isolate,
+    }
 
     struct DirectionalStatusStack {
         vec: Vec<Status>,
@@ -503,12 +539,16 @@ mod explicit {
 
     impl DirectionalStatusStack {
         fn new() -> Self {
-            DirectionalStatusStack {
-                vec: Vec::with_capacity(MAX_DEPTH as usize + 2)
-            }
+            DirectionalStatusStack { vec: Vec::with_capacity(MAX_DEPTH as usize + 2) }
         }
         fn push(&mut self, level: u8, status: OverrideStatus) {
-            self.vec.push(Status { level: level, status: status });
+            self.vec
+                .push(
+                    Status {
+                        level: level,
+                        status: status,
+                    },
+                );
         }
         fn last(&self) -> &Status {
             self.vec.last().unwrap()
@@ -538,9 +578,11 @@ mod prepare {
     /// whose matching PDI is the first character of the next level run in the sequence.
     ///
     /// Note: This function does *not* return the sequences in order by their first characters.
-    pub fn isolating_run_sequences(para_level: u8, initial_classes: &[BidiClass], levels: &[u8])
-        -> Vec<IsolatingRunSequence>
-    {
+    pub fn isolating_run_sequences(
+        para_level: u8,
+        initial_classes: &[BidiClass],
+        levels: &[u8],
+    ) -> Vec<IsolatingRunSequence> {
         let runs = level_runs(levels, initial_classes);
 
         // Compute the set of isolating run sequences.
@@ -582,36 +624,43 @@ mod prepare {
 
         // Determine the `sos` and `eos` class for each sequence.
         // http://www.unicode.org/reports/tr9/#X10
-        return sequences.into_iter().map(|sequence| {
-            assert!(!sequence.len() > 0);
-            let start = sequence[0].start;
-            let end = sequence[sequence.len() - 1].end;
+        return sequences
+                   .into_iter()
+                   .map(
+            |sequence| {
+                assert!(!sequence.len() > 0);
+                let start = sequence[0].start;
+                let end = sequence[sequence.len() - 1].end;
 
-            // Get the level inside these level runs.
-            let level = levels[start];
+                // Get the level inside these level runs.
+                let level = levels[start];
 
-            // Get the level of the last non-removed char before the runs.
-            let pred_level = match initial_classes[..start].iter().rposition(not_removed_by_x9) {
-                Some(idx) => levels[idx],
-                None => para_level
-            };
-
-            // Get the level of the next non-removed char after the runs.
-            let succ_level = if matches!(initial_classes[end - 1], RLI|LRI|FSI) {
-                para_level
-            } else {
-                match initial_classes[end..].iter().position(not_removed_by_x9) {
+                // Get the level of the last non-removed char before the runs.
+                let pred_level = match initial_classes[..start]
+                          .iter()
+                          .rposition(not_removed_by_x9) {
                     Some(idx) => levels[idx],
-                    None => para_level
-                }
-            };
+                    None => para_level,
+                };
 
-            IsolatingRunSequence {
-                runs: sequence,
-                sos: class_for_level(max(level, pred_level)),
-                eos: class_for_level(max(level, succ_level)),
-            }
-        }).collect()
+                // Get the level of the next non-removed char after the runs.
+                let succ_level = if matches!(initial_classes[end - 1], RLI | LRI | FSI) {
+                    para_level
+                } else {
+                    match initial_classes[end..].iter().position(not_removed_by_x9) {
+                        Some(idx) => levels[idx],
+                        None => para_level,
+                    }
+                };
+
+                IsolatingRunSequence {
+                    runs: sequence,
+                    sos: class_for_level(max(level, pred_level)),
+                    eos: class_for_level(max(level, succ_level)),
+                }
+            },
+        )
+                   .collect();
     }
 
     /// Finds the level runs in a paragraph.
@@ -622,7 +671,7 @@ mod prepare {
 
         let mut runs = Vec::new();
         if levels.len() == 0 {
-            return runs
+            return runs;
         }
 
         let mut current_run_level = levels[0];
@@ -654,23 +703,31 @@ mod prepare {
         !removed_by_x9(*class)
     }
 
-    #[cfg(test)] #[test]
+    #[cfg(test)]
+    #[test]
     fn test_level_runs() {
-        assert_eq!(level_runs(&[0,0,0,1,1,2,0,0], &[L; 8]), &[0..3, 3..5, 5..6, 6..8]);
+        assert_eq!(
+            level_runs(&[0, 0, 0, 1, 1, 2, 0, 0], &[L; 8]),
+            &[0..3, 3..5, 5..6, 6..8]
+        );
     }
 
-    #[cfg(test)] #[test]
+    #[cfg(test)]
+    #[test]
     fn test_isolating_run_sequences() {
         // Example 3 from http://www.unicode.org/reports/tr9/#BD13:
 
         //              0  1    2   3    4  5  6  7    8   9   10
         let classes = &[L, RLI, AL, LRI, L, R, L, PDI, AL, PDI, L];
-        let levels =  &[0, 0,   1,  1,   2, 3, 2, 1,   1,  0,   0];
+        let levels = &[0, 0, 1, 1, 2, 3, 2, 1, 1, 0, 0];
         let para_level = 0;
 
         let sequences = isolating_run_sequences(para_level, classes, levels);
         let runs: Vec<Vec<LevelRun>> = sequences.iter().map(|s| s.runs.clone()).collect();
-        assert_eq!(runs, vec![vec![4..5], vec![5..6], vec![6..7], vec![2..4, 7..9], vec![0..2, 9..11]]);
+        assert_eq!(
+            runs,
+            vec![vec![4..5], vec![5..6], vec![6..7], vec![2..4, 7..9], vec![0..2, 9..11]]
+        );
     }
 }
 
@@ -695,8 +752,14 @@ mod implicit {
         let mut et_run_indices = Vec::new(); // for W5
 
         // Like sequence.runs.iter().flat_map(Clone::clone), but make indices itself clonable.
-        fn id(x: LevelRun) -> LevelRun { x }
-        let mut indices = sequence.runs.iter().cloned().flat_map(id as fn(LevelRun) -> LevelRun);
+        fn id(x: LevelRun) -> LevelRun {
+            x
+        }
+        let mut indices = sequence
+            .runs
+            .iter()
+            .cloned()
+            .flat_map(id as fn(LevelRun) -> LevelRun);
 
         while let Some(i) = indices.next() {
             match classes[i] {
@@ -704,7 +767,7 @@ mod implicit {
                 NSM => {
                     classes[i] = match prev_class {
                         RLI | LRI | FSI | PDI => ON,
-                        _ => prev_class
+                        _ => prev_class,
                     };
                 }
                 EN => {
@@ -724,31 +787,40 @@ mod implicit {
 
                 // http://www.unicode.org/reports/tr9/#W4
                 ES | CS => {
-                    let next_class = indices.clone().map(|j| classes[j]).filter(not_removed_by_x9)
-                        .next().unwrap_or(sequence.eos);
+                    let next_class = indices
+                        .clone()
+                        .map(|j| classes[j])
+                        .filter(not_removed_by_x9)
+                        .next()
+                        .unwrap_or(sequence.eos);
                     classes[i] = match (prev_class, classes[i], next_class) {
-                        (EN, ES, EN) |
-                        (EN, CS, EN) => EN,
+                        (EN, ES, EN) | (EN, CS, EN) => EN,
                         (AN, CS, AN) => AN,
-                        (_,  _,  _ ) => ON,
+                        (_, _, _) => ON,
                     }
                 }
                 // http://www.unicode.org/reports/tr9/#W5
                 ET => {
                     match prev_class {
                         EN => classes[i] = EN,
-                        _ => et_run_indices.push(i) // In case this is followed by an EN.
+                        _ => et_run_indices.push(i), // In case this is followed by an EN.
                     }
                 }
-                class => if removed_by_x9(class) {
-                    continue
+                class => {
+                    if removed_by_x9(class) {
+                        continue;
+                    }
                 }
             }
 
             prev_class = classes[i];
             match prev_class {
-                L | R => { last_strong_is_al = false; }
-                AL => { last_strong_is_al = true;  }
+                L | R => {
+                    last_strong_is_al = false;
+                }
+                AL => {
+                    last_strong_is_al = true;
+                }
                 _ => {}
             }
             if prev_class != ET {
@@ -765,9 +837,15 @@ mod implicit {
         for run in &sequence.runs {
             for i in run.clone() {
                 match classes[i] {
-                    EN if last_strong_is_l => { classes[i] = L; }
-                    L => { last_strong_is_l = true; }
-                    R | AL => { last_strong_is_l = false; }
+                    EN if last_strong_is_l => {
+                        classes[i] = L;
+                    }
+                    L => {
+                        last_strong_is_l = true;
+                    }
+                    R | AL => {
+                        last_strong_is_l = false;
+                    }
                     _ => {}
                 }
             }
@@ -777,9 +855,11 @@ mod implicit {
     /// 3.3.5 Resolving Neutral Types
     ///
     /// http://www.unicode.org/reports/tr9/#Resolving_Neutral_Types
-    pub fn resolve_neutral(sequence: &IsolatingRunSequence, levels: &[u8],
-                           classes: &mut [BidiClass])
-    {
+    pub fn resolve_neutral(
+        sequence: &IsolatingRunSequence,
+        levels: &[u8],
+        classes: &mut [BidiClass],
+    ) {
         let mut indices = sequence.runs.iter().flat_map(Clone::clone);
         let mut prev_class = sequence.sos;
 
@@ -804,35 +884,28 @@ mod implicit {
                         Some(j) => {
                             i = j;
                             if removed_by_x9(classes[i]) {
-                                continue
+                                continue;
                             }
                             next_class = classes[j];
                             if ni(next_class) {
                                 ni_run.push(i);
                             } else {
-                                break
+                                break;
                             }
                         }
                         None => {
                             next_class = sequence.eos;
-                            break
+                            break;
                         }
                     };
                 }
 
                 // N1-N2.
                 let new_class = match (prev_class, next_class) {
-                    (L,  L ) => L,
-                    (R,  R ) |
-                    (R,  AN) |
-                    (R,  EN) |
-                    (AN, R ) |
-                    (AN, AN) |
-                    (AN, EN) |
-                    (EN, R ) |
-                    (EN, AN) |
-                    (EN, EN) => R,
-                    (_,  _ ) => class_for_level(levels[i]),
+                    (L, L) => L,
+                    (R, R) | (R, AN) | (R, EN) | (AN, R) | (AN, AN) | (AN, EN) | (EN, R) |
+                    (EN, AN) | (EN, EN) => R,
+                    (_, _) => class_for_level(levels[i]),
                 };
                 for j in &ni_run {
                     classes[*j] = new_class;
@@ -855,13 +928,10 @@ mod implicit {
         for i in 0..levels.len() {
             match (is_rtl(levels[i]), classes[i]) {
                 // http://www.unicode.org/reports/tr9/#I1
-                (false, R)  => levels[i] += 1,
-                (false, AN) |
-                (false, EN) => levels[i] += 2,
+                (false, R) => levels[i] += 1,
+                (false, AN) | (false, EN) => levels[i] += 2,
                 // http://www.unicode.org/reports/tr9/#I2
-                (true, L)  |
-                (true, EN) |
-                (true, AN) => levels[i] += 1,
+                (true, L) | (true, EN) | (true, AN) => levels[i] += 1,
                 (_, _) => {}
             }
             max_level = max(max_level, levels[i]);
@@ -878,31 +948,64 @@ mod test {
     fn test_initial_scan() {
         use super::{InitialProperties, initial_scan, ParagraphInfo};
 
-        assert_eq!(initial_scan("a1", None), InitialProperties {
-            initial_classes: vec![L, EN],
-            paragraphs: vec![ParagraphInfo { range: 0..2, level: 0 }],
-        });
-        assert_eq!(initial_scan("غ א", None), InitialProperties {
-            initial_classes: vec![AL, AL, WS, R, R],
-            paragraphs: vec![ParagraphInfo { range: 0..5, level: 1 }],
-        });
+        assert_eq!(
+            initial_scan("a1", None),
+            InitialProperties {
+                initial_classes: vec![L, EN],
+                paragraphs: vec![
+                    ParagraphInfo {
+                        range: 0..2,
+                        level: 0,
+                    },
+                ],
+            }
+        );
+        assert_eq!(
+            initial_scan("غ א", None),
+            InitialProperties {
+                initial_classes: vec![AL, AL, WS, R, R],
+                paragraphs: vec![
+                    ParagraphInfo {
+                        range: 0..5,
+                        level: 1,
+                    },
+                ],
+            }
+        );
         {
-            let para1 = ParagraphInfo { range: 0..4, level: 0 };
-            let para2 = ParagraphInfo { range: 4..5, level: 0 };
-            assert_eq!(initial_scan("a\u{2029}b", None), InitialProperties {
-                initial_classes: vec![L, B, B, B, L],
-                paragraphs: vec![para1, para2],
-            });
+            let para1 = ParagraphInfo {
+                range: 0..4,
+                level: 0,
+            };
+            let para2 = ParagraphInfo {
+                range: 4..5,
+                level: 0,
+            };
+            assert_eq!(
+                initial_scan("a\u{2029}b", None),
+                InitialProperties {
+                    initial_classes: vec![L, B, B, B, L],
+                    paragraphs: vec![para1, para2],
+                }
+            );
         }
 
         let fsi = '\u{2068}';
         let pdi = '\u{2069}';
 
         let s = format!("{}א{}a", fsi, pdi);
-        assert_eq!(initial_scan(&s, None), InitialProperties {
-            initial_classes: vec![RLI, RLI, RLI, R, R, PDI, PDI, PDI, L],
-            paragraphs: vec![ParagraphInfo { range: 0..9, level: 0 }],
-        });
+        assert_eq!(
+            initial_scan(&s, None),
+            InitialProperties {
+                initial_classes: vec![RLI, RLI, RLI, R, R, PDI, PDI, PDI, L],
+                paragraphs: vec![
+                    ParagraphInfo {
+                        range: 0..9,
+                        level: 0,
+                    },
+                ],
+            }
+        );
     }
 
     #[test]
@@ -918,42 +1021,101 @@ mod test {
     fn test_process_text() {
         use super::{BidiInfo, ParagraphInfo, process_text};
 
-        assert_eq!(process_text("abc123", Some(0)), BidiInfo {
-            levels:  vec![0, 0, 0, 0,  0,  0],
-            classes: vec![L, L, L, EN, EN, EN],
-            paragraphs: vec![ParagraphInfo { range: 0..6, level: 0 }],
-        });
-        assert_eq!(process_text("abc אבג", Some(0)), BidiInfo {
-            levels:  vec![0, 0, 0, 0,  1,1, 1,1, 1,1],
-            classes: vec![L, L, L, WS, R,R, R,R, R,R],
-            paragraphs: vec![ParagraphInfo { range: 0..10, level: 0 }],
-        });
-        assert_eq!(process_text("abc אבג", Some(1)), BidiInfo {
-            levels:  vec![2, 2, 2, 1,  1,1, 1,1, 1,1],
-            classes: vec![L, L, L, WS, R,R, R,R, R,R],
-            paragraphs: vec![ParagraphInfo { range: 0..10, level: 1 }],
-        });
-        assert_eq!(process_text("אבג abc", Some(0)), BidiInfo {
-            levels:  vec![1,1, 1,1, 1,1, 0,  0, 0, 0],
-            classes: vec![R,R, R,R, R,R, WS, L, L, L],
-            paragraphs: vec![ParagraphInfo { range: 0..10, level: 0 }],
-        });
-        assert_eq!(process_text("אבג abc", None), BidiInfo {
-            levels:  vec![1,1, 1,1, 1,1, 1,  2, 2, 2],
-            classes: vec![R,R, R,R, R,R, WS, L, L, L],
-            paragraphs: vec![ParagraphInfo { range: 0..10, level: 1 }],
-        });
-        assert_eq!(process_text("غ2ظ א2ג", Some(0)), BidiInfo {
-            levels:  vec![1, 1,  2,  1, 1,  1,  1,1, 2,  1,1],
-            classes: vec![AL,AL, EN, AL,AL, WS, R,R, EN, R,R],
-            paragraphs: vec![ParagraphInfo { range: 0..11, level: 0 }],
-        });
-        assert_eq!(process_text("a א.\nג", None), BidiInfo {
-            classes: vec![L, WS, R,R, CS, B, R,R],
-            levels:  vec![0, 0,  1,1, 0,  0, 1,1],
-            paragraphs: vec![ParagraphInfo { range: 0..6, level: 0 },
-                             ParagraphInfo { range: 6..8, level: 1 }],
-        });
+        assert_eq!(
+            process_text("abc123", Some(0)),
+            BidiInfo {
+                levels: vec![0, 0, 0, 0, 0, 0],
+                classes: vec![L, L, L, EN, EN, EN],
+                paragraphs: vec![
+                    ParagraphInfo {
+                        range: 0..6,
+                        level: 0,
+                    },
+                ],
+            }
+        );
+        assert_eq!(
+            process_text("abc אבג", Some(0)),
+            BidiInfo {
+                levels: vec![0, 0, 0, 0, 1, 1, 1, 1, 1, 1],
+                classes: vec![L, L, L, WS, R, R, R, R, R, R],
+                paragraphs: vec![
+                    ParagraphInfo {
+                        range: 0..10,
+                        level: 0,
+                    },
+                ],
+            }
+        );
+        assert_eq!(
+            process_text("abc אבג", Some(1)),
+            BidiInfo {
+                levels: vec![2, 2, 2, 1, 1, 1, 1, 1, 1, 1],
+                classes: vec![L, L, L, WS, R, R, R, R, R, R],
+                paragraphs: vec![
+                    ParagraphInfo {
+                        range: 0..10,
+                        level: 1,
+                    },
+                ],
+            }
+        );
+        assert_eq!(
+            process_text("אבג abc", Some(0)),
+            BidiInfo {
+                levels: vec![1, 1, 1, 1, 1, 1, 0, 0, 0, 0],
+                classes: vec![R, R, R, R, R, R, WS, L, L, L],
+                paragraphs: vec![
+                    ParagraphInfo {
+                        range: 0..10,
+                        level: 0,
+                    },
+                ],
+            }
+        );
+        assert_eq!(
+            process_text("אבג abc", None),
+            BidiInfo {
+                levels: vec![1, 1, 1, 1, 1, 1, 1, 2, 2, 2],
+                classes: vec![R, R, R, R, R, R, WS, L, L, L],
+                paragraphs: vec![
+                    ParagraphInfo {
+                        range: 0..10,
+                        level: 1,
+                    },
+                ],
+            }
+        );
+        assert_eq!(
+            process_text("غ2ظ א2ג", Some(0)),
+            BidiInfo {
+                levels: vec![1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 1],
+                classes: vec![AL, AL, EN, AL, AL, WS, R, R, EN, R, R],
+                paragraphs: vec![
+                    ParagraphInfo {
+                        range: 0..11,
+                        level: 0,
+                    },
+                ],
+            }
+        );
+        assert_eq!(
+            process_text("a א.\nג", None),
+            BidiInfo {
+                classes: vec![L, WS, R, R, CS, B, R, R],
+                levels: vec![0, 0, 1, 1, 0, 0, 1, 1],
+                paragraphs: vec![
+                    ParagraphInfo {
+                        range: 0..6,
+                        level: 0,
+                    },
+                    ParagraphInfo {
+                        range: 6..8,
+                        level: 1,
+                    },
+                ],
+            }
+        );
     }
 
     #[test]
@@ -972,19 +1134,27 @@ mod test {
         //Numbers being weak LTR characters, cannot reorder strong RTL
         assert_eq!(reorder("123 אבג"), "גבא 123");
         //Testing for RLE Character
-        assert_eq!(reorder("\u{202B}abc אבג\u{202C}"), "\u{202B}\u{202C}גבא abc");
+        assert_eq!(
+            reorder("\u{202B}abc אבג\u{202C}"),
+            "\u{202B}\u{202C}גבא abc"
+        );
         //Testing neutral characters
         assert_eq!(reorder("אבג? אבג"), "גבא ?גבא");
         //Testing neutral characters with special case
         assert_eq!(reorder("A אבג?"), "A גבא?");
         //Testing neutral characters with Implicit RTL Marker
-        //The given test highlights a possible non-conformance issue that will perhaps be fixed in the subsequent steps.
+        //The given test highlights a possible non-conformance issue that will perhaps be fixed in
+        //the subsequent steps.
         //assert_eq!(reorder("A אבג?\u{202f}"), "A \u{202f}?גבא");
         assert_eq!(reorder("אבג abc"), "abc גבא");
-        assert_eq!(reorder("abc\u{2067}.-\u{2069}ghi"),
-                           "abc\u{2067}-.\u{2069}ghi");
-        assert_eq!(reorder("Hello, \u{2068}\u{202E}world\u{202C}\u{2069}!"),
-                           "Hello, \u{2068}\u{202E}\u{202C}dlrow\u{2069}!");
+        assert_eq!(
+            reorder("abc\u{2067}.-\u{2069}ghi"),
+            "abc\u{2067}-.\u{2069}ghi"
+        );
+        assert_eq!(
+            reorder("Hello, \u{2068}\u{202E}world\u{202C}\u{2069}!"),
+            "Hello, \u{2068}\u{202E}\u{202C}dlrow\u{2069}!"
+        );
     }
 
     #[test]
