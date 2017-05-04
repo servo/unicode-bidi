@@ -9,8 +9,6 @@
 
 //! 3.3.4 - 3.3.6. Resolve implicit levels and types.
 
-#![forbid(unsafe_code)]
-
 use char_data::BidiClass;
 use prepare::{IsolatingRunSequence, LevelRun, not_removed_by_x9, removed_by_x9};
 use std::cmp::max;

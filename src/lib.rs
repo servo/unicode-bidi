@@ -55,16 +55,19 @@
 #[macro_use]
 extern crate matches;
 
-mod char_data;
+pub mod char_data;
+pub mod format_chars;
+pub mod level;
+
 mod explicit;
 mod implicit;
 mod prepare;
-mod level;
 
 pub use char_data::{BidiClass, get_bidi_class, UNICODE_VERSION};
-pub use prepare::LevelRun;
 pub use level::Level;
+pub use prepare::LevelRun;
 
+use format_chars as chars;
 use std::borrow::Cow;
 use std::cmp::{max, min};
 use std::iter::repeat;
@@ -264,8 +267,6 @@ pub fn initial_scan(text: &str, default_para_level: Option<Level>) -> InitialPro
     let mut para_start = 0;
     let mut para_level = default_para_level;
 
-    const FSI_CHAR: char = '\u{2069}';
-
     for (i, c) in text.char_indices() {
         let class = get_bidi_class(c);
         classes.extend(repeat(class).take(c.len_utf8()));
@@ -292,7 +293,7 @@ pub fn initial_scan(text: &str, default_para_level: Option<Level>) -> InitialPro
                         if classes[start] == FSI {
                             // X5c. If the first strong character between FSI and its matching PDI
                             // is R or AL, treat it as RLI. Otherwise, treat it as LRI.
-                            for j in 0..FSI_CHAR.len_utf8() {
+                            for j in 0..chars::FSI.len_utf8() {
                                 classes[start + j] = if class == L { LRI } else { RLI };
                             }
                         }
@@ -361,6 +362,7 @@ mod test {
                 ],
             }
         );
+
         assert_eq!(
             initial_scan("غ א", None),
             InitialProperties {
@@ -373,28 +375,25 @@ mod test {
                 ],
             }
         );
-        {
-            let para1 = ParagraphInfo {
-                range: 0..4,
-                level: Level(0),
-            };
-            let para2 = ParagraphInfo {
-                range: 4..5,
-                level: Level(0),
-            };
-            assert_eq!(
-                initial_scan("a\u{2029}b", None),
-                InitialProperties {
-                    initial_classes: vec![L, B, B, B, L],
-                    paragraphs: vec![para1, para2],
-                }
-            );
-        }
 
-        let fsi = '\u{2068}';
-        let pdi = '\u{2069}';
+        assert_eq!(
+            initial_scan("a\u{2029}b", None),
+            InitialProperties {
+                initial_classes: vec![L, B, B, B, L],
+                paragraphs: vec![
+                    ParagraphInfo {
+                        range: 0..4,
+                        level: Level(0),
+                    },
+                    ParagraphInfo {
+                        range: 4..5,
+                        level: Level(0),
+                    },
+                ],
+            }
+        );
 
-        let s = format!("{}א{}a", fsi, pdi);
+        let s = format!("{}א{}a", chars::FSI, chars::PDI);
         assert_eq!(
             initial_scan(&s, None),
             InitialProperties {

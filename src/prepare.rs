@@ -11,8 +11,6 @@
 //!
 //! http://www.unicode.org/reports/tr9/#Preparations_for_Implicit_Processing
 
-#![forbid(unsafe_code)]
-
 use std::ops::Range;
 
 use char_data::BidiClass;

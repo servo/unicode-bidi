@@ -11,8 +11,6 @@
 //!
 //! http://www.unicode.org/reports/tr9/#BD2
 
-#![forbid(unsafe_code)]
-
 use char_data::BidiClass;
 
 /// Maximum depth of the directional status stack.

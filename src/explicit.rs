@@ -11,8 +11,6 @@
 //!
 //! http://www.unicode.org/reports/tr9/#Explicit_Levels_and_Directions
 
-#![forbid(unsafe_code)]
-
 use char_data::BidiClass;
 use level::{Level, MAX_DEPTH};
 
