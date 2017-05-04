@@ -86,7 +86,7 @@ impl Level {
 
     /// Generate a character type based on a level (as specified in steps X10 and N2).
     #[inline]
-    pub fn get_bidi_class(&self) -> BidiClass {
+    pub fn gen_bidi_class(&self) -> BidiClass {
         if self.is_rtl() {
             BidiClass::R
         } else {

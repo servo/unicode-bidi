@@ -9,16 +9,19 @@
 
 #![forbid(unsafe_code)]
 
-//! TODO
+//! Accessor for `Bidi_Class` property from Unicode Character Database (UCD)
 
-pub use char_data_tables::{BidiClass, bidi_class_table, UNICODE_VERSION};
+mod tables;
+
+pub use self::tables::{BidiClass, UNICODE_VERSION};
 
 use std::cmp::Ordering::{Equal, Less, Greater};
 
+use self::tables::bidi_class_table;
 use BidiClass::*;
 
 /// Find the BidiClass of a single char.
-pub fn bidi_class(c: char) -> BidiClass {
+pub fn get_bidi_class(c: char) -> BidiClass {
     bsearch_range_value_table(c, bidi_class_table)
 }
 
@@ -48,9 +51,9 @@ mod test {
 
     #[test]
     fn test_bidi_class() {
-        assert_eq!(bidi_class('c'), L);
-        assert_eq!(bidi_class('\u{05D1}'), R);
-        assert_eq!(bidi_class('\u{0627}'), AL);
+        assert_eq!(get_bidi_class('c'), L);
+        assert_eq!(get_bidi_class('\u{05D1}'), R);
+        assert_eq!(get_bidi_class('\u{0627}'), AL);
     }
 
 }

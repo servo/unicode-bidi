@@ -56,13 +56,12 @@
 extern crate matches;
 
 mod char_data;
-mod char_data_tables;
 mod explicit;
 mod implicit;
 mod prepare;
 mod level;
 
-pub use char_data::{BidiClass, bidi_class, UNICODE_VERSION};
+pub use char_data::{BidiClass, get_bidi_class, UNICODE_VERSION};
 pub use prepare::LevelRun;
 pub use level::Level;
 
@@ -268,7 +267,7 @@ pub fn initial_scan(text: &str, default_para_level: Option<Level>) -> InitialPro
     const FSI_CHAR: char = '\u{2069}';
 
     for (i, c) in text.char_indices() {
-        let class = bidi_class(c);
+        let class = get_bidi_class(c);
         classes.extend(repeat(class).take(c.len_utf8()));
         match class {
             B => {

@@ -4,15 +4,13 @@
 #![allow(missing_docs, non_upper_case_globals, non_snake_case)]
 #![cfg_attr(rustfmt, rustfmt_skip)]
 
-/// The version of [Unicode](http://www.unicode.org/)
-/// that the `bidi_class` function is based on.
+/// The version of [Unicode](http://www.unicode.org/) data
 pub const UNICODE_VERSION: (u64, u64, u64) = (9, 0, 0);
-use self::BidiClass::*;
 
 #[allow(non_camel_case_types)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-/// Represents the Unicode character property **Bidi_Class**, also known as
-/// the *bidirectional character type*.
+/// Represents values of the Unicode character property **Bidi_Class**, also
+/// known as the *bidirectional character type*.
 ///
 /// http://www.unicode.org/reports/tr9/#Bidirectional_Character_Types
 pub enum BidiClass {
@@ -41,6 +39,7 @@ pub enum BidiClass {
     WS,
 }
 
+use self::BidiClass::*;
 pub const bidi_class_table: &'static [(char, char, BidiClass)] = &[
     ('\u{0}', '\u{8}', BN), ('\u{9}', '\u{9}', S), ('\u{a}', '\u{a}', B), ('\u{b}', '\u{b}', S),
     ('\u{c}', '\u{c}', WS), ('\u{d}', '\u{d}', B), ('\u{e}', '\u{1b}', BN), ('\u{1c}', '\u{1e}', B),

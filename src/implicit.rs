@@ -185,7 +185,7 @@ pub fn resolve_neutral(
                 (L, L) => L,
                 (R, R) | (R, AN) | (R, EN) | (AN, R) | (AN, AN) | (AN, EN) | (EN, R) |
                 (EN, AN) | (EN, EN) => R,
-                (_, _) => levels[i].get_bidi_class(),
+                (_, _) => levels[i].gen_bidi_class(),
             };
             for j in &ni_run {
                 classes[*j] = new_class;

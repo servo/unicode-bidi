@@ -117,8 +117,8 @@ pub fn isolating_run_sequences(
 
             IsolatingRunSequence {
                 runs: sequence,
-                sos: max(level, pred_level).get_bidi_class(),
-                eos: max(level, succ_level).get_bidi_class(),
+                sos: max(level, pred_level).gen_bidi_class(),
+                eos: max(level, succ_level).gen_bidi_class(),
             }
         },
     )
