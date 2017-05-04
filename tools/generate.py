@@ -167,10 +167,12 @@ def emit_bidi_module(file_, bidi_class_table, cats):
     file_.write("""
 #[allow(non_camel_case_types)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-/// Represents values of the Unicode character property **Bidi_Class**, also
+/// Represents values of the Unicode character property
+/// [Bidi_Class](http://www.unicode.org/reports/tr44/#Bidi_Class), also
 /// known as the *bidirectional character type*.
 ///
-/// http://www.unicode.org/reports/tr9/#Bidirectional_Character_Types
+/// * http://www.unicode.org/reports/tr9/#Bidirectional_Character_Types
+/// * http://www.unicode.org/reports/tr44/#Bidi_Class_Values
 pub enum BidiClass {
 """)
     for cat in cats:
@@ -206,7 +208,7 @@ if __name__ == "__main__":
     with open(TABLES_PATH, "w") as file_:
         file_.write(PREAMBLE)
         file_.write("""
-/// The version of [Unicode](http://www.unicode.org/) data
+/// The [Unicode version](http://www.unicode.org/versions/) of data
 pub const UNICODE_VERSION: (u64, u64, u64) = (%s, %s, %s);
 """ % unicode_version)
 

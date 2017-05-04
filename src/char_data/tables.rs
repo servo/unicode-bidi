@@ -4,15 +4,17 @@
 #![allow(missing_docs, non_upper_case_globals, non_snake_case)]
 #![cfg_attr(rustfmt, rustfmt_skip)]
 
-/// The version of [Unicode](http://www.unicode.org/) data
+/// The [Unicode version](http://www.unicode.org/versions/) of data
 pub const UNICODE_VERSION: (u64, u64, u64) = (9, 0, 0);
 
 #[allow(non_camel_case_types)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-/// Represents values of the Unicode character property **Bidi_Class**, also
+/// Represents values of the Unicode character property
+/// [Bidi_Class](http://www.unicode.org/reports/tr44/#Bidi_Class), also
 /// known as the *bidirectional character type*.
 ///
-/// http://www.unicode.org/reports/tr9/#Bidirectional_Character_Types
+/// * http://www.unicode.org/reports/tr9/#Bidirectional_Character_Types
+/// * http://www.unicode.org/reports/tr44/#Bidi_Class_Values
 pub enum BidiClass {
     AL,
     AN,

@@ -102,7 +102,9 @@ pub struct ParagraphInfo {
     /// TODO: Shrink this to only include the starting index?
     pub range: Range<usize>,
 
-    /// The paragraph embedding level. http://www.unicode.org/reports/tr9/#BD4
+    /// The paragraph embedding level.
+    ///
+    /// http://www.unicode.org/reports/tr9/#BD4
     pub level: Level,
 }
 
