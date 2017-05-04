@@ -7,14 +7,12 @@
 /// The version of [Unicode](http://www.unicode.org/)
 /// that the `bidi_class` function is based on.
 pub const UNICODE_VERSION: (u64, u64, u64) = (9, 0, 0);
-pub use self::BidiClass::*;
+use self::BidiClass::*;
 
 #[allow(non_camel_case_types)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 /// Represents the Unicode character property **Bidi_Class**, also known as
 /// the *bidirectional character type*.
-///
-/// Use the `bidi_class` function to look up the BidiClass of a code point.
 ///
 /// http://www.unicode.org/reports/tr9/#Bidirectional_Character_Types
 pub enum BidiClass {
@@ -43,29 +41,7 @@ pub enum BidiClass {
     WS,
 }
 
-fn bsearch_range_value_table(c: char, r: &'static [(char, char, BidiClass)]) -> BidiClass {
-    use ::std::cmp::Ordering::{Equal, Less, Greater};
-    match r.binary_search_by(|&(lo, hi, _)| {
-        if lo <= c && c <= hi { Equal }
-        else if hi < c { Less }
-        else { Greater }
-    }) {
-        Ok(idx) => {
-            let (_, _, cat) = r[idx];
-            cat
-        }
-        // UCD/extracted/DerivedBidiClass.txt: "All code points not explicitly listed
-        // for Bidi_Class have the value Left_To_Right (L)."
-        Err(_) => L
-    }
-}
-
-/// Find the BidiClass of a single char.
-pub fn bidi_class(c: char) -> BidiClass {
-    bsearch_range_value_table(c, bidi_class_table)
-}
-
-const bidi_class_table: &'static [(char, char, BidiClass)] = &[
+pub const bidi_class_table: &'static [(char, char, BidiClass)] = &[
     ('\u{0}', '\u{8}', BN), ('\u{9}', '\u{9}', S), ('\u{a}', '\u{a}', B), ('\u{b}', '\u{b}', S),
     ('\u{c}', '\u{c}', WS), ('\u{d}', '\u{d}', B), ('\u{e}', '\u{1b}', BN), ('\u{1c}', '\u{1e}', B),
     ('\u{1f}', '\u{1f}', S), ('\u{20}', '\u{20}', WS), ('\u{21}', '\u{22}', ON), ('\u{23}',

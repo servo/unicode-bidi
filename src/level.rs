@@ -7,21 +7,25 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+//! Embedding Levels and Related Types
+//!
+//! http://www.unicode.org/reports/tr9/#BD2
+
 #![forbid(unsafe_code)]
 
-use tables::BidiClass;
+use char_data::BidiClass;
+
+/// Maximum depth of the directional status stack.
+pub const MAX_DEPTH: u8 = 125;
 
 /// Embedding Level
 ///
-/// Embedding Levels are numbers, where even values denote a left-to-right (LTR) direction and odd values
-/// a right-to-left (RTL).
+/// Embedding Levels are numbers, where even values denote a left-to-right (LTR) direction and odd
+/// values a right-to-left (RTL).
 ///
 /// http://www.unicode.org/reports/tr9/#BD2
 #[derive(Copy, Clone, Debug, Ord, Eq, PartialEq, PartialOrd)]
 pub struct Level(pub u8);
-
-/// Maximum depth of the directional status stack.
-pub const MAX_DEPTH: u8 = 125;
 
 impl Level {
     // == Inquiries ==
@@ -87,11 +91,11 @@ impl Level {
             BidiClass::L
         }
     }
-}
 
-#[cfg(test)]
-pub fn gen_vec(v: &[u8]) -> Vec<Level> {
-    v.iter().map(|&x| Level(x)).collect()
+    #[cfg(test)]
+    pub fn gen_vec(v: &[u8]) -> Vec<Level> {
+        v.iter().map(|&x| Level(x)).collect()
+    }
 }
 
 #[cfg(test)]
@@ -132,6 +136,9 @@ mod test {
 
     #[test]
     fn test_gen_vec() {
-        assert_eq!(gen_vec(&[0, 1, 125]), vec![Level(0), Level(1), Level(125)]);
+        assert_eq!(
+            Level::gen_vec(&[0, 1, 125]),
+            vec![Level(0), Level(1), Level(125)]
+        );
     }
 }
