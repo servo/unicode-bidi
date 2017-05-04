@@ -53,12 +53,14 @@ impl Level {
     /// Raise level by `amount`.
     #[inline]
     pub fn raise(&mut self, amount: u8) {
+        debug_assert!(self.0 as i16 + amount as i16 <= MAX_DEPTH as i16);
         self.0 += amount;
     }
 
     /// Lower level by `amount`.
     #[inline]
     pub fn lower(&mut self, amount: u8) {
+        debug_assert!(self.0 as i16 - amount as i16 >= 0);
         self.0 -= amount;
     }
 
