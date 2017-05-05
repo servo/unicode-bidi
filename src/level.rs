@@ -28,6 +28,12 @@ pub struct Level(pub u8);
 impl Level {
     // == Inquiries ==
 
+    /// The level number
+    #[inline]
+    pub fn get_number(&self) -> u8 {
+        self.0
+    }
+
     /// Levels from 0 through MAX_DEPTH are valid.
     #[inline]
     pub fn is_valid(&self) -> bool {
