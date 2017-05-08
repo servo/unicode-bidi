@@ -30,7 +30,7 @@ impl Level {
 
     /// The level number
     #[inline]
-    pub fn get_number(&self) -> u8 {
+    pub fn number(&self) -> u8 {
         self.0
     }
 

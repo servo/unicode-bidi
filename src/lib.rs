@@ -32,8 +32,8 @@
 //! // This paragraph has embedding level 1 because its first strong character is RTL.
 //! assert_eq!(info.paragraphs.len(), 1);
 //! let paragraph_info = &info.paragraphs[0];
+//! assert_eq!(paragraph_info.level.number(), 1);
 //! assert_eq!(paragraph_info.level.is_rtl(), true);
-//! assert_eq!(paragraph_info.level.get_number(), 1);
 //!
 //! // Re-ordering is done after wrapping each paragraph into a sequence of
 //! // lines. For this example, I'll just use a single line that spans the
