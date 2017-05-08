@@ -56,6 +56,9 @@
 #[macro_use]
 extern crate matches;
 
+#[macro_use]
+extern crate serde_derive;
+
 pub mod char_data;
 pub mod format_chars;
 pub mod level;

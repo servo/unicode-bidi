@@ -22,7 +22,7 @@ pub const MAX_DEPTH: u8 = 125;
 /// values a right-to-left (RTL).
 ///
 /// http://www.unicode.org/reports/tr9/#BD2
-#[derive(Copy, Clone, Debug, Ord, Eq, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Debug, Ord, Eq, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub struct Level(pub u8);
 
 impl Level {
