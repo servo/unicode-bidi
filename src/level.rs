@@ -11,6 +11,8 @@
 //!
 //! http://www.unicode.org/reports/tr9/#BD2
 
+use std::convert::Into;
+
 use char_data::BidiClass;
 
 /// Maximum depth of the directional status stack.
@@ -22,7 +24,7 @@ pub const MAX_DEPTH: u8 = 125;
 /// values a right-to-left (RTL).
 ///
 /// http://www.unicode.org/reports/tr9/#BD2
-#[derive(Copy, Clone, Debug, Ord, Eq, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub struct Level(u8);
 
 impl Level {
@@ -126,6 +128,21 @@ impl Level {
     }
 }
 
+impl Into<u8> for Level {
+    /// Convert to the level number
+    fn into(self) -> u8 {
+        self.number()
+    }
+}
+
+impl Into<i32> for Level {
+    /// Convert to the level number
+    fn into(self) -> i32 {
+        self.number().into()
+    }
+}
+
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -160,6 +177,13 @@ mod test {
         assert_eq!(Level(11).is_rtl(), true);
         assert_eq!(Level(124).is_rtl(), false);
         assert_eq!(Level(125).is_rtl(), true);
+    }
+
+    #[test]
+    fn test_into() {
+        let level = Level::new_rtl();
+        assert_eq!(1, level.into());
+        assert_eq!(1u8, level.into());
     }
 
     #[test]
