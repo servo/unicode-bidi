@@ -95,6 +95,24 @@ pub struct BidiInfo {
     pub paragraphs: Vec<ParagraphInfo>,
 }
 
+/// If levels has any RTL (even) level
+///
+/// This information is usually used to skip re-ordering of text when no RTL level is present
+#[inline]
+pub fn has_rtl(levels: &[Level]) -> bool {
+    levels.iter().any(|&lvl| lvl.is_rtl())
+}
+
+impl BidiInfo {
+    /// If processed text has any RTL computed bidi levels
+    ///
+    /// This information is usually used to skip re-ordering of text when no RTL level is present
+    #[inline]
+    pub fn has_rtl(&self) -> bool {
+        self::has_rtl(&self.levels)
+    }
+}
+
 /// Info about a single paragraph
 #[derive(Debug, PartialEq)]
 pub struct ParagraphInfo {
@@ -508,6 +526,30 @@ mod test {
                 ],
             }
         );
+    }
+
+    #[test]
+    fn test_bidi_info_has_rtl() {
+        // ASCII only
+        assert_eq!(process_text("123", None).has_rtl(), false);
+        assert_eq!(process_text("123", Some(Level(0))).has_rtl(), false);
+        assert_eq!(process_text("123", Some(Level(1))).has_rtl(), false);
+        assert_eq!(process_text("abc", None).has_rtl(), false);
+        assert_eq!(process_text("abc", Some(Level(0))).has_rtl(), false);
+        assert_eq!(process_text("abc", Some(Level(1))).has_rtl(), false);
+        assert_eq!(process_text("abc 123", None).has_rtl(), false);
+        assert_eq!(process_text("abc\n123", None).has_rtl(), false);
+
+        // With Hebrew
+        assert_eq!(process_text("אבּג", None).has_rtl(), true);
+        assert_eq!(process_text("אבּג", Some(Level(0))).has_rtl(), true);
+        assert_eq!(process_text("אבּג", Some(Level(1))).has_rtl(), true);
+        assert_eq!(process_text("abc אבּג", None).has_rtl(), true);
+        assert_eq!(process_text("abc\nאבּג", None).has_rtl(), true);
+        assert_eq!(process_text("אבּג abc", None).has_rtl(), true);
+        assert_eq!(process_text("אבּג\nabc", None).has_rtl(), true);
+        assert_eq!(process_text("אבּג 123", None).has_rtl(), true);
+        assert_eq!(process_text("אבּג\n123", None).has_rtl(), true);
     }
 
     #[test]
