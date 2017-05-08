@@ -23,9 +23,31 @@ pub const MAX_DEPTH: u8 = 125;
 ///
 /// http://www.unicode.org/reports/tr9/#BD2
 #[derive(Copy, Clone, Debug, Ord, Eq, PartialEq, PartialOrd, Serialize, Deserialize)]
-pub struct Level(pub u8);
+pub struct Level(u8);
 
 impl Level {
+    /// Create new LTR or RTL level (with smallest number vaules, 0 or 1)
+    #[inline]
+    pub fn new(be_rtl: bool) -> Level {
+        if be_rtl {
+            Level::new_rtl()
+        } else {
+            Level::new_ltr()
+        }
+    }
+
+    /// Create new LTR level (with smallest number vaule, 0)
+    #[inline]
+    pub fn new_ltr() -> Level {
+        Level(0)
+    }
+
+    /// Create new RTL level (with smallest number vaule, 1)
+    #[inline]
+    pub fn new_rtl() -> Level {
+        Level(1)
+    }
+
     // == Inquiries ==
 
     /// The level number

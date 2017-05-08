@@ -184,7 +184,7 @@ mod test {
         //              0    1   2    3  4  5  6    7   8    9 10
         let classes = &[L, RLI, AL, LRI, L, R, L, PDI, AL, PDI, L];
         let levels =  &[0,   0,  1,   1, 2, 3, 2,   1,  1,   0, 0];
-        let para_level = Level(0);
+        let para_level = Level::new_ltr();
 
         let sequences = isolating_run_sequences(para_level, classes, &Level::gen_vec(levels));
         let runs: Vec<Vec<LevelRun>> = sequences.iter().map(|s| s.runs.clone()).collect();

@@ -200,7 +200,7 @@ pub fn resolve_neutral(
 ///
 /// http://www.unicode.org/reports/tr9/#Resolving_Implicit_Levels
 pub fn resolve_levels(classes: &[BidiClass], levels: &mut [Level]) -> Level {
-    let mut max_level = Level(0);
+    let mut max_level = Level::new_ltr();
 
     assert!(classes.len() == levels.len());
     for i in 0..levels.len() {

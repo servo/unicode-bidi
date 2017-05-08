@@ -308,7 +308,7 @@ pub fn initial_scan(text: &str, default_para_level: Option<Level>) -> InitialPro
                     ParagraphInfo {
                         range: para_start..para_end,
                         // P3. If no character is found in p2, set the paragraph level to zero.
-                        level: para_level.unwrap_or(Level(0)),
+                        level: para_level.unwrap_or(Level::new_ltr()),
                     },
                 );
                 // Reset state for the start of the next paragraph.
@@ -331,7 +331,7 @@ pub fn initial_scan(text: &str, default_para_level: Option<Level>) -> InitialPro
                         if para_level.is_none() {
                             // P2. Find the first character of type L, AL, or R, while skipping any
                             // characters between an isolate initiator and its matching PDI.
-                            para_level = Some(if class == L { Level(0) } else { Level(1) });
+                            para_level = Some(Level::new(class != L));
                         }
                     }
                 }
@@ -349,7 +349,7 @@ pub fn initial_scan(text: &str, default_para_level: Option<Level>) -> InitialPro
         paragraphs.push(
             ParagraphInfo {
                 range: para_start..text.len(),
-                level: para_level.unwrap_or(Level(0)),
+                level: para_level.unwrap_or(Level::new_ltr()),
             },
         );
     }
@@ -386,7 +386,7 @@ mod test {
                 paragraphs: vec![
                     ParagraphInfo {
                         range: 0..2,
-                        level: Level(0),
+                        level: Level::new_ltr(),
                     },
                 ],
             }
@@ -399,7 +399,7 @@ mod test {
                 paragraphs: vec![
                     ParagraphInfo {
                         range: 0..5,
-                        level: Level(1),
+                        level: Level::new_rtl(),
                     },
                 ],
             }
@@ -412,11 +412,11 @@ mod test {
                 paragraphs: vec![
                     ParagraphInfo {
                         range: 0..4,
-                        level: Level(0),
+                        level: Level::new_ltr(),
                     },
                     ParagraphInfo {
                         range: 4..5,
-                        level: Level(0),
+                        level: Level::new_ltr(),
                     },
                 ],
             }
@@ -430,7 +430,7 @@ mod test {
                 paragraphs: vec![
                     ParagraphInfo {
                         range: 0..9,
-                        level: Level(0),
+                        level: Level::new_ltr(),
                     },
                 ],
             }
@@ -440,53 +440,53 @@ mod test {
     #[test]
     fn test_process_text() {
         assert_eq!(
-            process_text("abc123", Some(Level(0))),
+            process_text("abc123", Some(Level::new_ltr())),
             BidiInfo {
                 levels: Level::gen_vec(&[0, 0, 0, 0, 0, 0]),
                 classes: vec![L, L, L, EN, EN, EN],
                 paragraphs: vec![
                     ParagraphInfo {
                         range: 0..6,
-                        level: Level(0),
+                        level: Level::new_ltr(),
                     },
                 ],
             }
         );
         assert_eq!(
-            process_text("abc אבג", Some(Level(0))),
+            process_text("abc אבג", Some(Level::new_ltr())),
             BidiInfo {
                 levels: Level::gen_vec(&[0, 0, 0, 0, 1, 1, 1, 1, 1, 1]),
                 classes: vec![L, L, L, WS, R, R, R, R, R, R],
                 paragraphs: vec![
                     ParagraphInfo {
                         range: 0..10,
-                        level: Level(0),
+                        level: Level::new_ltr(),
                     },
                 ],
             }
         );
         assert_eq!(
-            process_text("abc אבג", Some(Level(1))),
+            process_text("abc אבג", Some(Level::new_rtl())),
             BidiInfo {
                 levels: Level::gen_vec(&[2, 2, 2, 1, 1, 1, 1, 1, 1, 1]),
                 classes: vec![L, L, L, WS, R, R, R, R, R, R],
                 paragraphs: vec![
                     ParagraphInfo {
                         range: 0..10,
-                        level: Level(1),
+                        level: Level::new_rtl(),
                     },
                 ],
             }
         );
         assert_eq!(
-            process_text("אבג abc", Some(Level(0))),
+            process_text("אבג abc", Some(Level::new_ltr())),
             BidiInfo {
                 levels: Level::gen_vec(&[1, 1, 1, 1, 1, 1, 0, 0, 0, 0]),
                 classes: vec![R, R, R, R, R, R, WS, L, L, L],
                 paragraphs: vec![
                     ParagraphInfo {
                         range: 0..10,
-                        level: Level(0),
+                        level: Level::new_ltr(),
                     },
                 ],
             }
@@ -499,20 +499,20 @@ mod test {
                 paragraphs: vec![
                     ParagraphInfo {
                         range: 0..10,
-                        level: Level(1),
+                        level: Level::new_rtl(),
                     },
                 ],
             }
         );
         assert_eq!(
-            process_text("غ2ظ א2ג", Some(Level(0))),
+            process_text("غ2ظ א2ג", Some(Level::new_ltr())),
             BidiInfo {
                 levels: Level::gen_vec(&[1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 1]),
                 classes: vec![AL, AL, EN, AL, AL, WS, R, R, EN, R, R],
                 paragraphs: vec![
                     ParagraphInfo {
                         range: 0..11,
-                        level: Level(0),
+                        level: Level::new_ltr(),
                     },
                 ],
             }
@@ -525,11 +525,11 @@ mod test {
                 paragraphs: vec![
                     ParagraphInfo {
                         range: 0..6,
-                        level: Level(0),
+                        level: Level::new_ltr(),
                     },
                     ParagraphInfo {
                         range: 6..8,
-                        level: Level(1),
+                        level: Level::new_rtl(),
                     },
                 ],
             }
