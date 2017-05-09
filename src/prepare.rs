@@ -145,21 +145,48 @@ pub fn not_removed_by_x9(class: &BidiClass) -> bool {
     !removed_by_x9(*class)
 }
 
-#[cfg(test)] #[test]
-fn test_level_runs() {
-    assert_eq!(level_runs(&[0,0,0,1,1,2,0,0], &[L; 8]), &[0..3, 3..5, 5..6, 6..8]);
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-#[cfg(test)] #[test]
-fn test_isolating_run_sequences() {
-    // Example 3 from http://www.unicode.org/reports/tr9/#BD13:
+    #[test]
+    fn test_level_runs() {
+        assert_eq!(level_runs(&[0,0,0,1,1,2,0,0], &[L; 8]), &[0..3, 3..5, 5..6, 6..8]);
+    }
 
-    //              0  1    2   3    4  5  6  7    8   9   10
-    let classes = &[L, RLI, AL, LRI, L, R, L, PDI, AL, PDI, L];
-    let levels =  &[0, 0,   1,  1,   2, 3, 2, 1,   1,  0,   0];
-    let para_level = 0;
+    #[test]
+    fn test_isolating_run_sequences() {
+        // Example 3 from http://www.unicode.org/reports/tr9/#BD13:
 
-    let sequences = isolating_run_sequences(para_level, classes, levels);
-    let runs: Vec<Vec<LevelRun>> = sequences.iter().map(|s| s.runs.clone()).collect();
-    assert_eq!(runs, vec![vec![4..5], vec![5..6], vec![6..7], vec![2..4, 7..9], vec![0..2, 9..11]]);
+        //              0  1    2   3    4  5  6  7    8   9   10
+        let classes = &[L, RLI, AL, LRI, L, R, L, PDI, AL, PDI, L];
+        let levels =  &[0, 0,   1,  1,   2, 3, 2, 1,   1,  0,   0];
+        let para_level = 0;
+
+        let sequences = isolating_run_sequences(para_level, classes, levels);
+        let runs: Vec<Vec<LevelRun>> = sequences.iter().map(|s| s.runs.clone()).collect();
+        assert_eq!(runs, vec![vec![4..5], vec![5..6], vec![6..7], vec![2..4, 7..9], vec![0..2, 9..11]]);
+    }
+
+    #[test]
+    fn test_removed_by_x9() {
+        use prepare::removed_by_x9;
+        let rem_classes = &[RLE, LRE, RLO, LRO, PDF, BN];
+        let not_classes = &[L, RLI, AL, LRI, PDI];
+        for x in rem_classes {
+            assert_eq!(removed_by_x9(*x), true);
+        }
+        for x in not_classes {
+            assert_eq!(removed_by_x9(*x), false);
+        }
+    }
+
+    #[test]
+    fn test_not_removed_by_x9() {
+        use prepare::not_removed_by_x9;
+        let non_x9_classes = &[L, R, AL, EN, ES, ET, AN, CS, NSM, B, S, WS, ON, LRI, RLI, FSI, PDI];
+        for x in non_x9_classes {
+            assert_eq!(not_removed_by_x9(&x), true);
+        }
+    }
 }
