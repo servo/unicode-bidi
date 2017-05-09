@@ -354,12 +354,10 @@ fn assign_levels_to_removed_chars(para_level: u8, classes: &[BidiClass], levels:
 
 #[cfg(test)]
 mod test {
-    use super::BidiClass::*;
+    use super::*;
 
     #[test]
     fn test_initial_scan() {
-        use super::{InitialProperties, initial_scan, ParagraphInfo};
-
         assert_eq!(initial_scan("a1", None), InitialProperties {
             initial_classes: vec![L, EN],
             paragraphs: vec![ParagraphInfo { range: 0..2, level: 0 }],
@@ -388,18 +386,7 @@ mod test {
     }
 
     #[test]
-    fn test_bidi_class() {
-        use super::bidi_class;
-
-        assert_eq!(bidi_class('c'), L);
-        assert_eq!(bidi_class('\u{05D1}'), R);
-        assert_eq!(bidi_class('\u{0627}'), AL);
-    }
-
-    #[test]
     fn test_process_text() {
-        use super::{BidiInfo, ParagraphInfo, process_text};
-
         assert_eq!(process_text("abc123", Some(0)), BidiInfo {
             levels:  vec![0, 0, 0, 0,  0,  0],
             classes: vec![L, L, L, EN, EN, EN],
@@ -440,7 +427,6 @@ mod test {
 
     #[test]
     fn test_reorder_line() {
-        use super::{process_text, reorder_line};
         use std::borrow::Cow;
         fn reorder(s: &str) -> Cow<str> {
             let info = process_text(s, None);
@@ -471,7 +457,6 @@ mod test {
 
     #[test]
     fn test_is_ltr() {
-        use super::is_ltr;
         assert_eq!(is_ltr(10), true);
         assert_eq!(is_ltr(11), false);
         assert_eq!(is_ltr(20), true);
@@ -479,31 +464,9 @@ mod test {
 
     #[test]
     fn test_is_rtl() {
-        use super::is_rtl;
         assert_eq!(is_rtl(13), true);
         assert_eq!(is_rtl(11), true);
         assert_eq!(is_rtl(20), false);
     }
 
-    #[test]
-    fn test_removed_by_x9() {
-        use prepare::removed_by_x9;
-        let rem_classes = &[RLE, LRE, RLO, LRO, PDF, BN];
-        let not_classes = &[L, RLI, AL, LRI, PDI];
-        for x in rem_classes {
-            assert_eq!(removed_by_x9(*x), true);
-        }
-        for x in not_classes {
-            assert_eq!(removed_by_x9(*x), false);
-        }
-    }
-
-    #[test]
-    fn test_not_removed_by_x9() {
-        use prepare::not_removed_by_x9;
-        let non_x9_classes = &[L, R, AL, EN, ES, ET, AN, CS, NSM, B, S, WS, ON, LRI, RLI, FSI, PDI];
-        for x in non_x9_classes {
-            assert_eq!(not_removed_by_x9(&x), true);
-        }
-    }
 }

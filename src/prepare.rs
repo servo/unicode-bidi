@@ -163,3 +163,30 @@ fn test_isolating_run_sequences() {
     let runs: Vec<Vec<LevelRun>> = sequences.iter().map(|s| s.runs.clone()).collect();
     assert_eq!(runs, vec![vec![4..5], vec![5..6], vec![6..7], vec![2..4, 7..9], vec![0..2, 9..11]]);
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_removed_by_x9() {
+        use prepare::removed_by_x9;
+        let rem_classes = &[RLE, LRE, RLO, LRO, PDF, BN];
+        let not_classes = &[L, RLI, AL, LRI, PDI];
+        for x in rem_classes {
+            assert_eq!(removed_by_x9(*x), true);
+        }
+        for x in not_classes {
+            assert_eq!(removed_by_x9(*x), false);
+        }
+    }
+
+    #[test]
+    fn test_not_removed_by_x9() {
+        use prepare::not_removed_by_x9;
+        let non_x9_classes = &[L, R, AL, EN, ES, ET, AN, CS, NSM, B, S, WS, ON, LRI, RLI, FSI, PDI];
+        for x in non_x9_classes {
+            assert_eq!(not_removed_by_x9(&x), true);
+        }
+    }
+}
