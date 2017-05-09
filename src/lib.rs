@@ -79,6 +79,11 @@ use std::ops::Range;
 
 use BidiClass::*;
 
+#[deprecated(since="0.3.0", note="please use `get_bidi_class` instead")]
+pub fn bidi_class(c: char) -> BidiClass {
+    get_bidi_class(c)
+}
+
 /// Output of `process_text`
 ///
 /// The `classes` and `levels` vectors are indexed by byte offsets into the text.  If a character
