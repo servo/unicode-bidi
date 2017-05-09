@@ -135,10 +135,13 @@ pub struct ParagraphInfo {
     pub level: Level,
 }
 
-/// Determine the bidirectional embedding levels for a single paragraph.
+/// Split the text into paragraphs and determine the bidirectional embedding levels for each
+/// paragraph.
 ///
 /// TODO: In early steps, check for special cases that allow later steps to be skipped. like text
 /// that is entirely LTR.  See the `nsBidi` class from Gecko for comparison.
+///
+/// TODO: Support auto-RTL base direction
 pub fn process_text(text: &str, level: Option<Level>) -> BidiInfo {
     let InitialProperties {
         initial_classes,
@@ -313,6 +316,9 @@ pub fn initial_scan(text: &str, default_para_level: Option<Level>) -> InitialPro
                 );
                 // Reset state for the start of the next paragraph.
                 para_start = para_end;
+                // TODO: Support defaulting to direction of previous paragraph
+                //
+                // http://www.unicode.org/reports/tr9/#HL1
                 para_level = default_para_level;
                 isolate_stack.clear();
             }

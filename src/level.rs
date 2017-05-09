@@ -11,7 +11,7 @@
 //!
 //! http://www.unicode.org/reports/tr9/#BD2
 
-use std::convert::Into;
+use std::convert::{From, Into};
 
 use char_data::BidiClass;
 
@@ -122,26 +122,39 @@ impl Level {
         }
     }
 
-    #[cfg(test)]
     pub fn gen_vec(v: &[u8]) -> Vec<Level> {
-        v.iter().map(|&x| Level(x)).collect()
+        v.iter().map(|&x| x.into()).collect()
     }
 }
 
 impl Into<u8> for Level {
     /// Convert to the level number
+    #[inline]
     fn into(self) -> u8 {
         self.number()
     }
 }
 
-impl Into<i32> for Level {
-    /// Convert to the level number
-    fn into(self) -> i32 {
-        self.number().into()
+impl From<u8> for Level {
+    /// Create level by number
+    #[inline]
+    fn from(number: u8) -> Level {
+        debug_assert!(number <= MAX_DEPTH);
+        Level(number)
     }
 }
 
+/// Used for matching levels in conformance tests
+impl<'a> PartialEq<&'a str> for Level {
+    #[inline]
+    fn eq(&self, s: &&'a str) -> bool {
+        if *s == "x" {
+            true
+        } else {
+            *s == self.0.to_string()
+        }
+    }
+}
 
 #[cfg(test)]
 mod test {
@@ -182,7 +195,6 @@ mod test {
     #[test]
     fn test_into() {
         let level = Level::new_rtl();
-        assert_eq!(1, level.into());
         assert_eq!(1u8, level.into());
     }
 
@@ -192,5 +204,11 @@ mod test {
             Level::gen_vec(&[0, 1, 125]),
             vec![Level(0), Level(1), Level(125)]
         );
+    }
+
+    #[test]
+    fn test_string_eq() {
+        assert_eq!(Level::gen_vec(&[0, 1, 4, 125]), vec!["0", "1", "x", "125"]);
+        assert_ne!(Level::gen_vec(&[0, 1, 4, 125]), vec!["0", "1", "5", "125"]);
     }
 }
