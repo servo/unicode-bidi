@@ -11,8 +11,10 @@
 //!
 //! http://www.unicode.org/reports/tr9/#Explicit_Levels_and_Directions
 
-use super::BidiClass;
-use super::BidiClass::*;
+use super::char_data::BidiClass;
+use super::level::Level;
+
+use BidiClass::*;
 
 /// Compute explicit embedding levels for one paragraph of text (X1-X8).
 ///
@@ -20,9 +22,9 @@ use super::BidiClass::*;
 /// for each char in `text`.
 pub fn compute(
     text: &str,
-    para_level: u8,
+    para_level: Level,
     initial_classes: &[BidiClass],
-    levels: &mut [u8],
+    levels: &mut [Level],
     classes: &mut [BidiClass],
 ) {
     assert!(text.len() == initial_classes.len());
@@ -39,15 +41,16 @@ pub fn compute(
         match initial_classes[i] {
             // Rules X2-X5c
             RLE | LRE | RLO | LRO | RLI | LRI | FSI => {
-                let is_rtl = match initial_classes[i] {
+                let char_is_rtl = match initial_classes[i] {
                     RLE | RLO | RLI => true,
                     _ => false,
                 };
 
                 let last_level = stack.last().level;
-                let new_level = match is_rtl {
-                    true => next_rtl_level(last_level),
-                    false => next_ltr_level(last_level),
+                let new_level = if char_is_rtl {
+                    last_level.new_explicit_next_rtl()
+                } else {
+                    last_level.new_explicit_next_ltr()
                 };
 
                 // X5a-X5c: Isolate initiators get the level of the last entry on the stack.
@@ -61,8 +64,9 @@ pub fn compute(
                     }
                 }
 
-                if valid(new_level) && overflow_isolate_count == 0 &&
+                if new_level.is_ok() && overflow_isolate_count == 0 &&
                    overflow_embedding_count == 0 {
+                    let new_level = new_level.unwrap();
                     stack.push(
                         new_level,
                         match initial_classes[i] {
@@ -145,28 +149,9 @@ pub fn compute(
     }
 }
 
-/// Maximum depth of the directional status stack.
-pub const MAX_DEPTH: u8 = 125;
-
-/// Levels from 0 through max_depth are valid at this stage.
-/// http://www.unicode.org/reports/tr9/#X1
-fn valid(level: u8) -> bool {
-    level <= MAX_DEPTH
-}
-
-/// The next odd level greater than `level`.
-fn next_rtl_level(level: u8) -> u8 {
-    (level + 1) | 1
-}
-
-/// The next even level greater than `level`.
-fn next_ltr_level(level: u8) -> u8 {
-    (level + 2) & !1
-}
-
 /// Entries in the directional status stack:
 struct Status {
-    level: u8,
+    level: Level,
     status: OverrideStatus,
 }
 
@@ -184,9 +169,9 @@ struct DirectionalStatusStack {
 
 impl DirectionalStatusStack {
     fn new() -> Self {
-        DirectionalStatusStack { vec: Vec::with_capacity(MAX_DEPTH as usize + 2) }
+        DirectionalStatusStack { vec: Vec::with_capacity(Level::max_explicit_depth() as usize + 2) }
     }
-    fn push(&mut self, level: u8, status: OverrideStatus) {
+    fn push(&mut self, level: Level, status: OverrideStatus) {
         self.vec
             .push(
                 Status {
