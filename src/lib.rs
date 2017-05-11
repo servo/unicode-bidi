@@ -52,7 +52,8 @@
 
 #![forbid(unsafe_code)]
 
-#[macro_use] extern crate matches;
+#[macro_use]
+extern crate matches;
 
 mod char_data;
 mod explicit;
@@ -89,7 +90,7 @@ pub struct BidiInfo {
     pub paragraphs: Vec<ParagraphInfo>,
 }
 
-/// Info about a single paragraph 
+/// Info about a single paragraph
 #[derive(Debug, PartialEq)]
 pub struct ParagraphInfo {
     /// The paragraphs boundaries within the text, as byte indices.
@@ -106,7 +107,10 @@ pub struct ParagraphInfo {
 /// TODO: In early steps, check for special cases that allow later steps to be skipped. like text
 /// that is entirely LTR.  See the `nsBidi` class from Gecko for comparison.
 pub fn process_text(text: &str, level: Option<u8>) -> BidiInfo {
-    let InitialProperties { initial_classes, paragraphs } = initial_scan(text, level);
+    let InitialProperties {
+        initial_classes,
+        paragraphs,
+    } = initial_scan(text, level);
 
     let mut levels = Vec::with_capacity(text.len());
     let mut classes = initial_classes.clone();
@@ -142,13 +146,17 @@ pub fn process_text(text: &str, level: Option<u8>) -> BidiInfo {
 /// Even embedding levels are left-to-right.
 ///
 /// http://www.unicode.org/reports/tr9/#BD2
-pub fn is_ltr(level: u8) -> bool { level % 2 == 0 }
+pub fn is_ltr(level: u8) -> bool {
+    level % 2 == 0
+}
 
 #[inline]
 /// Odd levels are right-to-left.
 ///
 /// http://www.unicode.org/reports/tr9/#BD2
-pub fn is_rtl(level: u8) -> bool { level % 2 == 1 }
+pub fn is_rtl(level: u8) -> bool {
+    level % 2 == 1
+}
 
 /// Generate a character type based on a level (as specified in steps X10 and N2).
 fn class_for_level(level: u8) -> BidiClass {
@@ -161,12 +169,10 @@ fn class_for_level(level: u8) -> BidiClass {
 /// `line` is a range of bytes indices within `text`.
 ///
 /// Returns the line in display order.
-pub fn reorder_line<'a>(text: &'a str, line: Range<usize>, levels: &[u8])
-    -> Cow<'a, str>
-{
+pub fn reorder_line<'a>(text: &'a str, line: Range<usize>, levels: &[u8]) -> Cow<'a, str> {
     let runs = visual_runs(line.clone(), &levels);
     if runs.len() == 1 && !is_rtl(levels[runs[0].start]) {
-        return text.into()
+        return text.into();
     }
     let mut result = String::with_capacity(line.len());
     for run in runs {
@@ -232,14 +238,14 @@ pub fn visual_runs(line: Range<usize>, levels: &[u8]) -> Vec<LevelRun> {
         while seq_start < run_count {
             if levels[runs[seq_start].start] < max_level {
                 seq_start += 1;
-                continue
+                continue;
             }
 
             // Found the start of a sequence. Now find the end.
             let mut seq_end = seq_start + 1;
             while seq_end < run_count {
                 if levels[runs[seq_end].start] < max_level {
-                    break
+                    break;
                 }
                 seq_end += 1;
             }
@@ -293,30 +299,38 @@ pub fn initial_scan(text: &str, default_para_level: Option<u8>) -> InitialProper
                 // P1. Split the text into separate paragraphs. The paragraph separator is kept
                 // with the previous paragraph.
                 let para_end = i + c.len_utf8();
-                paragraphs.push(ParagraphInfo {
-                    range: para_start..para_end,
-                    // P3. If no character is found in p2, set the paragraph level to zero.
-                    level: para_level.unwrap_or(0)
-                });
+                paragraphs.push(
+                    ParagraphInfo {
+                        range: para_start..para_end,
+                        // P3. If no character is found in p2, set the paragraph level to zero.
+                        level: para_level.unwrap_or(0),
+                    },
+                );
                 // Reset state for the start of the next paragraph.
                 para_start = para_end;
                 para_level = default_para_level;
                 isolate_stack.clear();
             }
-            L | R | AL => match isolate_stack.last() {
-                Some(&start) => if classes[start] == FSI {
-                    // X5c. If the first strong character between FSI and its matching PDI is R
-                    // or AL, treat it as RLI. Otherwise, treat it as LRI.
-                    for j in 0..FSI_CHAR.len_utf8() {
-                        classes[start+j] = if class == L { LRI } else { RLI };
+            L | R | AL => {
+                match isolate_stack.last() {
+                    Some(&start) => {
+                        if classes[start] == FSI {
+                            // X5c. If the first strong character between FSI and its matching PDI
+                            // is R or AL, treat it as RLI. Otherwise, treat it as LRI.
+                            for j in 0..FSI_CHAR.len_utf8() {
+                                classes[start + j] = if class == L { LRI } else { RLI };
+                            }
+                        }
                     }
-                },
-                None => if para_level.is_none() {
-                    // P2. Find the first character of type L, AL, or R, while skipping any
-                    // characters between an isolate initiator and its matching PDI.
-                    para_level = Some(if class == L { 0 } else { 1 });
+                    None => {
+                        if para_level.is_none() {
+                            // P2. Find the first character of type L, AL, or R, while skipping any
+                            // characters between an isolate initiator and its matching PDI.
+                            para_level = Some(if class == L { 0 } else { 1 });
+                        }
+                    }
                 }
-            },
+            }
             RLI | LRI | FSI => {
                 isolate_stack.push(i);
             }
@@ -327,10 +341,12 @@ pub fn initial_scan(text: &str, default_para_level: Option<u8>) -> InitialProper
         }
     }
     if para_start < text.len() {
-        paragraphs.push(ParagraphInfo {
-            range: para_start..text.len(),
-            level: para_level.unwrap_or(0)
-        });
+        paragraphs.push(
+            ParagraphInfo {
+                range: para_start..text.len(),
+                level: para_level.unwrap_or(0),
+            },
+        );
     }
     assert!(classes.len() == text.len());
 
@@ -347,7 +363,7 @@ pub fn initial_scan(text: &str, default_para_level: Option<u8>) -> InitialProper
 fn assign_levels_to_removed_chars(para_level: u8, classes: &[BidiClass], levels: &mut [u8]) {
     for i in 0..levels.len() {
         if prepare::removed_by_x9(classes[i]) {
-            levels[i] = if i > 0 { levels[i-1] } else { para_level };
+            levels[i] = if i > 0 { levels[i - 1] } else { para_level };
         }
     }
 }
@@ -358,71 +374,163 @@ mod tests {
 
     #[test]
     fn test_initial_scan() {
-        assert_eq!(initial_scan("a1", None), InitialProperties {
-            initial_classes: vec![L, EN],
-            paragraphs: vec![ParagraphInfo { range: 0..2, level: 0 }],
-        });
-        assert_eq!(initial_scan("غ א", None), InitialProperties {
-            initial_classes: vec![AL, AL, WS, R, R],
-            paragraphs: vec![ParagraphInfo { range: 0..5, level: 1 }],
-        });
+        assert_eq!(
+            initial_scan("a1", None),
+            InitialProperties {
+                initial_classes: vec![L, EN],
+                paragraphs: vec![
+                    ParagraphInfo {
+                        range: 0..2,
+                        level: 0,
+                    },
+                ],
+            }
+        );
+        assert_eq!(
+            initial_scan("غ א", None),
+            InitialProperties {
+                initial_classes: vec![AL, AL, WS, R, R],
+                paragraphs: vec![
+                    ParagraphInfo {
+                        range: 0..5,
+                        level: 1,
+                    },
+                ],
+            }
+        );
         {
-            let para1 = ParagraphInfo { range: 0..4, level: 0 };
-            let para2 = ParagraphInfo { range: 4..5, level: 0 };
-            assert_eq!(initial_scan("a\u{2029}b", None), InitialProperties {
-                initial_classes: vec![L, B, B, B, L],
-                paragraphs: vec![para1, para2],
-            });
+            let para1 = ParagraphInfo {
+                range: 0..4,
+                level: 0,
+            };
+            let para2 = ParagraphInfo {
+                range: 4..5,
+                level: 0,
+            };
+            assert_eq!(
+                initial_scan("a\u{2029}b", None),
+                InitialProperties {
+                    initial_classes: vec![L, B, B, B, L],
+                    paragraphs: vec![para1, para2],
+                }
+            );
         }
 
         let fsi = '\u{2068}';
         let pdi = '\u{2069}';
 
         let s = format!("{}א{}a", fsi, pdi);
-        assert_eq!(initial_scan(&s, None), InitialProperties {
-            initial_classes: vec![RLI, RLI, RLI, R, R, PDI, PDI, PDI, L],
-            paragraphs: vec![ParagraphInfo { range: 0..9, level: 0 }],
-        });
+        assert_eq!(
+            initial_scan(&s, None),
+            InitialProperties {
+                initial_classes: vec![RLI, RLI, RLI, R, R, PDI, PDI, PDI, L],
+                paragraphs: vec![
+                    ParagraphInfo {
+                        range: 0..9,
+                        level: 0,
+                    },
+                ],
+            }
+        );
     }
 
     #[test]
     fn test_process_text() {
-        assert_eq!(process_text("abc123", Some(0)), BidiInfo {
-            levels:  vec![0, 0, 0, 0,  0,  0],
-            classes: vec![L, L, L, EN, EN, EN],
-            paragraphs: vec![ParagraphInfo { range: 0..6, level: 0 }],
-        });
-        assert_eq!(process_text("abc אבג", Some(0)), BidiInfo {
-            levels:  vec![0, 0, 0, 0,  1,1, 1,1, 1,1],
-            classes: vec![L, L, L, WS, R,R, R,R, R,R],
-            paragraphs: vec![ParagraphInfo { range: 0..10, level: 0 }],
-        });
-        assert_eq!(process_text("abc אבג", Some(1)), BidiInfo {
-            levels:  vec![2, 2, 2, 1,  1,1, 1,1, 1,1],
-            classes: vec![L, L, L, WS, R,R, R,R, R,R],
-            paragraphs: vec![ParagraphInfo { range: 0..10, level: 1 }],
-        });
-        assert_eq!(process_text("אבג abc", Some(0)), BidiInfo {
-            levels:  vec![1,1, 1,1, 1,1, 0,  0, 0, 0],
-            classes: vec![R,R, R,R, R,R, WS, L, L, L],
-            paragraphs: vec![ParagraphInfo { range: 0..10, level: 0 }],
-        });
-        assert_eq!(process_text("אבג abc", None), BidiInfo {
-            levels:  vec![1,1, 1,1, 1,1, 1,  2, 2, 2],
-            classes: vec![R,R, R,R, R,R, WS, L, L, L],
-            paragraphs: vec![ParagraphInfo { range: 0..10, level: 1 }],
-        });
-        assert_eq!(process_text("غ2ظ א2ג", Some(0)), BidiInfo {
-            levels:  vec![1, 1,  2,  1, 1,  1,  1,1, 2,  1,1],
-            classes: vec![AL,AL, EN, AL,AL, WS, R,R, EN, R,R],
-            paragraphs: vec![ParagraphInfo { range: 0..11, level: 0 }],
-        });
-        assert_eq!(process_text("a א.\nג", None), BidiInfo {
-            classes: vec![L, WS, R,R, CS, B, R,R],
-            levels:  vec![0, 0,  1,1, 0,  0, 1,1],
-            paragraphs: vec![ParagraphInfo { range: 0..6, level: 0 },
-                             ParagraphInfo { range: 6..8, level: 1 }],
-        });
+        assert_eq!(
+            process_text("abc123", Some(0)),
+            BidiInfo {
+                levels: vec![0, 0, 0, 0, 0, 0],
+                classes: vec![L, L, L, EN, EN, EN],
+                paragraphs: vec![
+                    ParagraphInfo {
+                        range: 0..6,
+                        level: 0,
+                    },
+                ],
+            }
+        );
+        assert_eq!(
+            process_text("abc אבג", Some(0)),
+            BidiInfo {
+                levels: vec![0, 0, 0, 0, 1, 1, 1, 1, 1, 1],
+                classes: vec![L, L, L, WS, R, R, R, R, R, R],
+                paragraphs: vec![
+                    ParagraphInfo {
+                        range: 0..10,
+                        level: 0,
+                    },
+                ],
+            }
+        );
+        assert_eq!(
+            process_text("abc אבג", Some(1)),
+            BidiInfo {
+                levels: vec![2, 2, 2, 1, 1, 1, 1, 1, 1, 1],
+                classes: vec![L, L, L, WS, R, R, R, R, R, R],
+                paragraphs: vec![
+                    ParagraphInfo {
+                        range: 0..10,
+                        level: 1,
+                    },
+                ],
+            }
+        );
+        assert_eq!(
+            process_text("אבג abc", Some(0)),
+            BidiInfo {
+                levels: vec![1, 1, 1, 1, 1, 1, 0, 0, 0, 0],
+                classes: vec![R, R, R, R, R, R, WS, L, L, L],
+                paragraphs: vec![
+                    ParagraphInfo {
+                        range: 0..10,
+                        level: 0,
+                    },
+                ],
+            }
+        );
+        assert_eq!(
+            process_text("אבג abc", None),
+            BidiInfo {
+                levels: vec![1, 1, 1, 1, 1, 1, 1, 2, 2, 2],
+                classes: vec![R, R, R, R, R, R, WS, L, L, L],
+                paragraphs: vec![
+                    ParagraphInfo {
+                        range: 0..10,
+                        level: 1,
+                    },
+                ],
+            }
+        );
+        assert_eq!(
+            process_text("غ2ظ א2ג", Some(0)),
+            BidiInfo {
+                levels: vec![1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 1],
+                classes: vec![AL, AL, EN, AL, AL, WS, R, R, EN, R, R],
+                paragraphs: vec![
+                    ParagraphInfo {
+                        range: 0..11,
+                        level: 0,
+                    },
+                ],
+            }
+        );
+        assert_eq!(
+            process_text("a א.\nג", None),
+            BidiInfo {
+                classes: vec![L, WS, R, R, CS, B, R, R],
+                levels: vec![0, 0, 1, 1, 0, 0, 1, 1],
+                paragraphs: vec![
+                    ParagraphInfo {
+                        range: 0..6,
+                        level: 0,
+                    },
+                    ParagraphInfo {
+                        range: 6..8,
+                        level: 1,
+                    },
+                ],
+            }
+        );
     }
 
     #[test]
@@ -440,19 +548,27 @@ mod tests {
         //Numbers being weak LTR characters, cannot reorder strong RTL
         assert_eq!(reorder("123 אבג"), "גבא 123");
         //Testing for RLE Character
-        assert_eq!(reorder("\u{202B}abc אבג\u{202C}"), "\u{202B}\u{202C}גבא abc");
+        assert_eq!(
+            reorder("\u{202B}abc אבג\u{202C}"),
+            "\u{202B}\u{202C}גבא abc"
+        );
         //Testing neutral characters
         assert_eq!(reorder("אבג? אבג"), "גבא ?גבא");
         //Testing neutral characters with special case
         assert_eq!(reorder("A אבג?"), "A גבא?");
         //Testing neutral characters with Implicit RTL Marker
-        //The given test highlights a possible non-conformance issue that will perhaps be fixed in the subsequent steps.
+        //The given test highlights a possible non-conformance issue that will perhaps be fixed in
+        //the subsequent steps.
         //assert_eq!(reorder("A אבג?\u{202f}"), "A \u{202f}?גבא");
         assert_eq!(reorder("אבג abc"), "abc גבא");
-        assert_eq!(reorder("abc\u{2067}.-\u{2069}ghi"),
-                           "abc\u{2067}-.\u{2069}ghi");
-        assert_eq!(reorder("Hello, \u{2068}\u{202E}world\u{202C}\u{2069}!"),
-                           "Hello, \u{2068}\u{202E}\u{202C}dlrow\u{2069}!");
+        assert_eq!(
+            reorder("abc\u{2067}.-\u{2069}ghi"),
+            "abc\u{2067}-.\u{2069}ghi"
+        );
+        assert_eq!(
+            reorder("Hello, \u{2068}\u{202E}world\u{202C}\u{2069}!"),
+            "Hello, \u{2068}\u{202E}\u{202C}dlrow\u{2069}!"
+        );
     }
 
     #[test]
