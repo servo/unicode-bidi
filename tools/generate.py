@@ -18,6 +18,7 @@ import fileinput, re, os, sys, operator
 
 
 DATA_DIR = 'data'
+TESTS_DATA_DIR = 'tests/data'
 README_NAME = "ReadMe.txt"
 UNICODE_DATA_NAME = "UnicodeData.txt"
 TABLES_PATH = os.path.join("src", "char_data", "tables.rs")
@@ -32,13 +33,20 @@ PREAMBLE = '''// NOTE:
 # these are the surrogate codepoints, which are not valid rust characters
 surrogate_codepoints = (0xD800, 0xDFFF)
 
-def fetch_data(name):
-    dst = os.path.join(DATA_DIR, os.path.basename(name))
+def fetch(name, dst):
     if not os.path.exists(dst):
         os.system("curl -o '%s' 'http://www.unicode.org/Public/UNIDATA/%s'" % (dst, name))
     if not os.path.exists(dst):
         sys.stderr.write("cannot fetch %s" % name)
         exit(1)
+
+def fetch_data(name):
+    dst = os.path.join(DATA_DIR, os.path.basename(name))
+    fetch(name, dst)
+
+def fetch_test_data(name):
+    dst = os.path.join(TESTS_DATA_DIR, os.path.basename(name))
+    fetch(name, dst)
 
 def open_data(name):
     return open(os.path.join(DATA_DIR, name))
@@ -191,18 +199,18 @@ use self::BidiClass::*;
     )
 
 def get_unicode_version():
-    # download and parse all the data
     fetch_data(README_NAME)
     with open_data(README_NAME) as readme:
         pattern = "for Version (\d+)\.(\d+)\.(\d+) of the Unicode"
         return re.search(pattern, readme.read()).groups()
 
 if __name__ == "__main__":
+    # Find Unicode Version
     if not os.path.exists(DATA_DIR):
         os.mkdir(DATA_DIR)
-
     unicode_version = get_unicode_version()
 
+    # Build data tables
     if os.path.exists(TABLES_PATH):
         os.remove(TABLES_PATH)
     with open(TABLES_PATH, "w") as file_:
@@ -215,7 +223,6 @@ pub const UNICODE_VERSION: (u64, u64, u64) = (%s, %s, %s);
         (bidi_categories, bidi_class_table) = load_unicode_data()
         emit_bidi_module(file_, bidi_class_table, bidi_categories)
 
-    # downloading the test case files
-    # fetch_data("BidiTest.txt")
-    # fetch_data("BidiCharacterTest.txt")
-
+    # Fetch test data files
+    fetch_test_data("BidiTest.txt")
+    fetch_test_data("BidiCharacterTest.txt")
