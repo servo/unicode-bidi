@@ -9,10 +9,13 @@
 
 //! 3.3.4 - 3.3.6. Resolve implicit levels and types.
 
-use super::{BidiClass, class_for_level, is_rtl, LevelRun};
-use super::BidiClass::*;
-use super::prepare::{IsolatingRunSequence, not_removed_by_x9, removed_by_x9};
 use std::cmp::max;
+
+use super::char_data::BidiClass;
+use super::prepare::{IsolatingRunSequence, LevelRun, not_removed_by_x9, removed_by_x9};
+use super::level::Level;
+
+use BidiClass::*;
 
 /// 3.3.4 Resolving Weak Types
 ///
@@ -131,7 +134,11 @@ pub fn resolve_weak(sequence: &IsolatingRunSequence, classes: &mut [BidiClass]) 
 /// 3.3.5 Resolving Neutral Types
 ///
 /// http://www.unicode.org/reports/tr9/#Resolving_Neutral_Types
-pub fn resolve_neutral(sequence: &IsolatingRunSequence, levels: &[u8], classes: &mut [BidiClass]) {
+pub fn resolve_neutral(
+    sequence: &IsolatingRunSequence,
+    levels: &[Level],
+    classes: &mut [BidiClass],
+) {
     let mut indices = sequence.runs.iter().flat_map(Clone::clone);
     let mut prev_class = sequence.sos;
 
@@ -177,7 +184,7 @@ pub fn resolve_neutral(sequence: &IsolatingRunSequence, levels: &[u8], classes: 
                 (L, L) => L,
                 (R, R) | (R, AN) | (R, EN) | (AN, R) | (AN, AN) | (AN, EN) | (EN, R) |
                 (EN, AN) | (EN, EN) => R,
-                (_, _) => class_for_level(levels[i]),
+                (_, _) => levels[i].bidi_class(),
             };
             for j in &ni_run {
                 classes[*j] = new_class;
@@ -193,20 +200,21 @@ pub fn resolve_neutral(sequence: &IsolatingRunSequence, levels: &[u8], classes: 
 /// Returns the maximum embedding level in the paragraph.
 ///
 /// http://www.unicode.org/reports/tr9/#Resolving_Implicit_Levels
-pub fn resolve_levels(classes: &[BidiClass], levels: &mut [u8]) -> u8 {
-    let mut max_level = 0;
+pub fn resolve_levels(classes: &[BidiClass], levels: &mut [Level]) -> Level {
+    let mut max_level = Level::ltr();
 
     assert!(classes.len() == levels.len());
     for i in 0..levels.len() {
-        match (is_rtl(levels[i]), classes[i]) {
+        match (levels[i].is_rtl(), classes[i]) {
             // http://www.unicode.org/reports/tr9/#I1
-            (false, R) => levels[i] += 1,
-            (false, AN) | (false, EN) => levels[i] += 2,
+            (false, R) => levels[i].raise(1).expect("Level number error"),
+            (false, AN) | (false, EN) => levels[i].raise(2).expect("Level number error"),
             // http://www.unicode.org/reports/tr9/#I2
-            (true, L) | (true, EN) | (true, AN) => levels[i] += 1,
+            (true, L) | (true, EN) | (true, AN) => levels[i].raise(1).expect("Level number error"),
             (_, _) => {}
         }
         max_level = max(max_level, levels[i]);
     }
+
     max_level
 }

@@ -11,9 +11,18 @@
 //!
 //! http://www.unicode.org/reports/tr9/#Preparations_for_Implicit_Processing
 
-use super::{BidiClass, class_for_level, LevelRun};
-use super::BidiClass::*;
 use std::cmp::max;
+use std::ops::Range;
+
+use super::char_data::BidiClass;
+use super::level::Level;
+
+use BidiClass::*;
+
+/// A maximal substring of characters with the same embedding level.
+///
+/// Represented as a range of byte indices.
+pub type LevelRun = Range<usize>;
 
 /// Output of `isolating_run_sequences` (steps X9-X10)
 pub struct IsolatingRunSequence {
@@ -30,9 +39,9 @@ pub struct IsolatingRunSequence {
 ///
 /// Note: This function does *not* return the sequences in order by their first characters.
 pub fn isolating_run_sequences(
-    para_level: u8,
+    para_level: Level,
     initial_classes: &[BidiClass],
-    levels: &[u8],
+    levels: &[Level],
 ) -> Vec<IsolatingRunSequence> {
     let runs = level_runs(levels, initial_classes);
 
@@ -106,8 +115,8 @@ pub fn isolating_run_sequences(
 
             IsolatingRunSequence {
                 runs: sequence,
-                sos: class_for_level(max(level, pred_level)),
-                eos: class_for_level(max(level, succ_level)),
+                sos: max(level, pred_level).bidi_class(),
+                eos: max(level, succ_level).bidi_class(),
             }
         },
     )
@@ -117,7 +126,7 @@ pub fn isolating_run_sequences(
 /// Finds the level runs in a paragraph.
 ///
 /// http://www.unicode.org/reports/tr9/#BD7
-fn level_runs(levels: &[u8], classes: &[BidiClass]) -> Vec<LevelRun> {
+fn level_runs(levels: &[Level], classes: &[BidiClass]) -> Vec<LevelRun> {
     assert!(levels.len() == classes.len());
 
     let mut runs = Vec::new();
@@ -155,13 +164,14 @@ pub fn not_removed_by_x9(class: &BidiClass) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
+mod test {
     use super::*;
 
     #[test]
     fn test_level_runs() {
+        let levels = &[0, 0, 0, 1, 1, 2, 0, 0];
         assert_eq!(
-            level_runs(&[0, 0, 0, 1, 1, 2, 0, 0], &[L; 8]),
+            level_runs(&Level::vec(levels), &[L; 8]),
             &[0..3, 3..5, 5..6, 6..8]
         );
     }
@@ -170,12 +180,12 @@ mod tests {
     #[cfg_attr(rustfmt, rustfmt_skip)]
     #[test]
     fn test_isolating_run_sequences() {
-        //              0  1    2   3    4  5  6  7    8   9   10
+        //  char index  0  1    2   3    4  5  6  7    8   9   10
         let classes = &[L, RLI, AL, LRI, L, R, L, PDI, AL, PDI, L];
         let levels =  &[0, 0,   1,  1,   2, 3, 2, 1,   1,  0,   0];
-        let para_level = 0;
+        let para_level = Level::ltr();
 
-        let sequences = isolating_run_sequences(para_level, classes, levels);
+        let sequences = isolating_run_sequences(para_level, classes, &Level::vec(levels));
         let runs: Vec<Vec<LevelRun>> = sequences.iter().map(|s| s.runs.clone()).collect();
         assert_eq!(
             runs,
@@ -185,7 +195,6 @@ mod tests {
 
     #[test]
     fn test_removed_by_x9() {
-        use prepare::removed_by_x9;
         let rem_classes = &[RLE, LRE, RLO, LRO, PDF, BN];
         let not_classes = &[L, RLI, AL, LRI, PDI];
         for x in rem_classes {
@@ -198,7 +207,6 @@ mod tests {
 
     #[test]
     fn test_not_removed_by_x9() {
-        use prepare::not_removed_by_x9;
         let non_x9_classes = &[L, R, AL, EN, ES, ET, AN, CS, NSM, B, S, WS, ON, LRI, RLI, FSI, PDI];
         for x in non_x9_classes {
             assert_eq!(not_removed_by_x9(&x), true);
