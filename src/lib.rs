@@ -68,9 +68,6 @@ pub use char_data::{BidiClass, bidi_class, UNICODE_VERSION};
 pub use level::Level;
 pub use prepare::LevelRun;
 
-#[deprecated(since="0.2.6", note="please use `char_data` module instead")]
-pub use char_data::tables;
-
 use std::borrow::Cow;
 use std::cmp::{max, min};
 use std::iter::repeat;

@@ -9,8 +9,7 @@
 
 //! Accessor for `Bidi_Class` property from Unicode Character Database (UCD)
 
-// TODO: Make private after dropping deprecated call
-pub mod tables;
+mod tables;
 
 pub use self::tables::{BidiClass, UNICODE_VERSION};
 
