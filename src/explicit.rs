@@ -1,4 +1,4 @@
-// Copyright 2014 The html5ever Project Developers. See the
+// Copyright 2015 The Servo Project Developers. See the
 // COPYRIGHT file at the top-level directory of this distribution.
 //
 // Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
@@ -11,15 +11,20 @@
 //!
 //! http://www.unicode.org/reports/tr9/#Explicit_Levels_and_Directions
 
-use super::{BidiClass};
+use super::BidiClass;
 use super::BidiClass::*;
 
 /// Compute explicit embedding levels for one paragraph of text (X1-X8).
 ///
 /// `classes[i]` must contain the BidiClass of the char at byte index `i`,
 /// for each char in `text`.
-pub fn compute(text: &str, para_level: u8, initial_classes: &[BidiClass],
-               levels: &mut [u8], classes: &mut [BidiClass]) {
+pub fn compute(
+    text: &str,
+    para_level: u8,
+    initial_classes: &[BidiClass],
+    levels: &mut [u8],
+    classes: &mut [BidiClass],
+) {
     assert!(text.len() == initial_classes.len());
 
     // http://www.unicode.org/reports/tr9/#X1
@@ -36,13 +41,13 @@ pub fn compute(text: &str, para_level: u8, initial_classes: &[BidiClass],
             RLE | LRE | RLO | LRO | RLI | LRI | FSI => {
                 let is_rtl = match initial_classes[i] {
                     RLE | RLO | RLI => true,
-                    _ => false
+                    _ => false,
                 };
 
                 let last_level = stack.last().level;
                 let new_level = match is_rtl {
-                    true  => next_rtl_level(last_level),
-                    false => next_ltr_level(last_level)
+                    true => next_rtl_level(last_level),
+                    false => next_ltr_level(last_level),
                 };
 
                 // X5a-X5c: Isolate initiators get the level of the last entry on the stack.
@@ -56,13 +61,17 @@ pub fn compute(text: &str, para_level: u8, initial_classes: &[BidiClass],
                     }
                 }
 
-                if valid(new_level) && overflow_isolate_count == 0 && overflow_embedding_count == 0 {
-                    stack.push(new_level, match initial_classes[i] {
-                        RLO => OverrideStatus::RTL,
-                        LRO => OverrideStatus::LTR,
-                        RLI | LRI | FSI => OverrideStatus::Isolate,
-                        _ => OverrideStatus::Neutral
-                    });
+                if valid(new_level) && overflow_isolate_count == 0 &&
+                   overflow_embedding_count == 0 {
+                    stack.push(
+                        new_level,
+                        match initial_classes[i] {
+                            RLO => OverrideStatus::RTL,
+                            LRO => OverrideStatus::LTR,
+                            RLI | LRI | FSI => OverrideStatus::Isolate,
+                            _ => OverrideStatus::Neutral,
+                        },
+                    );
                     if is_isolate {
                         valid_isolate_count += 1;
                     } else {
@@ -87,7 +96,7 @@ pub fn compute(text: &str, para_level: u8, initial_classes: &[BidiClass],
                         match stack.vec.pop() {
                             Some(Status { status: OverrideStatus::Isolate, .. }) => break,
                             None => break,
-                            _ => continue
+                            _ => continue,
                         }
                     }
                     valid_isolate_count -= 1;
@@ -103,11 +112,11 @@ pub fn compute(text: &str, para_level: u8, initial_classes: &[BidiClass],
             // http://www.unicode.org/reports/tr9/#X7
             PDF => {
                 if overflow_isolate_count > 0 {
-                    continue
+                    continue;
                 }
                 if overflow_embedding_count > 0 {
                     overflow_embedding_count -= 1;
-                    continue
+                    continue;
                 }
                 if stack.last().status != OverrideStatus::Isolate && stack.vec.len() >= 2 {
                     stack.vec.pop();
@@ -130,8 +139,8 @@ pub fn compute(text: &str, para_level: u8, initial_classes: &[BidiClass],
         }
         // Handle multi-byte characters.
         for j in 1..c.len_utf8() {
-            levels[i+j] = levels[i];
-            classes[i+j] = classes[i];
+            levels[i + j] = levels[i];
+            classes[i + j] = classes[i];
         }
     }
 }
@@ -141,13 +150,19 @@ pub const MAX_DEPTH: u8 = 125;
 
 /// Levels from 0 through max_depth are valid at this stage.
 /// http://www.unicode.org/reports/tr9/#X1
-fn valid(level: u8) -> bool { level <= MAX_DEPTH }
+fn valid(level: u8) -> bool {
+    level <= MAX_DEPTH
+}
 
 /// The next odd level greater than `level`.
-fn next_rtl_level(level: u8) -> u8 { (level + 1) |  1 }
+fn next_rtl_level(level: u8) -> u8 {
+    (level + 1) | 1
+}
 
 /// The next even level greater than `level`.
-fn next_ltr_level(level: u8) -> u8 { (level + 2) & !1 }
+fn next_ltr_level(level: u8) -> u8 {
+    (level + 2) & !1
+}
 
 /// Entries in the directional status stack:
 struct Status {
@@ -156,7 +171,12 @@ struct Status {
 }
 
 #[derive(PartialEq)]
-enum OverrideStatus { Neutral, RTL, LTR, Isolate }
+enum OverrideStatus {
+    Neutral,
+    RTL,
+    LTR,
+    Isolate,
+}
 
 struct DirectionalStatusStack {
     vec: Vec<Status>,
@@ -164,12 +184,16 @@ struct DirectionalStatusStack {
 
 impl DirectionalStatusStack {
     fn new() -> Self {
-        DirectionalStatusStack {
-            vec: Vec::with_capacity(MAX_DEPTH as usize + 2)
-        }
+        DirectionalStatusStack { vec: Vec::with_capacity(MAX_DEPTH as usize + 2) }
     }
     fn push(&mut self, level: u8, status: OverrideStatus) {
-        self.vec.push(Status { level: level, status: status });
+        self.vec
+            .push(
+                Status {
+                    level: level,
+                    status: status,
+                },
+            );
     }
     fn last(&self) -> &Status {
         self.vec.last().unwrap()

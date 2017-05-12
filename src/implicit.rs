@@ -1,4 +1,4 @@
-// Copyright 2014 The html5ever Project Developers. See the
+// Copyright 2015 The Servo Project Developers. See the
 // COPYRIGHT file at the top-level directory of this distribution.
 //
 // Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
@@ -28,8 +28,14 @@ pub fn resolve_weak(sequence: &IsolatingRunSequence, classes: &mut [BidiClass]) 
     let mut et_run_indices = Vec::new(); // for W5
 
     // Like sequence.runs.iter().flat_map(Clone::clone), but make indices itself clonable.
-    fn id(x: LevelRun) -> LevelRun { x }
-    let mut indices = sequence.runs.iter().cloned().flat_map(id as fn(LevelRun) -> LevelRun);
+    fn id(x: LevelRun) -> LevelRun {
+        x
+    }
+    let mut indices = sequence
+        .runs
+        .iter()
+        .cloned()
+        .flat_map(id as fn(LevelRun) -> LevelRun);
 
     while let Some(i) = indices.next() {
         match classes[i] {
@@ -37,7 +43,7 @@ pub fn resolve_weak(sequence: &IsolatingRunSequence, classes: &mut [BidiClass]) 
             NSM => {
                 classes[i] = match prev_class {
                     RLI | LRI | FSI | PDI => ON,
-                    _ => prev_class
+                    _ => prev_class,
                 };
             }
             EN => {
@@ -57,31 +63,40 @@ pub fn resolve_weak(sequence: &IsolatingRunSequence, classes: &mut [BidiClass]) 
 
             // http://www.unicode.org/reports/tr9/#W4
             ES | CS => {
-                let next_class = indices.clone().map(|j| classes[j]).filter(not_removed_by_x9)
-                    .next().unwrap_or(sequence.eos);
+                let next_class = indices
+                    .clone()
+                    .map(|j| classes[j])
+                    .filter(not_removed_by_x9)
+                    .next()
+                    .unwrap_or(sequence.eos);
                 classes[i] = match (prev_class, classes[i], next_class) {
-                    (EN, ES, EN) |
-                    (EN, CS, EN) => EN,
+                    (EN, ES, EN) | (EN, CS, EN) => EN,
                     (AN, CS, AN) => AN,
-                    (_,  _,  _ ) => ON,
+                    (_, _, _) => ON,
                 }
             }
             // http://www.unicode.org/reports/tr9/#W5
             ET => {
                 match prev_class {
                     EN => classes[i] = EN,
-                    _ => et_run_indices.push(i) // In case this is followed by an EN.
+                    _ => et_run_indices.push(i), // In case this is followed by an EN.
                 }
             }
-            class => if removed_by_x9(class) {
-                continue
+            class => {
+                if removed_by_x9(class) {
+                    continue;
+                }
             }
         }
 
         prev_class = classes[i];
         match prev_class {
-            L | R => { last_strong_is_al = false; }
-            AL => { last_strong_is_al = true;  }
+            L | R => {
+                last_strong_is_al = false;
+            }
+            AL => {
+                last_strong_is_al = true;
+            }
             _ => {}
         }
         if prev_class != ET {
@@ -98,9 +113,15 @@ pub fn resolve_weak(sequence: &IsolatingRunSequence, classes: &mut [BidiClass]) 
     for run in &sequence.runs {
         for i in run.clone() {
             match classes[i] {
-                EN if last_strong_is_l => { classes[i] = L; }
-                L => { last_strong_is_l = true; }
-                R | AL => { last_strong_is_l = false; }
+                EN if last_strong_is_l => {
+                    classes[i] = L;
+                }
+                L => {
+                    last_strong_is_l = true;
+                }
+                R | AL => {
+                    last_strong_is_l = false;
+                }
                 _ => {}
             }
         }
@@ -110,9 +131,7 @@ pub fn resolve_weak(sequence: &IsolatingRunSequence, classes: &mut [BidiClass]) 
 /// 3.3.5 Resolving Neutral Types
 ///
 /// http://www.unicode.org/reports/tr9/#Resolving_Neutral_Types
-pub fn resolve_neutral(sequence: &IsolatingRunSequence, levels: &[u8],
-                       classes: &mut [BidiClass])
-{
+pub fn resolve_neutral(sequence: &IsolatingRunSequence, levels: &[u8], classes: &mut [BidiClass]) {
     let mut indices = sequence.runs.iter().flat_map(Clone::clone);
     let mut prev_class = sequence.sos;
 
@@ -137,35 +156,28 @@ pub fn resolve_neutral(sequence: &IsolatingRunSequence, levels: &[u8],
                     Some(j) => {
                         i = j;
                         if removed_by_x9(classes[i]) {
-                            continue
+                            continue;
                         }
                         next_class = classes[j];
                         if ni(next_class) {
                             ni_run.push(i);
                         } else {
-                            break
+                            break;
                         }
                     }
                     None => {
                         next_class = sequence.eos;
-                        break
+                        break;
                     }
                 };
             }
 
             // N1-N2.
             let new_class = match (prev_class, next_class) {
-                (L,  L ) => L,
-                (R,  R ) |
-                (R,  AN) |
-                (R,  EN) |
-                (AN, R ) |
-                (AN, AN) |
-                (AN, EN) |
-                (EN, R ) |
-                (EN, AN) |
-                (EN, EN) => R,
-                (_,  _ ) => class_for_level(levels[i]),
+                (L, L) => L,
+                (R, R) | (R, AN) | (R, EN) | (AN, R) | (AN, AN) | (AN, EN) | (EN, R) |
+                (EN, AN) | (EN, EN) => R,
+                (_, _) => class_for_level(levels[i]),
             };
             for j in &ni_run {
                 classes[*j] = new_class;
@@ -188,13 +200,10 @@ pub fn resolve_levels(classes: &[BidiClass], levels: &mut [u8]) -> u8 {
     for i in 0..levels.len() {
         match (is_rtl(levels[i]), classes[i]) {
             // http://www.unicode.org/reports/tr9/#I1
-            (false, R)  => levels[i] += 1,
-            (false, AN) |
-            (false, EN) => levels[i] += 2,
+            (false, R) => levels[i] += 1,
+            (false, AN) | (false, EN) => levels[i] += 2,
             // http://www.unicode.org/reports/tr9/#I2
-            (true, L)  |
-            (true, EN) |
-            (true, AN) => levels[i] += 1,
+            (true, L) | (true, EN) | (true, AN) => levels[i] += 1,
             (_, _) => {}
         }
         max_level = max(max_level, levels[i]);

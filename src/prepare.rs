@@ -1,4 +1,4 @@
-// Copyright 2014 The html5ever Project Developers. See the
+// Copyright 2015 The Servo Project Developers. See the
 // COPYRIGHT file at the top-level directory of this distribution.
 //
 // Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
@@ -29,9 +29,11 @@ pub struct IsolatingRunSequence {
 /// whose matching PDI is the first character of the next level run in the sequence.
 ///
 /// Note: This function does *not* return the sequences in order by their first characters.
-pub fn isolating_run_sequences(para_level: u8, initial_classes: &[BidiClass], levels: &[u8])
-    -> Vec<IsolatingRunSequence>
-{
+pub fn isolating_run_sequences(
+    para_level: u8,
+    initial_classes: &[BidiClass],
+    levels: &[u8],
+) -> Vec<IsolatingRunSequence> {
     let runs = level_runs(levels, initial_classes);
 
     // Compute the set of isolating run sequences.
@@ -73,36 +75,43 @@ pub fn isolating_run_sequences(para_level: u8, initial_classes: &[BidiClass], le
 
     // Determine the `sos` and `eos` class for each sequence.
     // http://www.unicode.org/reports/tr9/#X10
-    return sequences.into_iter().map(|sequence| {
-        assert!(!sequence.len() > 0);
-        let start = sequence[0].start;
-        let end = sequence[sequence.len() - 1].end;
+    return sequences
+               .into_iter()
+               .map(
+        |sequence| {
+            assert!(!sequence.len() > 0);
+            let start = sequence[0].start;
+            let end = sequence[sequence.len() - 1].end;
 
-        // Get the level inside these level runs.
-        let level = levels[start];
+            // Get the level inside these level runs.
+            let level = levels[start];
 
-        // Get the level of the last non-removed char before the runs.
-        let pred_level = match initial_classes[..start].iter().rposition(not_removed_by_x9) {
-            Some(idx) => levels[idx],
-            None => para_level
-        };
-
-        // Get the level of the next non-removed char after the runs.
-        let succ_level = if matches!(initial_classes[end - 1], RLI|LRI|FSI) {
-            para_level
-        } else {
-            match initial_classes[end..].iter().position(not_removed_by_x9) {
+            // Get the level of the last non-removed char before the runs.
+            let pred_level = match initial_classes[..start]
+                      .iter()
+                      .rposition(not_removed_by_x9) {
                 Some(idx) => levels[idx],
-                None => para_level
-            }
-        };
+                None => para_level,
+            };
 
-        IsolatingRunSequence {
-            runs: sequence,
-            sos: class_for_level(max(level, pred_level)),
-            eos: class_for_level(max(level, succ_level)),
-        }
-    }).collect()
+            // Get the level of the next non-removed char after the runs.
+            let succ_level = if matches!(initial_classes[end - 1], RLI | LRI | FSI) {
+                para_level
+            } else {
+                match initial_classes[end..].iter().position(not_removed_by_x9) {
+                    Some(idx) => levels[idx],
+                    None => para_level,
+                }
+            };
+
+            IsolatingRunSequence {
+                runs: sequence,
+                sos: class_for_level(max(level, pred_level)),
+                eos: class_for_level(max(level, succ_level)),
+            }
+        },
+    )
+               .collect();
 }
 
 /// Finds the level runs in a paragraph.
@@ -113,7 +122,7 @@ fn level_runs(levels: &[u8], classes: &[BidiClass]) -> Vec<LevelRun> {
 
     let mut runs = Vec::new();
     if levels.len() == 0 {
-        return runs
+        return runs;
     }
 
     let mut current_run_level = levels[0];
@@ -151,13 +160,16 @@ mod tests {
 
     #[test]
     fn test_level_runs() {
-        assert_eq!(level_runs(&[0,0,0,1,1,2,0,0], &[L; 8]), &[0..3, 3..5, 5..6, 6..8]);
+        assert_eq!(
+            level_runs(&[0, 0, 0, 1, 1, 2, 0, 0], &[L; 8]),
+            &[0..3, 3..5, 5..6, 6..8]
+        );
     }
 
+    /// Example 3 from http://www.unicode.org/reports/tr9/#BD13:
+    #[cfg_attr(rustfmt, rustfmt_skip)]
     #[test]
     fn test_isolating_run_sequences() {
-        // Example 3 from http://www.unicode.org/reports/tr9/#BD13:
-
         //              0  1    2   3    4  5  6  7    8   9   10
         let classes = &[L, RLI, AL, LRI, L, R, L, PDI, AL, PDI, L];
         let levels =  &[0, 0,   1,  1,   2, 3, 2, 1,   1,  0,   0];
@@ -165,7 +177,10 @@ mod tests {
 
         let sequences = isolating_run_sequences(para_level, classes, levels);
         let runs: Vec<Vec<LevelRun>> = sequences.iter().map(|s| s.runs.clone()).collect();
-        assert_eq!(runs, vec![vec![4..5], vec![5..6], vec![6..7], vec![2..4, 7..9], vec![0..2, 9..11]]);
+        assert_eq!(
+            runs,
+            vec![vec![4..5], vec![5..6], vec![6..7], vec![2..4, 7..9], vec![0..2, 9..11]]
+        );
     }
 
     #[test]
