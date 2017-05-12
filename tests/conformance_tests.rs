@@ -15,7 +15,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
-use unicode_bidi::{BidiInfo, format_chars, Level, process_text};
+use unicode_bidi::{bidi_class, BidiInfo, format_chars, Level, process_text};
 
 const TEST_DATA_DIR: &str = "tests/data";
 const BASE_TEST_FILE_NAME: &str = "BidiTest.txt";
@@ -194,5 +194,39 @@ fn gen_char_from_bidi_class(class_name: &str) -> char {
         "S" => '\u{0009}',
         "WS" => '\u{000c}',
         &_ => panic!("Invalid Bidi_Class name: {}", class_name),
+    }
+}
+
+#[test]
+fn test_gen_char_from_bidi_class() {
+    use unicode_bidi::BidiClass::*;
+    for class in vec![
+        AL,
+        AN,
+        B,
+        BN,
+        CS,
+        EN,
+        ES,
+        ET,
+        FSI,
+        L,
+        LRE,
+        LRI,
+        LRO,
+        NSM,
+        ON,
+        PDF,
+        PDI,
+        R,
+        RLE,
+        RLI,
+        RLO,
+        S,
+        WS,
+    ] {
+        let class_name = format!("{:?}", class);
+        let sample_char = gen_char_from_bidi_class(&class_name);
+        assert_eq!(bidi_class(sample_char), class);
     }
 }
