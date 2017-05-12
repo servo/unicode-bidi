@@ -11,21 +11,21 @@
 //!
 //! http://www.unicode.org/reports/tr9/#Explicit_Levels_and_Directions
 
-use super::char_data::BidiClass;
+use super::char_data::{BidiClass, is_rtl};
 use super::level::Level;
 
 use BidiClass::*;
 
 /// Compute explicit embedding levels for one paragraph of text (X1-X8).
 ///
-/// `classes[i]` must contain the BidiClass of the char at byte index `i`,
+/// `processing_classes[i]` must contain the BidiClass of the char at byte index `i`,
 /// for each char in `text`.
 pub fn compute(
     text: &str,
     para_level: Level,
     initial_classes: &[BidiClass],
     levels: &mut [Level],
-    classes: &mut [BidiClass],
+    processing_classes: &mut [BidiClass],
 ) {
     assert!(text.len() == initial_classes.len());
 
@@ -41,13 +41,8 @@ pub fn compute(
         match initial_classes[i] {
             // Rules X2-X5c
             RLE | LRE | RLO | LRO | RLI | LRI | FSI => {
-                let char_is_rtl = match initial_classes[i] {
-                    RLE | RLO | RLI => true,
-                    _ => false,
-                };
-
                 let last_level = stack.last().level;
-                let new_level = if char_is_rtl {
+                let new_level = if is_rtl(initial_classes[i]) {
                     last_level.new_explicit_next_rtl()
                 } else {
                     last_level.new_explicit_next_ltr()
@@ -58,8 +53,8 @@ pub fn compute(
                 if is_isolate {
                     levels[i] = last_level;
                     match stack.last().status {
-                        OverrideStatus::RTL => classes[i] = R,
-                        OverrideStatus::LTR => classes[i] = L,
+                        OverrideStatus::RTL => processing_classes[i] = R,
+                        OverrideStatus::LTR => processing_classes[i] = L,
                         _ => {}
                     }
                 }
@@ -108,8 +103,8 @@ pub fn compute(
                 let last = stack.last();
                 levels[i] = last.level;
                 match last.status {
-                    OverrideStatus::RTL => classes[i] = R,
-                    OverrideStatus::LTR => classes[i] = L,
+                    OverrideStatus::RTL => processing_classes[i] = R,
+                    OverrideStatus::LTR => processing_classes[i] = L,
                     _ => {}
                 }
             }
@@ -135,8 +130,8 @@ pub fn compute(
                 let last = stack.last();
                 levels[i] = last.level;
                 match last.status {
-                    OverrideStatus::RTL => classes[i] = R,
-                    OverrideStatus::LTR => classes[i] = L,
+                    OverrideStatus::RTL => processing_classes[i] = R,
+                    OverrideStatus::LTR => processing_classes[i] = L,
                     _ => {}
                 }
             }
@@ -144,7 +139,7 @@ pub fn compute(
         // Handle multi-byte characters.
         for j in 1..c.len_utf8() {
             levels[i + j] = levels[i];
-            classes[i + j] = classes[i];
+            processing_classes[i + j] = processing_classes[i];
         }
     }
 }

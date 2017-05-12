@@ -228,7 +228,7 @@ impl<'a> PartialEq<&'a str> for Level {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
 
     #[test]

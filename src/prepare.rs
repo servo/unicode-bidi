@@ -126,8 +126,8 @@ pub fn isolating_run_sequences(
 /// Finds the level runs in a paragraph.
 ///
 /// http://www.unicode.org/reports/tr9/#BD7
-fn level_runs(levels: &[Level], classes: &[BidiClass]) -> Vec<LevelRun> {
-    assert!(levels.len() == classes.len());
+fn level_runs(levels: &[Level], original_classes: &[BidiClass]) -> Vec<LevelRun> {
+    assert!(levels.len() == original_classes.len());
 
     let mut runs = Vec::new();
     if levels.len() == 0 {
@@ -138,7 +138,7 @@ fn level_runs(levels: &[Level], classes: &[BidiClass]) -> Vec<LevelRun> {
     let mut current_run_start = 0;
 
     for i in 1..levels.len() {
-        if !removed_by_x9(classes[i]) {
+        if !removed_by_x9(original_classes[i]) {
             if levels[i] != current_run_level {
                 // End the last run and start a new one.
                 runs.push(current_run_start..i);
@@ -164,7 +164,7 @@ pub fn not_removed_by_x9(class: &BidiClass) -> bool {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
 
     #[test]
