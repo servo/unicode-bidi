@@ -9,15 +9,18 @@
 
 //! 3.3.4 - 3.3.6. Resolve implicit levels and types.
 
-use super::{BidiClass, class_for_level, is_rtl, LevelRun};
-use super::BidiClass::*;
-use super::prepare::{IsolatingRunSequence, not_removed_by_x9, removed_by_x9};
 use std::cmp::max;
+
+use super::char_data::BidiClass;
+use super::prepare::{IsolatingRunSequence, LevelRun, not_removed_by_x9, removed_by_x9};
+use super::level::Level;
+
+use BidiClass::*;
 
 /// 3.3.4 Resolving Weak Types
 ///
 /// http://www.unicode.org/reports/tr9/#Resolving_Weak_Types
-pub fn resolve_weak(sequence: &IsolatingRunSequence, classes: &mut [BidiClass]) {
+pub fn resolve_weak(sequence: &IsolatingRunSequence, processing_classes: &mut [BidiClass]) {
     // FIXME (#8): This function applies steps W1-W6 in a single pass.  This can produce
     // incorrect results in cases where a "later" rule changes the value of `prev_class` seen
     // by an "earlier" rule.  We should either split this into separate passes, or preserve
@@ -38,10 +41,10 @@ pub fn resolve_weak(sequence: &IsolatingRunSequence, classes: &mut [BidiClass]) 
         .flat_map(id as fn(LevelRun) -> LevelRun);
 
     while let Some(i) = indices.next() {
-        match classes[i] {
+        match processing_classes[i] {
             // http://www.unicode.org/reports/tr9/#W1
             NSM => {
-                classes[i] = match prev_class {
+                processing_classes[i] = match prev_class {
                     RLI | LRI | FSI | PDI => ON,
                     _ => prev_class,
                 };
@@ -49,27 +52,27 @@ pub fn resolve_weak(sequence: &IsolatingRunSequence, classes: &mut [BidiClass]) 
             EN => {
                 if last_strong_is_al {
                     // W2. If previous strong char was AL, change EN to AN.
-                    classes[i] = AN;
+                    processing_classes[i] = AN;
                 } else {
                     // W5. If a run of ETs is adjacent to an EN, change the ETs to EN.
                     for j in &et_run_indices {
-                        classes[*j] = EN;
+                        processing_classes[*j] = EN;
                     }
                     et_run_indices.clear();
                 }
             }
             // http://www.unicode.org/reports/tr9/#W3
-            AL => classes[i] = R,
+            AL => processing_classes[i] = R,
 
             // http://www.unicode.org/reports/tr9/#W4
             ES | CS => {
                 let next_class = indices
                     .clone()
-                    .map(|j| classes[j])
+                    .map(|j| processing_classes[j])
                     .filter(not_removed_by_x9)
                     .next()
                     .unwrap_or(sequence.eos);
-                classes[i] = match (prev_class, classes[i], next_class) {
+                processing_classes[i] = match (prev_class, processing_classes[i], next_class) {
                     (EN, ES, EN) | (EN, CS, EN) => EN,
                     (AN, CS, AN) => AN,
                     (_, _, _) => ON,
@@ -78,7 +81,7 @@ pub fn resolve_weak(sequence: &IsolatingRunSequence, classes: &mut [BidiClass]) 
             // http://www.unicode.org/reports/tr9/#W5
             ET => {
                 match prev_class {
-                    EN => classes[i] = EN,
+                    EN => processing_classes[i] = EN,
                     _ => et_run_indices.push(i), // In case this is followed by an EN.
                 }
             }
@@ -89,7 +92,7 @@ pub fn resolve_weak(sequence: &IsolatingRunSequence, classes: &mut [BidiClass]) 
             }
         }
 
-        prev_class = classes[i];
+        prev_class = processing_classes[i];
         match prev_class {
             L | R => {
                 last_strong_is_al = false;
@@ -102,7 +105,7 @@ pub fn resolve_weak(sequence: &IsolatingRunSequence, classes: &mut [BidiClass]) 
         if prev_class != ET {
             // W6. If we didn't find an adjacent EN, turn any ETs into ON instead.
             for j in &et_run_indices {
-                classes[*j] = ON;
+                processing_classes[*j] = ON;
             }
             et_run_indices.clear();
         }
@@ -112,9 +115,9 @@ pub fn resolve_weak(sequence: &IsolatingRunSequence, classes: &mut [BidiClass]) 
     let mut last_strong_is_l = sequence.sos == L;
     for run in &sequence.runs {
         for i in run.clone() {
-            match classes[i] {
+            match processing_classes[i] {
                 EN if last_strong_is_l => {
-                    classes[i] = L;
+                    processing_classes[i] = L;
                 }
                 L => {
                     last_strong_is_l = true;
@@ -131,7 +134,11 @@ pub fn resolve_weak(sequence: &IsolatingRunSequence, classes: &mut [BidiClass]) 
 /// 3.3.5 Resolving Neutral Types
 ///
 /// http://www.unicode.org/reports/tr9/#Resolving_Neutral_Types
-pub fn resolve_neutral(sequence: &IsolatingRunSequence, levels: &[u8], classes: &mut [BidiClass]) {
+pub fn resolve_neutral(
+    sequence: &IsolatingRunSequence,
+    levels: &[Level],
+    processing_classes: &mut [BidiClass],
+) {
     let mut indices = sequence.runs.iter().flat_map(Clone::clone);
     let mut prev_class = sequence.sos;
 
@@ -147,7 +154,7 @@ pub fn resolve_neutral(sequence: &IsolatingRunSequence, levels: &[u8], classes: 
 
         // Process sequences of NI characters.
         let mut ni_run = Vec::new();
-        if ni(classes[i]) {
+        if ni(processing_classes[i]) {
             // Consume a run of consecutive NI characters.
             ni_run.push(i);
             let mut next_class;
@@ -155,10 +162,10 @@ pub fn resolve_neutral(sequence: &IsolatingRunSequence, levels: &[u8], classes: 
                 match indices.next() {
                     Some(j) => {
                         i = j;
-                        if removed_by_x9(classes[i]) {
+                        if removed_by_x9(processing_classes[i]) {
                             continue;
                         }
-                        next_class = classes[j];
+                        next_class = processing_classes[j];
                         if ni(next_class) {
                             ni_run.push(i);
                         } else {
@@ -177,14 +184,14 @@ pub fn resolve_neutral(sequence: &IsolatingRunSequence, levels: &[u8], classes: 
                 (L, L) => L,
                 (R, R) | (R, AN) | (R, EN) | (AN, R) | (AN, AN) | (AN, EN) | (EN, R) |
                 (EN, AN) | (EN, EN) => R,
-                (_, _) => class_for_level(levels[i]),
+                (_, _) => levels[i].bidi_class(),
             };
             for j in &ni_run {
-                classes[*j] = new_class;
+                processing_classes[*j] = new_class;
             }
             ni_run.clear();
         }
-        prev_class = classes[i];
+        prev_class = processing_classes[i];
     }
 }
 
@@ -193,20 +200,21 @@ pub fn resolve_neutral(sequence: &IsolatingRunSequence, levels: &[u8], classes: 
 /// Returns the maximum embedding level in the paragraph.
 ///
 /// http://www.unicode.org/reports/tr9/#Resolving_Implicit_Levels
-pub fn resolve_levels(classes: &[BidiClass], levels: &mut [u8]) -> u8 {
-    let mut max_level = 0;
+pub fn resolve_levels(original_classes: &[BidiClass], levels: &mut [Level]) -> Level {
+    let mut max_level = Level::ltr();
 
-    assert!(classes.len() == levels.len());
+    assert!(original_classes.len() == levels.len());
     for i in 0..levels.len() {
-        match (is_rtl(levels[i]), classes[i]) {
+        match (levels[i].is_rtl(), original_classes[i]) {
             // http://www.unicode.org/reports/tr9/#I1
-            (false, R) => levels[i] += 1,
-            (false, AN) | (false, EN) => levels[i] += 2,
+            (false, R) => levels[i].raise(1).expect("Level number error"),
+            (false, AN) | (false, EN) => levels[i].raise(2).expect("Level number error"),
             // http://www.unicode.org/reports/tr9/#I2
-            (true, L) | (true, EN) | (true, AN) => levels[i] += 1,
+            (true, L) | (true, EN) | (true, AN) => levels[i].raise(1).expect("Level number error"),
             (_, _) => {}
         }
         max_level = max(max_level, levels[i]);
     }
+
     max_level
 }

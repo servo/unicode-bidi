@@ -9,8 +9,7 @@
 
 //! Accessor for `Bidi_Class` property from Unicode Character Database (UCD)
 
-// TODO: Make private after dropping deprecated call
-pub mod tables;
+mod tables;
 
 pub use self::tables::{BidiClass, UNICODE_VERSION};
 
@@ -23,6 +22,13 @@ use BidiClass::*;
 /// Find the BidiClass of a single char.
 pub fn bidi_class(c: char) -> BidiClass {
     bsearch_range_value_table(c, bidi_class_table)
+}
+
+pub fn is_rtl(bidi_class: BidiClass) -> bool {
+    match bidi_class {
+        RLE | RLO | RLI => true,
+        _ => false,
+    }
 }
 
 fn bsearch_range_value_table(c: char, r: &'static [(char, char, BidiClass)]) -> BidiClass {
@@ -46,7 +52,7 @@ fn bsearch_range_value_table(c: char, r: &'static [(char, char, BidiClass)]) -> 
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
 
     #[test]

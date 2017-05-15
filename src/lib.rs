@@ -14,38 +14,43 @@
 //! ## Example
 //!
 //! ```rust
-//! use unicode_bidi::{process_text, reorder_line};
+//! use unicode_bidi::BidiInfo;
 //!
 //! // This example text is defined using `concat!` because some browsers
 //! // and text editors have trouble displaying bidi strings.
-//! let text = concat!["א",
-//!                    "ב",
-//!                    "ג",
-//!                    "a",
-//!                    "b",
-//!                    "c"];
+//! let text = concat![
+//!   "א",
+//!   "ב",
+//!   "ג",
+//!   "a",
+//!   "b",
+//!   "c",
+//! ];
 //!
 //! // Resolve embedding levels within the text.  Pass `None` to detect the
 //! // paragraph level automatically.
-//! let info = process_text(&text, None);
+//! let bidi_info = BidiInfo::new(&text, None);
 //!
 //! // This paragraph has embedding level 1 because its first strong character is RTL.
-//! assert_eq!(info.paragraphs.len(), 1);
-//! let paragraph_info = &info.paragraphs[0];
-//! assert_eq!(paragraph_info.level, 1);
+//! assert_eq!(bidi_info.paragraphs.len(), 1);
+//! let para = &bidi_info.paragraphs[0];
+//! assert_eq!(para.level.number(), 1);
+//! assert_eq!(para.level.is_rtl(), true);
 //!
 //! // Re-ordering is done after wrapping each paragraph into a sequence of
 //! // lines. For this example, I'll just use a single line that spans the
 //! // entire paragraph.
-//! let line = paragraph_info.range.clone();
+//! let line = para.range.clone();
 //!
-//! let display = reorder_line(&text, line, &info.levels);
-//! assert_eq!(display, concat!["a",
-//!                             "b",
-//!                             "c",
-//!                             "ג",
-//!                             "ב",
-//!                             "א"]);
+//! let display = bidi_info.reorder_line(para, line);
+//! assert_eq!(display, concat![
+//!   "a",
+//!   "b",
+//!   "c",
+//!   "ג",
+//!   "ב",
+//!   "א",
+//! ]);
 //! ```
 //!
 //! [tr9]: http://www.unicode.org/reports/tr9/
@@ -55,33 +60,167 @@
 #[macro_use]
 extern crate matches;
 
+pub mod format_chars;
+pub mod level;
+
 mod char_data;
 mod explicit;
-mod prepare;
 mod implicit;
+mod prepare;
 
 pub use char_data::{BidiClass, bidi_class, UNICODE_VERSION};
-use BidiClass::*;
-
-#[deprecated(since="0.2.6", note="please use `char_data` module instead")]
-pub use char_data::tables;
+pub use level::Level;
+pub use prepare::LevelRun;
 
 use std::borrow::Cow;
 use std::cmp::{max, min};
 use std::iter::repeat;
 use std::ops::Range;
 
-/// Output of `process_text`
-///
-/// The `classes` and `levels` vectors are indexed by byte offsets into the text.  If a character
-/// is multiple bytes wide, then its class and level will appear multiple times in these vectors.
+use BidiClass::*;
+use format_chars as chars;
+
+
+/// Bidi information about a single paragraph
 #[derive(Debug, PartialEq)]
-pub struct BidiInfo {
+pub struct ParagraphInfo {
+    /// The paragraphs boundaries within the text, as byte indices.
+    ///
+    /// TODO: Shrink this to only include the starting index?
+    pub range: Range<usize>,
+
+    /// The paragraph embedding level.
+    ///
+    /// http://www.unicode.org/reports/tr9/#BD4
+    pub level: Level,
+}
+
+/// Initial bidi information of the text
+///
+/// Contains the paragraphs and BidiClasses in a string of text.
+#[derive(PartialEq, Debug)]
+pub struct InitialInfo<'text> {
+    /// The text
+    pub text: &'text str,
+
     /// The BidiClass of the character at each byte in the text.
-    pub classes: Vec<BidiClass>,
+    /// If a character is multiple bytes, its class will appear multiple times in the vector.
+    pub original_classes: Vec<BidiClass>,
+
+    /// The boundaries and level of each paragraph within the text.
+    pub paragraphs: Vec<ParagraphInfo>,
+}
+
+impl<'text> InitialInfo<'text> {
+    /// Find the paragraphs and BidiClasses in a string of text.
+    ///
+    /// http://www.unicode.org/reports/tr9/#The_Paragraph_Level
+    ///
+    /// Also sets the class for each First Strong Isolate initiator (FSI) to LRI or RLI if a strong
+    /// character is found before the matching PDI.  If no strong character is found, the class will
+    /// remain FSI, and it's up to later stages to treat these as LRI when needed.
+    pub fn new(text: &str, default_para_level: Option<Level>) -> InitialInfo {
+        let mut original_classes = Vec::with_capacity(text.len());
+
+        // The stack contains the starting byte index for each nested isolate we're inside.
+        let mut isolate_stack = Vec::new();
+        let mut paragraphs = Vec::new();
+
+        let mut para_start = 0;
+        let mut para_level = default_para_level;
+
+        for (i, c) in text.char_indices() {
+            let class = bidi_class(c);
+            original_classes.extend(repeat(class).take(c.len_utf8()));
+            match class {
+                B => {
+                    // P1. Split the text into separate paragraphs. The paragraph separator is kept
+                    // with the previous paragraph.
+                    let para_end = i + c.len_utf8();
+                    paragraphs.push(
+                        ParagraphInfo {
+                            range: para_start..para_end,
+                            // P3. If no character is found in p2, set the paragraph level to zero.
+                            level: para_level.unwrap_or(Level::ltr()),
+                        },
+                    );
+                    // Reset state for the start of the next paragraph.
+                    para_start = para_end;
+                    // TODO: Support defaulting to direction of previous paragraph
+                    //
+                    // http://www.unicode.org/reports/tr9/#HL1
+                    para_level = default_para_level;
+                    isolate_stack.clear();
+                }
+                L | R | AL => {
+                    match isolate_stack.last() {
+                        Some(&start) => {
+                            if original_classes[start] == FSI {
+                                // X5c. If the first strong character between FSI and its matching PDI
+                                // is R or AL, treat it as RLI. Otherwise, treat it as LRI.
+                                for j in 0..chars::FSI.len_utf8() {
+                                    original_classes[start + j] =
+                                        if class == L { LRI } else { RLI };
+                                }
+                            }
+                        }
+                        None => {
+                            if para_level.is_none() {
+                                // P2. Find the first character of type L, AL, or R, while skipping any
+                                // characters between an isolate initiator and its matching PDI.
+                                para_level = Some(
+                                    if class != L {
+                                        Level::rtl()
+                                    } else {
+                                        Level::ltr()
+                                    },
+                                );
+                            }
+                        }
+                    }
+                }
+                RLI | LRI | FSI => {
+                    isolate_stack.push(i);
+                }
+                PDI => {
+                    isolate_stack.pop();
+                }
+                _ => {}
+            }
+        }
+        if para_start < text.len() {
+            paragraphs.push(
+                ParagraphInfo {
+                    range: para_start..text.len(),
+                    level: para_level.unwrap_or(Level::ltr()),
+                },
+            );
+        }
+        assert!(original_classes.len() == text.len());
+
+        InitialInfo {
+            text,
+            original_classes,
+            paragraphs,
+        }
+    }
+}
+
+/// Bidi information of the text
+///
+/// The `original_classes` and `levels` vectors are indexed by byte offsets into the text.  If a character
+/// is multiple bytes wide, then its class and level will appear multiple times in these vectors.
+// TODO: Impl `struct StringProperty<T> { values: Vec<T> }` and use instead of Vec<T>
+#[derive(Debug, PartialEq)]
+pub struct BidiInfo<'text> {
+    /// The text
+    pub text: &'text str,
+
+    /// The BidiClass of the character at each byte in the text.
+    pub original_classes: Vec<BidiClass>,
 
     /// The directional embedding level of each byte in the text.
-    pub levels: Vec<u8>,
+    pub levels: Vec<Level>,
 
     /// The boundaries and paragraph embedding level of each paragraph within the text.
     ///
@@ -90,269 +229,202 @@ pub struct BidiInfo {
     pub paragraphs: Vec<ParagraphInfo>,
 }
 
-/// Info about a single paragraph
-#[derive(Debug, PartialEq)]
-pub struct ParagraphInfo {
-    /// The paragraphs boundaries within the text, as byte indices.
+impl<'text> BidiInfo<'text> {
+    /// Split the text into paragraphs and determine the bidi embedding levels for each paragraph.
     ///
-    /// TODO: Shrink this to only include the starting index?
-    pub range: Range<usize>,
+    /// TODO: In early steps, check for special cases that allow later steps to be skipped. like text
+    /// that is entirely LTR.  See the `nsBidi` class from Gecko for comparison.
+    ///
+    /// TODO: Support auto-RTL base direction
+    pub fn new(text: &str, default_para_level: Option<Level>) -> BidiInfo {
+        let InitialInfo {
+            text: _,
+            original_classes,
+            paragraphs,
+        } = InitialInfo::new(text, default_para_level);
 
-    /// The paragraph embedding level. http://www.unicode.org/reports/tr9/#BD4
-    pub level: u8,
-}
+        let mut levels = Vec::<Level>::with_capacity(text.len());
+        let mut processing_classes = original_classes.clone();
 
-/// Determine the bidirectional embedding levels for a single paragraph.
-///
-/// TODO: In early steps, check for special cases that allow later steps to be skipped. like text
-/// that is entirely LTR.  See the `nsBidi` class from Gecko for comparison.
-pub fn process_text(text: &str, level: Option<u8>) -> BidiInfo {
-    let InitialProperties {
-        initial_classes,
-        paragraphs,
-    } = initial_scan(text, level);
+        for para in &paragraphs {
+            let text = &text[para.range.clone()];
+            let original_classes = &original_classes[para.range.clone()];
+            let processing_classes = &mut processing_classes[para.range.clone()];
 
-    let mut levels = Vec::with_capacity(text.len());
-    let mut classes = initial_classes.clone();
+            let new_len = levels.len() + para.range.len();
+            levels.resize(new_len, para.level);
+            let levels = &mut levels[para.range.clone()];
 
-    for para in &paragraphs {
-        let text = &text[para.range.clone()];
-        let classes = &mut classes[para.range.clone()];
-        let initial_classes = &initial_classes[para.range.clone()];
+            explicit::compute(
+                text,
+                para.level,
+                &original_classes,
+                levels,
+                processing_classes,
+            );
 
-        // FIXME: Use `levels.resize(...)` when it becomes stable.
-        levels.extend(repeat(para.level).take(para.range.len()));
-        let levels = &mut levels[para.range.clone()];
-
-        explicit::compute(text, para.level, &initial_classes, levels, classes);
-
-        let sequences = prepare::isolating_run_sequences(para.level, &initial_classes, levels);
-        for sequence in &sequences {
-            implicit::resolve_weak(sequence, classes);
-            implicit::resolve_neutral(sequence, levels, classes);
-        }
-        implicit::resolve_levels(classes, levels);
-        assign_levels_to_removed_chars(para.level, &initial_classes, levels);
-    }
-
-    BidiInfo {
-        levels: levels,
-        classes: initial_classes,
-        paragraphs: paragraphs,
-    }
-}
-
-#[inline]
-/// Even embedding levels are left-to-right.
-///
-/// http://www.unicode.org/reports/tr9/#BD2
-pub fn is_ltr(level: u8) -> bool {
-    level % 2 == 0
-}
-
-#[inline]
-/// Odd levels are right-to-left.
-///
-/// http://www.unicode.org/reports/tr9/#BD2
-pub fn is_rtl(level: u8) -> bool {
-    level % 2 == 1
-}
-
-/// Generate a character type based on a level (as specified in steps X10 and N2).
-fn class_for_level(level: u8) -> BidiClass {
-    if is_rtl(level) { R } else { L }
-}
-
-/// Re-order a line based on resolved levels.
-///
-/// `levels` are the embedding levels returned by `process_text`.
-/// `line` is a range of bytes indices within `text`.
-///
-/// Returns the line in display order.
-pub fn reorder_line<'a>(text: &'a str, line: Range<usize>, levels: &[u8]) -> Cow<'a, str> {
-    let runs = visual_runs(line.clone(), &levels);
-    if runs.len() == 1 && !is_rtl(levels[runs[0].start]) {
-        return text.into();
-    }
-    let mut result = String::with_capacity(line.len());
-    for run in runs {
-        if is_rtl(levels[run.start]) {
-            result.extend(text[run].chars().rev());
-        } else {
-            result.push_str(&text[run]);
-        }
-    }
-    result.into()
-}
-
-/// A maximal substring of characters with the same embedding level.
-///
-/// Represented as a range of byte indices.
-pub type LevelRun = Range<usize>;
-
-/// Find the level runs within a line and return them in visual order.
-///
-/// `line` is a range of bytes indices within `levels`.
-///
-/// http://www.unicode.org/reports/tr9/#Reordering_Resolved_Levels
-pub fn visual_runs(line: Range<usize>, levels: &[u8]) -> Vec<LevelRun> {
-    assert!(line.start <= levels.len());
-    assert!(line.end <= levels.len());
-
-    // TODO: Whitespace handling.
-    // http://www.unicode.org/reports/tr9/#L1
-
-    let mut runs = Vec::new();
-
-    // Find consecutive level runs.
-    let mut start = line.start;
-    let mut level = levels[start];
-    let mut min_level = level;
-    let mut max_level = level;
-
-    for i in (start + 1)..line.end {
-        let new_level = levels[i];
-        if new_level != level {
-            // End of the previous run, start of a new one.
-            runs.push(start..i);
-            start = i;
-            level = new_level;
-
-            min_level = min(level, min_level);
-            max_level = max(level, max_level);
-        }
-    }
-    runs.push(start..line.end);
-
-    let run_count = runs.len();
-
-    // Re-order the odd runs.
-    // http://www.unicode.org/reports/tr9/#L2
-
-    // Stop at the lowest *odd* level.
-    min_level |= 1;
-
-    while max_level >= min_level {
-        // Look for the start of a sequence of consecutive runs of max_level or higher.
-        let mut seq_start = 0;
-        while seq_start < run_count {
-            if levels[runs[seq_start].start] < max_level {
-                seq_start += 1;
-                continue;
+            let sequences = prepare::isolating_run_sequences(para.level, &original_classes, levels);
+            for sequence in &sequences {
+                implicit::resolve_weak(sequence, processing_classes);
+                implicit::resolve_neutral(sequence, levels, processing_classes);
             }
+            implicit::resolve_levels(processing_classes, levels);
 
-            // Found the start of a sequence. Now find the end.
-            let mut seq_end = seq_start + 1;
-            while seq_end < run_count {
-                if levels[runs[seq_end].start] < max_level {
-                    break;
-                }
-                seq_end += 1;
-            }
-
-            // Reverse the runs within this sequence.
-            runs[seq_start..seq_end].reverse();
-
-            seq_start = seq_end;
+            assign_levels_to_removed_chars(para.level, &original_classes, levels);
         }
-        max_level -= 1;
+
+        BidiInfo {
+            text,
+            original_classes,
+            paragraphs,
+            levels,
+        }
     }
 
-    runs
-}
+    /// Re-order a line based on resolved levels and return only the embedding levels.
+    pub fn reordered_levels(&self, para: &ParagraphInfo, line: Range<usize>) -> Vec<Level> {
+        let (levels, _) = self.visual_runs(para, line.clone());
+        levels
+    }
 
-/// Output of `initial_scan`
-#[derive(PartialEq, Debug)]
-pub struct InitialProperties {
-    /// The BidiClass of the character at each byte in the text.
-    /// If a character is multiple bytes, its class will appear multiple times in the vector.
-    pub initial_classes: Vec<BidiClass>,
-
-    /// The boundaries and level of each paragraph within the text.
-    pub paragraphs: Vec<ParagraphInfo>,
-}
-
-/// Find the paragraphs and BidiClasses in a string of text.
-///
-/// http://www.unicode.org/reports/tr9/#The_Paragraph_Level
-///
-/// Also sets the class for each First Strong Isolate initiator (FSI) to LRI or RLI if a strong
-/// character is found before the matching PDI.  If no strong character is found, the class will
-/// remain FSI, and it's up to later stages to treat these as LRI when needed.
-pub fn initial_scan(text: &str, default_para_level: Option<u8>) -> InitialProperties {
-    let mut classes = Vec::with_capacity(text.len());
-
-    // The stack contains the starting byte index for each nested isolate we're inside.
-    let mut isolate_stack = Vec::new();
-    let mut paragraphs = Vec::new();
-
-    let mut para_start = 0;
-    let mut para_level = default_para_level;
-
-    const FSI_CHAR: char = '\u{2069}';
-
-    for (i, c) in text.char_indices() {
-        let class = bidi_class(c);
-        classes.extend(repeat(class).take(c.len_utf8()));
-        match class {
-            B => {
-                // P1. Split the text into separate paragraphs. The paragraph separator is kept
-                // with the previous paragraph.
-                let para_end = i + c.len_utf8();
-                paragraphs.push(
-                    ParagraphInfo {
-                        range: para_start..para_end,
-                        // P3. If no character is found in p2, set the paragraph level to zero.
-                        level: para_level.unwrap_or(0),
-                    },
-                );
-                // Reset state for the start of the next paragraph.
-                para_start = para_end;
-                para_level = default_para_level;
-                isolate_stack.clear();
+    /// Re-order a line based on resolved levels and return the line in display order.
+    pub fn reorder_line(&self, para: &ParagraphInfo, line: Range<usize>) -> Cow<'text, str> {
+        let (levels, runs) = self.visual_runs(para, line.clone());
+        if runs.len() == 1 && levels[runs[0].start].is_ltr() {
+            return self.text.into();
+        }
+        let mut result = String::with_capacity(line.len());
+        for run in runs {
+            if levels[run.start].is_rtl() {
+                result.extend(self.text[run].chars().rev());
+            } else {
+                result.push_str(&self.text[run]);
             }
-            L | R | AL => {
-                match isolate_stack.last() {
-                    Some(&start) => {
-                        if classes[start] == FSI {
-                            // X5c. If the first strong character between FSI and its matching PDI
-                            // is R or AL, treat it as RLI. Otherwise, treat it as LRI.
-                            for j in 0..FSI_CHAR.len_utf8() {
-                                classes[start + j] = if class == L { LRI } else { RLI };
-                            }
-                        }
-                    }
-                    None => {
-                        if para_level.is_none() {
-                            // P2. Find the first character of type L, AL, or R, while skipping any
-                            // characters between an isolate initiator and its matching PDI.
-                            para_level = Some(if class == L { 0 } else { 1 });
-                        }
+        }
+        result.into()
+    }
+
+    /// Find the level runs within a line and return them in visual order.
+    ///
+    /// `line` is a range of bytes indices within `levels`.
+    ///
+    /// http://www.unicode.org/reports/tr9/#Reordering_Resolved_Levels
+    pub fn visual_runs(
+        &self,
+        para: &ParagraphInfo,
+        line: Range<usize>,
+    ) -> (Vec<Level>, Vec<LevelRun>) {
+        assert!(line.start <= self.levels.len());
+        assert!(line.end <= self.levels.len());
+
+        let mut levels = self.levels.clone();
+
+        // Reset some whitespace chars to paragraph level.
+        // http://www.unicode.org/reports/tr9/#L1
+        let line_str: &str = &self.text[line.clone()];
+        let mut reset_from: Option<usize> = None;
+        let mut reset_to: Option<usize> = None;
+        for (i, c) in line_str.char_indices() {
+            match self.original_classes[i] {
+                // Segment separator, Paragraph separator
+                B | S => {
+                    assert!(reset_to == None);
+                    reset_to = Some(i + c.len_utf8());
+                    if reset_from == None {
+                        reset_from = Some(i);
                     }
                 }
+                // Whitespace, isolate formatting
+                WS | FSI | LRI | RLI | PDI => {
+                    if reset_from == None {
+                        reset_from = Some(i);
+                    }
+                }
+                _ => {
+                    reset_from = None;
+                }
             }
-            RLI | LRI | FSI => {
-                isolate_stack.push(i);
+            if let (Some(from), Some(to)) = (reset_from, reset_to) {
+                for j in from..to {
+                    levels[j] = para.level;
+                }
+                reset_from = None;
+                reset_to = None;
             }
-            PDI => {
-                isolate_stack.pop();
-            }
-            _ => {}
         }
-    }
-    if para_start < text.len() {
-        paragraphs.push(
-            ParagraphInfo {
-                range: para_start..text.len(),
-                level: para_level.unwrap_or(0),
-            },
-        );
-    }
-    assert!(classes.len() == text.len());
+        if let Some(from) = reset_from {
+            for j in from..line_str.len() {
+                levels[j] = para.level;
+            }
+        }
 
-    InitialProperties {
-        initial_classes: classes,
-        paragraphs: paragraphs,
+        let mut runs = Vec::new();
+
+        // Find consecutive level runs.
+        let mut start = line.start;
+        let mut level = levels[start];
+        let mut min_level = level;
+        let mut max_level = level;
+
+        for i in (start + 1)..line.end {
+            let new_level = levels[i];
+            if new_level != level {
+                // End of the previous run, start of a new one.
+                runs.push(start..i);
+                start = i;
+                level = new_level;
+
+                min_level = min(level, min_level);
+                max_level = max(level, max_level);
+            }
+        }
+        runs.push(start..line.end);
+
+        let run_count = runs.len();
+
+        // Re-order the odd runs.
+        // http://www.unicode.org/reports/tr9/#L2
+
+        // Stop at the lowest *odd* level.
+        min_level = min_level.new_lowest_ge_rtl().expect("Level error");
+
+        while max_level >= min_level {
+            // Look for the start of a sequence of consecutive runs of max_level or higher.
+            let mut seq_start = 0;
+            while seq_start < run_count {
+                if self.levels[runs[seq_start].start] < max_level {
+                    seq_start += 1;
+                    continue;
+                }
+
+                // Found the start of a sequence. Now find the end.
+                let mut seq_end = seq_start + 1;
+                while seq_end < run_count {
+                    if self.levels[runs[seq_end].start] < max_level {
+                        break;
+                    }
+                    seq_end += 1;
+                }
+
+                // Reverse the runs within this sequence.
+                runs[seq_start..seq_end].reverse();
+
+                seq_start = seq_end;
+            }
+            max_level
+                .lower(1)
+                .expect("Lowering embedding level below zero");
+        }
+
+        (levels, runs)
+    }
+
+    /// If processed text has any computed RTL levels
+    ///
+    /// This information is usually used to skip re-ordering of text when no RTL level is present
+    #[inline]
+    pub fn has_rtl(&self) -> bool {
+        level::has_rtl(&self.levels)
     }
 }
 
@@ -360,7 +432,7 @@ pub fn initial_scan(text: &str, default_para_level: Option<u8>) -> InitialProper
 ///
 /// The levels assigned to these characters are not specified by the algorithm.  This function
 /// assigns each one the level of the previous character, to avoid breaking level runs.
-fn assign_levels_to_removed_chars(para_level: u8, classes: &[BidiClass], levels: &mut [u8]) {
+fn assign_levels_to_removed_chars(para_level: Level, classes: &[BidiClass], levels: &mut [Level]) {
     for i in 0..levels.len() {
         if prepare::removed_by_x9(classes[i]) {
             levels[i] = if i > 0 { levels[i - 1] } else { para_level };
@@ -373,61 +445,66 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_initial_scan() {
+    fn test_initial_text_info() {
+        let text = "a1";
         assert_eq!(
-            initial_scan("a1", None),
-            InitialProperties {
-                initial_classes: vec![L, EN],
+            InitialInfo::new(text, None),
+            InitialInfo {
+                text,
+                original_classes: vec![L, EN],
                 paragraphs: vec![
                     ParagraphInfo {
                         range: 0..2,
-                        level: 0,
+                        level: Level::ltr(),
                     },
                 ],
             }
         );
+
+        let text = "غ א";
         assert_eq!(
-            initial_scan("غ א", None),
-            InitialProperties {
-                initial_classes: vec![AL, AL, WS, R, R],
+            InitialInfo::new(text, None),
+            InitialInfo {
+                text,
+                original_classes: vec![AL, AL, WS, R, R],
                 paragraphs: vec![
                     ParagraphInfo {
                         range: 0..5,
-                        level: 1,
+                        level: Level::rtl(),
                     },
                 ],
             }
         );
-        {
-            let para1 = ParagraphInfo {
-                range: 0..4,
-                level: 0,
-            };
-            let para2 = ParagraphInfo {
-                range: 4..5,
-                level: 0,
-            };
-            assert_eq!(
-                initial_scan("a\u{2029}b", None),
-                InitialProperties {
-                    initial_classes: vec![L, B, B, B, L],
-                    paragraphs: vec![para1, para2],
-                }
-            );
-        }
 
-        let fsi = '\u{2068}';
-        let pdi = '\u{2069}';
-
-        let s = format!("{}א{}a", fsi, pdi);
+        let text = "a\u{2029}b";
         assert_eq!(
-            initial_scan(&s, None),
-            InitialProperties {
-                initial_classes: vec![RLI, RLI, RLI, R, R, PDI, PDI, PDI, L],
+            InitialInfo::new(text, None),
+            InitialInfo {
+                text,
+                original_classes: vec![L, B, B, B, L],
+                paragraphs: vec![
+                    ParagraphInfo {
+                        range: 0..4,
+                        level: Level::ltr(),
+                    },
+                    ParagraphInfo {
+                        range: 4..5,
+                        level: Level::ltr(),
+                    },
+                ],
+            }
+        );
+
+        let s = format!("{}א{}a", chars::FSI, chars::PDI);
+        assert_eq!(
+            InitialInfo::new(&s, None),
+            InitialInfo {
+                text: &s,
+                original_classes: vec![RLI, RLI, RLI, R, R, PDI, PDI, PDI, L],
                 paragraphs: vec![
                     ParagraphInfo {
                         range: 0..9,
-                        level: 0,
+                        level: Level::ltr(),
                     },
                 ],
             }
@@ -436,97 +513,114 @@ mod tests {
 
     #[test]
     fn test_process_text() {
+
+        let text = "abc123";
         assert_eq!(
-            process_text("abc123", Some(0)),
+            BidiInfo::new(text, Some(Level::ltr())),
             BidiInfo {
-                levels: vec![0, 0, 0, 0, 0, 0],
-                classes: vec![L, L, L, EN, EN, EN],
+                text,
+                levels: Level::vec(&[0, 0, 0, 0, 0, 0]),
+                original_classes: vec![L, L, L, EN, EN, EN],
                 paragraphs: vec![
                     ParagraphInfo {
                         range: 0..6,
-                        level: 0,
+                        level: Level::ltr(),
                     },
                 ],
             }
         );
+
+        let text = "abc אבג";
         assert_eq!(
-            process_text("abc אבג", Some(0)),
+            BidiInfo::new(text, Some(Level::ltr())),
             BidiInfo {
-                levels: vec![0, 0, 0, 0, 1, 1, 1, 1, 1, 1],
-                classes: vec![L, L, L, WS, R, R, R, R, R, R],
+                text,
+                levels: Level::vec(&[0, 0, 0, 0, 1, 1, 1, 1, 1, 1]),
+                original_classes: vec![L, L, L, WS, R, R, R, R, R, R],
                 paragraphs: vec![
                     ParagraphInfo {
                         range: 0..10,
-                        level: 0,
+                        level: Level::ltr(),
                     },
                 ],
             }
         );
         assert_eq!(
-            process_text("abc אבג", Some(1)),
+            BidiInfo::new(text, Some(Level::rtl())),
             BidiInfo {
-                levels: vec![2, 2, 2, 1, 1, 1, 1, 1, 1, 1],
-                classes: vec![L, L, L, WS, R, R, R, R, R, R],
+                text,
+                levels: Level::vec(&[2, 2, 2, 1, 1, 1, 1, 1, 1, 1]),
+                original_classes: vec![L, L, L, WS, R, R, R, R, R, R],
                 paragraphs: vec![
                     ParagraphInfo {
                         range: 0..10,
-                        level: 1,
+                        level: Level::rtl(),
                     },
                 ],
             }
         );
+
+        let text = "אבג abc";
         assert_eq!(
-            process_text("אבג abc", Some(0)),
+            BidiInfo::new(text, Some(Level::ltr())),
             BidiInfo {
-                levels: vec![1, 1, 1, 1, 1, 1, 0, 0, 0, 0],
-                classes: vec![R, R, R, R, R, R, WS, L, L, L],
+                text,
+                levels: Level::vec(&[1, 1, 1, 1, 1, 1, 0, 0, 0, 0]),
+                original_classes: vec![R, R, R, R, R, R, WS, L, L, L],
                 paragraphs: vec![
                     ParagraphInfo {
                         range: 0..10,
-                        level: 0,
+                        level: Level::ltr(),
                     },
                 ],
             }
         );
         assert_eq!(
-            process_text("אבג abc", None),
+            BidiInfo::new(text, None),
             BidiInfo {
-                levels: vec![1, 1, 1, 1, 1, 1, 1, 2, 2, 2],
-                classes: vec![R, R, R, R, R, R, WS, L, L, L],
+                text,
+                levels: Level::vec(&[1, 1, 1, 1, 1, 1, 1, 2, 2, 2]),
+                original_classes: vec![R, R, R, R, R, R, WS, L, L, L],
                 paragraphs: vec![
                     ParagraphInfo {
                         range: 0..10,
-                        level: 1,
+                        level: Level::rtl(),
                     },
                 ],
             }
         );
+
+        let text = "غ2ظ א2ג";
         assert_eq!(
-            process_text("غ2ظ א2ג", Some(0)),
+            BidiInfo::new(text, Some(Level::ltr())),
             BidiInfo {
-                levels: vec![1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 1],
-                classes: vec![AL, AL, EN, AL, AL, WS, R, R, EN, R, R],
+                text,
+                levels: Level::vec(&[1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 1]),
+                original_classes: vec![AL, AL, EN, AL, AL, WS, R, R, EN, R, R],
                 paragraphs: vec![
                     ParagraphInfo {
                         range: 0..11,
-                        level: 0,
+                        level: Level::ltr(),
                     },
                 ],
             }
         );
+
+        let text = "a א.\nג";
         assert_eq!(
-            process_text("a א.\nג", None),
+            BidiInfo::new(text, None),
             BidiInfo {
-                classes: vec![L, WS, R, R, CS, B, R, R],
-                levels: vec![0, 0, 1, 1, 0, 0, 1, 1],
+                text,
+                original_classes: vec![L, WS, R, R, CS, B, R, R],
+                levels: Level::vec(&[0, 0, 1, 1, 0, 0, 1, 1]),
                 paragraphs: vec![
                     ParagraphInfo {
                         range: 0..6,
-                        level: 0,
+                        level: Level::ltr(),
                     },
                     ParagraphInfo {
                         range: 6..8,
-                        level: 1,
+                        level: Level::rtl(),
                     },
                 ],
             }
@@ -534,12 +628,42 @@ mod tests {
     }
 
     #[test]
+    fn test_bidi_info_has_rtl() {
+        // ASCII only
+        assert_eq!(BidiInfo::new("123", None).has_rtl(), false);
+        assert_eq!(BidiInfo::new("123", Some(Level::ltr())).has_rtl(), false);
+        assert_eq!(BidiInfo::new("123", Some(Level::rtl())).has_rtl(), false);
+        assert_eq!(BidiInfo::new("abc", None).has_rtl(), false);
+        assert_eq!(BidiInfo::new("abc", Some(Level::ltr())).has_rtl(), false);
+        assert_eq!(BidiInfo::new("abc", Some(Level::rtl())).has_rtl(), false);
+        assert_eq!(BidiInfo::new("abc 123", None).has_rtl(), false);
+        assert_eq!(BidiInfo::new("abc\n123", None).has_rtl(), false);
+
+        // With Hebrew
+        assert_eq!(BidiInfo::new("אבּג", None).has_rtl(), true);
+        assert_eq!(
+            BidiInfo::new("אבּג", Some(Level::ltr())).has_rtl(),
+            true
+        );
+        assert_eq!(
+            BidiInfo::new("אבּג", Some(Level::rtl())).has_rtl(),
+            true
+        );
+        assert_eq!(BidiInfo::new("abc אבּג", None).has_rtl(), true);
+        assert_eq!(BidiInfo::new("abc\nאבּג", None).has_rtl(), true);
+        assert_eq!(BidiInfo::new("אבּג abc", None).has_rtl(), true);
+        assert_eq!(BidiInfo::new("אבּג\nabc", None).has_rtl(), true);
+        assert_eq!(BidiInfo::new("אבּג 123", None).has_rtl(), true);
+        assert_eq!(BidiInfo::new("אבּג\n123", None).has_rtl(), true);
+    }
+
+    #[test]
     fn test_reorder_line() {
-        use std::borrow::Cow;
         fn reorder(s: &str) -> Cow<str> {
-            let info = process_text(s, None);
-            let para = &info.paragraphs[0];
-            reorder_line(s, para.range.clone(), &info.levels)
+            let bidi_info = BidiInfo::new(s, None);
+            let para = &bidi_info.paragraphs[0];
+            let line = para.range.clone();
+            bidi_info.reorder_line(para, line)
         }
         assert_eq!(reorder("abc123"), "abc123");
         assert_eq!(reorder("1.-2"), "1.-2");
@@ -570,19 +694,4 @@ mod tests {
             "Hello, \u{2068}\u{202E}\u{202C}dlrow\u{2069}!"
         );
     }
-
-    #[test]
-    fn test_is_ltr() {
-        assert_eq!(is_ltr(10), true);
-        assert_eq!(is_ltr(11), false);
-        assert_eq!(is_ltr(20), true);
-    }
-
-    #[test]
-    fn test_is_rtl() {
-        assert_eq!(is_rtl(13), true);
-        assert_eq!(is_rtl(11), true);
-        assert_eq!(is_rtl(20), false);
-    }
-
 }
