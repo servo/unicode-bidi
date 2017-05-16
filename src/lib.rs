@@ -60,6 +60,15 @@
 #[macro_use]
 extern crate matches;
 
+#[cfg(feature = "with_serde")]
+#[macro_use]
+extern crate serde_derive;
+
+#[cfg(feature = "with_serde")]
+#[cfg(test)]
+extern crate serde_test;
+
+pub mod deprecated;
 pub mod format_chars;
 pub mod level;
 
@@ -156,8 +165,8 @@ impl<'text> InitialInfo<'text> {
                     match isolate_stack.last() {
                         Some(&start) => {
                             if original_classes[start] == FSI {
-                                // X5c. If the first strong character between FSI and its matching PDI
-                                // is R or AL, treat it as RLI. Otherwise, treat it as LRI.
+                                // X5c. If the first strong character between FSI and its matching
+                                // PDI is R or AL, treat it as RLI. Otherwise, treat it as LRI.
                                 for j in 0..chars::FSI.len_utf8() {
                                     original_classes[start + j] =
                                         if class == L { LRI } else { RLI };
@@ -166,8 +175,9 @@ impl<'text> InitialInfo<'text> {
                         }
                         None => {
                             if para_level.is_none() {
-                                // P2. Find the first character of type L, AL, or R, while skipping any
-                                // characters between an isolate initiator and its matching PDI.
+                                // P2. Find the first character of type L, AL, or R, while skipping
+                                // any characters between an isolate initiator and its matching
+                                // PDI.
                                 para_level = Some(
                                     if class != L {
                                         Level::rtl()
@@ -208,8 +218,9 @@ impl<'text> InitialInfo<'text> {
 
 /// Bidi information of the text
 ///
-/// The `original_classes` and `levels` vectors are indexed by byte offsets into the text.  If a character
-/// is multiple bytes wide, then its class and level will appear multiple times in these vectors.
+/// The `original_classes` and `levels` vectors are indexed by byte offsets into the text.  If a
+/// character is multiple bytes wide, then its class and level will appear multiple times in these
+/// vectors.
 // TODO: Impl `struct StringProperty<T> { values: Vec<T> }` and use instead of Vec<T>
 #[derive(Debug, PartialEq)]
 pub struct BidiInfo<'text> {
@@ -232,8 +243,8 @@ pub struct BidiInfo<'text> {
 impl<'text> BidiInfo<'text> {
     /// Split the text into paragraphs and determine the bidi embedding levels for each paragraph.
     ///
-    /// TODO: In early steps, check for special cases that allow later steps to be skipped. like text
-    /// that is entirely LTR.  See the `nsBidi` class from Gecko for comparison.
+    /// TODO: In early steps, check for special cases that allow later steps to be skipped. like
+    /// text that is entirely LTR.  See the `nsBidi` class from Gecko for comparison.
     ///
     /// TODO: Support auto-RTL base direction
     pub fn new(text: &str, default_para_level: Option<Level>) -> BidiInfo {
@@ -358,9 +369,8 @@ impl<'text> BidiInfo<'text> {
             }
         }
 
-        let mut runs = Vec::new();
-
         // Find consecutive level runs.
+        let mut runs = Vec::new();
         let mut start = line.start;
         let mut level = levels[start];
         let mut min_level = level;
@@ -439,6 +449,7 @@ fn assign_levels_to_removed_chars(para_level: Level, classes: &[BidiClass], leve
         }
     }
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -692,6 +703,50 @@ mod tests {
         assert_eq!(
             reorder("Hello, \u{2068}\u{202E}world\u{202C}\u{2069}!"),
             "Hello, \u{2068}\u{202E}\u{202C}dlrow\u{2069}!"
+        );
+    }
+}
+
+
+#[cfg(feature = "with_serde")]
+#[cfg(test)]
+mod serde_tests {
+    use serde_test::{Token, assert_tokens};
+    use super::*;
+
+    #[test]
+    fn test_levels() {
+        let text = "abc אבג";
+        let bidi_info = BidiInfo::new(text, None);
+        let levels = bidi_info.levels;
+        assert_eq!(text.as_bytes().len(), 10);
+        assert_eq!(levels.len(), 10);
+        assert_tokens(
+            &levels,
+            &[
+                Token::Seq { len: Some(10) },
+                Token::NewtypeStruct { name: "Level" },
+                Token::U8(0),
+                Token::NewtypeStruct { name: "Level" },
+                Token::U8(0),
+                Token::NewtypeStruct { name: "Level" },
+                Token::U8(0),
+                Token::NewtypeStruct { name: "Level" },
+                Token::U8(0),
+                Token::NewtypeStruct { name: "Level" },
+                Token::U8(1),
+                Token::NewtypeStruct { name: "Level" },
+                Token::U8(1),
+                Token::NewtypeStruct { name: "Level" },
+                Token::U8(1),
+                Token::NewtypeStruct { name: "Level" },
+                Token::U8(1),
+                Token::NewtypeStruct { name: "Level" },
+                Token::U8(1),
+                Token::NewtypeStruct { name: "Level" },
+                Token::U8(1),
+                Token::SeqEnd,
+            ],
         );
     }
 }
