@@ -1,9 +1,19 @@
 sudo: false
 language: rust
+
 rust:
   - nightly
   - beta
   - stable
 
+matrix:
+  fast_finish: true
+
 notifications:
   webhooks: http://build.servo.org:54856/travis
+
+script:
+  - cargo build --verbose
+  - cargo test --verbose
+  - cargo test --verbose --features with_serde
+  - cargo doc --verbose --no-deps
