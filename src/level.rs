@@ -9,6 +9,8 @@
 
 //! Bidi Embedding Level
 //!
+//! See [`Level`](struct.Level.html) for more details.
+//!
 //! http://www.unicode.org/reports/tr9/#BD2
 
 use std::convert::{From, Into};
@@ -26,6 +28,7 @@ use super::char_data::BidiClass;
 ///
 /// http://www.unicode.org/reports/tr9/#BD2
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "with_serde", derive(Serialize, Deserialize))]
 pub struct Level(u8);
 
 pub const LTR_LEVEL: Level = Level(0);
@@ -336,5 +339,32 @@ mod tests {
     fn test_string_eq() {
         assert_eq!(Level::vec(&[0, 1, 4, 125]), vec!["0", "1", "x", "125"]);
         assert_ne!(Level::vec(&[0, 1, 4, 125]), vec!["0", "1", "5", "125"]);
+    }
+}
+
+#[cfg(all(feature = "with_serde", test))]
+mod serde_tests {
+    use serde_test::{Token, assert_tokens};
+    use super::*;
+
+    #[test]
+    fn test_statics() {
+        assert_tokens(
+            &Level::ltr(),
+            &[Token::NewtypeStruct { name: "Level" }, Token::U8(0)],
+        );
+        assert_tokens(
+            &Level::rtl(),
+            &[Token::NewtypeStruct { name: "Level" }, Token::U8(1)],
+        );
+    }
+
+    #[test]
+    fn test_new() {
+        let level = Level::new(42).unwrap();
+        assert_tokens(
+            &level,
+            &[Token::NewtypeStruct { name: "Level" }, Token::U8(42)],
+        );
     }
 }
