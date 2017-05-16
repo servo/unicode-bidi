@@ -11,45 +11,36 @@
 
 extern crate unicode_bidi;
 
-use std::fs::File;
-use std::io::{BufRead, BufReader};
-use std::path::Path;
-
-use unicode_bidi::{bidi_class, BidiInfo, format_chars, Level};
-
-const TEST_DATA_DIR: &str = "tests/data";
-const BASE_TEST_FILE_NAME: &str = "BidiTest.txt";
-//const CHAR_TEST_FILE_NAME: &str = "BidiCharacterTest.txt";
-
-fn open_test_file(filename: &str) -> File {
-    let path = Path::new(TEST_DATA_DIR).join(filename);
-    return File::open(&path).unwrap();
-}
+use unicode_bidi::{bidi_class, BidiInfo, format_chars, level, Level};
 
 #[derive(Debug)]
 struct Fail {
-    pub levels: Vec<String>,
-    pub ordering: Vec<String>,
+    pub line_num: usize,
+    pub input_base_level: Option<Level>,
     pub input_classes: Vec<String>,
-    pub input_chars: String,
-    pub para_level: Option<Level>,
+    pub input_string: String,
+    pub exp_base_level: Option<Level>,
+    pub exp_levels: Vec<String>,
+    pub exp_ordering: Vec<String>,
+    pub actual_base_level: Option<Level>,
+    pub actual_levels: Vec<Level>,
+    // TODO pub actual_ordering: Vec<String>,
 }
 
 #[test]
 #[should_panic(expected = "12827 test cases failed! (243920 passed)")]
-fn base_tests() {
-    let file = open_test_file(BASE_TEST_FILE_NAME);
-    let read = BufReader::new(file);
+fn test_basic_conformance() {
+    let test_data = include_str!("data/BidiTest.txt");
 
-    // State
+    // Test set state
+    let mut line_num: usize = 0;
     let mut passed_num: i32 = 0;
     let mut fails: Vec<Fail> = Vec::new();
-    let mut set_levels: Vec<String> = Vec::new();
-    let mut set_ordering: Vec<String> = Vec::new();
-    //let mut line_num = 0;
+    let mut exp_levels: Vec<String> = Vec::new();
+    let mut exp_ordering: Vec<String> = Vec::new();
 
-    for line in read.lines().map(|x| x.unwrap()) {
-        //line_num += 1;
+    for line in test_data.lines() {
+        line_num += 1;
         let line = line.trim();
 
         // Empty and comment lines
@@ -64,10 +55,10 @@ fn base_tests() {
             let (setting, values) = (tokens[0].as_ref(), tokens[1..].to_vec());
             match setting {
                 "@Levels:" => {
-                    set_levels = values.to_owned();
+                    exp_levels = values.to_owned();
                 }
                 "@Reorder:" => {
-                    set_ordering = values.to_owned();
+                    exp_ordering = values.to_owned();
                 }
                 _ => {
                     // Ignore, to allow some degree of forward compatibility
@@ -79,38 +70,42 @@ fn base_tests() {
         // Data lines
         {
             // Levels and ordering need to be set before any data line
-            assert!(set_levels.len() > 0);
-            assert!(set_ordering.len() <= set_levels.len());
+            assert!(exp_levels.len() > 0);
+            assert!(exp_ordering.len() <= exp_levels.len());
 
-            let pieces: Vec<&str> = line.split(';').collect();
-            let input_classes: Vec<&str> = pieces[0].split_whitespace().collect();
-            let bitset: u8 = pieces[1].trim().parse().unwrap();
+            let fields: Vec<&str> = line.split(';').collect();
+            let input_classes: Vec<&str> = fields[0].split_whitespace().collect();
+            let bitset: u8 = fields[1].trim().parse().unwrap();
             assert!(input_classes.len() > 0);
             assert!(bitset > 0);
 
-            let input_chars = get_sample_string_from_bidi_classes(input_classes.to_owned());
+            let input_string = get_sample_string_from_bidi_classes(input_classes.to_owned());
 
-            for para_level in gen_para_levels(bitset) {
-                let bidi_info = BidiInfo::new(&input_chars, para_level);
+            for input_base_level in gen_base_levels_for_base_tests(bitset) {
+                let bidi_info = BidiInfo::new(&input_string, input_base_level);
 
-                // Levels
-                let exp_levels: Vec<&str> = set_levels.iter().map(|x| x.as_ref()).collect();
-                let levels = gen_levels_list_from_bidi_info(&input_chars, &bidi_info);
+                // Check levels
+                let exp_levels: Vec<String> = exp_levels.iter().map(|x| x.to_owned()).collect();
+                let levels = gen_levels_list_from_bidi_info(&input_string, &bidi_info);
                 if levels != exp_levels {
                     fails.push(
                         Fail {
-                            levels: set_levels.to_owned(),
-                            ordering: set_ordering.to_owned(),
+                            line_num,
+                            input_base_level,
                             input_classes: input_classes.iter().map(|x| x.to_string()).collect(),
-                            input_chars: input_chars.to_owned(),
-                            para_level,
+                            input_string: input_string.to_owned(),
+                            exp_base_level: None,
+                            exp_levels: exp_levels.to_owned(),
+                            exp_ordering: exp_ordering.to_owned(),
+                            actual_base_level: None,
+                            actual_levels: levels.to_owned(),
                         },
                     );
                 } else {
                     passed_num += 1;
                 }
 
-                // Ordering
+                // Check reorder map
                 // TODO: Add reorder map to API output and test the map here
             }
         }
@@ -137,26 +132,119 @@ fn base_tests() {
     }
 }
 
-fn gen_para_levels(bitset: u8) -> Vec<Option<Level>> {
-    /// Values: auto-LTR, LTR, RTL
-    // TODO: Support auto-RTL
-    // FIXME: Convert back to `const` when `const fn` becomes possible
-    let para_level_values: &[Option<Level>] = &[None, Some(Level::ltr()), Some(Level::rtl())];
-    assert!(bitset < (1 << para_level_values.len()));
+#[test]
+#[should_panic(expected = "14558 test cases failed! (77141 passed)")]
+fn test_character_conformance() {
+    let test_data = include_str!("data/BidiCharacterTest.txt");
 
-    (0..3)
+    // Test set state
+    let mut line_num: usize = 0;
+    let mut passed_num: i32 = 0;
+    let mut fails: Vec<Fail> = Vec::new();
+
+    for line in test_data.lines() {
+        line_num += 1;
+        let line = line.trim();
+
+        // Empty and comment lines
+        if line.is_empty() || line.starts_with('#') {
+            // Ignore
+            continue;
+        }
+
+        // Data lines
+        {
+            let fields: Vec<&str> = line.split(';').collect();
+            let input_chars: Vec<char> = fields[0]
+                .split_whitespace()
+                .map(|cp_hex| u32::from_str_radix(cp_hex, 16).unwrap())
+                .map(|cp_u32| std::char::from_u32(cp_u32).unwrap())
+                .collect();
+            let input_string: String = input_chars.into_iter().collect();
+            let input_base_level: Option<Level> = gen_base_level_for_characters_tests(fields[1].trim().parse().unwrap(),);
+            let exp_base_level: Level = Level::new(fields[2].trim().parse().unwrap()).unwrap();
+            let exp_levels: Vec<String> = fields[3]
+                .split_whitespace()
+                .map(|x| x.to_owned())
+                .collect();
+            let exp_ordering: Vec<String> = fields[4]
+                .split_whitespace()
+                .map(|x| x.to_owned())
+                .collect();
+
+            let bidi_info = BidiInfo::new(&input_string, input_base_level);
+
+            // Check levels
+            let levels = gen_levels_list_from_bidi_info(&input_string, &bidi_info);
+            if levels != exp_levels {
+                fails.push(
+                    Fail {
+                        line_num,
+                        input_base_level,
+                        input_classes: vec![],
+                        input_string: input_string.to_owned(),
+                        exp_base_level: Some(exp_base_level),
+                        exp_levels: exp_levels.to_owned(),
+                        exp_ordering: exp_ordering.to_owned(),
+                        actual_base_level: None,
+                        actual_levels: levels.to_owned(),
+                    },
+                );
+            } else {
+                passed_num += 1;
+            }
+
+            // Check reorder map
+            // TODO: Add reorder map to API output and test the map here
+        }
+    }
+
+    if fails.len() > 0 {
+        // TODO: Show a list of failed cases when the number is less than 1K
+        panic!(
+            "{} test cases failed! ({} passed) {{\n\
+            \n\
+            0: {:?}\n\
+            \n\
+            ...\n\
+            \n\
+            {}: {:?}\n\
+            \n\
+            }}",
+            fails.len(),
+            passed_num,
+            fails[0],
+            fails.len() - 1,
+            fails[fails.len() - 1],
+        );
+    }
+}
+
+// TODO: Support auto-RTL
+fn gen_base_levels_for_base_tests(bitset: u8) -> Vec<Option<Level>> {
+    /// Values: auto-LTR, LTR, RTL
+    const VALUES: &[Option<Level>] = &[None, Some(level::LTR_LEVEL), Some(level::RTL_LEVEL)];
+    assert!(bitset < (1 << VALUES.len()));
+    (0..VALUES.len())
         .filter(|bit| bitset & (1u8 << bit) == 1)
-        .map(|idx| para_level_values[idx])
+        .map(|idx| VALUES[idx])
         .collect()
 }
 
+// TODO: Support auto-RTL
+fn gen_base_level_for_characters_tests(idx: usize) -> Option<Level> {
+    /// Values: LTR, RTL, auto-LTR
+    const VALUES: &[Option<Level>] = &[Some(level::LTR_LEVEL), Some(level::RTL_LEVEL), None];
+    assert!(idx < VALUES.len());
+    VALUES[idx]
+}
+
 /// We need to collaps levels to one-per-character from one-per-byte format.
-///
-/// TODO: Move to impl BidiInfo as pub api
-fn gen_levels_list_from_bidi_info(input_chars: &str, bidi_info: &BidiInfo) -> Vec<Level> {
+fn gen_levels_list_from_bidi_info(input_str: &str, bidi_info: &BidiInfo) -> Vec<Level> {
     let para = &bidi_info.paragraphs[0];
     let levels = bidi_info.reordered_levels(para, para.range.clone());
-    input_chars
+    // TODO: Move to impl BidiInfo as pub api
+    input_str
         .char_indices()
         .map(|(i, _)| levels[i])
         .collect()
