@@ -7,7 +7,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![cfg(test)]
+#![cfg(all(test, not(feature = "unstable")))]
 
 extern crate unicode_bidi;
 
