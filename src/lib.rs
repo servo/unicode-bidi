@@ -505,11 +505,11 @@ mod tests {
             }
         );
 
-        let s = format!("{}א{}a", chars::FSI, chars::PDI);
+        let text = format!("{}א{}a", chars::FSI, chars::PDI);
         assert_eq!(
-            InitialInfo::new(&s, None),
+            InitialInfo::new(&text, None),
             InitialInfo {
-                text: &s,
+                text: &text,
                 original_classes: vec![RLI, RLI, RLI, R, R, PDI, PDI, PDI, L],
                 paragraphs: vec![
                     ParagraphInfo {
@@ -523,7 +523,6 @@ mod tests {
 
     #[test]
     fn test_process_text() {
-
         let text = "abc123";
         assert_eq!(
             BidiInfo::new(text, Some(Level::ltr())),
@@ -669,30 +668,36 @@ mod tests {
 
     #[test]
     fn test_reorder_line() {
-        fn reorder(s: &str) -> Cow<str> {
-            let bidi_info = BidiInfo::new(s, None);
+        fn reorder(text: &str) -> Cow<str> {
+            let bidi_info = BidiInfo::new(text, None);
             let para = &bidi_info.paragraphs[0];
             let line = para.range.clone();
             bidi_info.reorder_line(para, line)
         }
+
         assert_eq!(reorder("abc123"), "abc123");
         assert_eq!(reorder("1.-2"), "1.-2");
         assert_eq!(reorder("1-.2"), "1-.2");
         assert_eq!(reorder("abc אבג"), "abc גבא");
-        //Numbers being weak LTR characters, cannot reorder strong RTL
+
+        // Numbers being weak LTR characters, cannot reorder strong RTL
         assert_eq!(reorder("123 אבג"), "גבא 123");
-        //Testing for RLE Character
+
+        // Testing for RLE Character
         assert_eq!(
             reorder("\u{202B}abc אבג\u{202C}"),
             "\u{202B}\u{202C}גבא abc"
         );
-        //Testing neutral characters
+
+        // Testing neutral characters
         assert_eq!(reorder("אבג? אבג"), "גבא ?גבא");
-        //Testing neutral characters with special case
+
+        // Testing neutral characters with special case
         assert_eq!(reorder("A אבג?"), "A גבא?");
-        //Testing neutral characters with Implicit RTL Marker
-        //The given test highlights a possible non-conformance issue that will perhaps be fixed in
-        //the subsequent steps.
+
+        // Testing neutral characters with Implicit RTL Marker
+        // The given test highlights a possible non-conformance issue that will perhaps be fixed in
+        // the subsequent steps.
         //assert_eq!(reorder("A אבג?\u{202f}"), "A \u{202f}?גבא");
         assert_eq!(reorder("אבג abc"), "abc גבא");
         assert_eq!(

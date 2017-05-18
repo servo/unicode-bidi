@@ -39,14 +39,10 @@ pub fn compute(
 
     for (i, c) in text.char_indices() {
         match initial_classes[i] {
+
             // Rules X2-X5c
             RLE | LRE | RLO | LRO | RLI | LRI | FSI => {
                 let last_level = stack.last().level;
-                let new_level = if is_rtl(initial_classes[i]) {
-                    last_level.new_explicit_next_rtl()
-                } else {
-                    last_level.new_explicit_next_ltr()
-                };
 
                 // X5a-X5c: Isolate initiators get the level of the last entry on the stack.
                 let is_isolate = matches!(initial_classes[i], RLI | LRI | FSI);
@@ -59,6 +55,11 @@ pub fn compute(
                     }
                 }
 
+                let new_level = if is_rtl(initial_classes[i]) {
+                    last_level.new_explicit_next_rtl()
+                } else {
+                    last_level.new_explicit_next_ltr()
+                };
                 if new_level.is_ok() && overflow_isolate_count == 0 &&
                    overflow_embedding_count == 0 {
                     let new_level = new_level.unwrap();
@@ -84,6 +85,7 @@ pub fn compute(
                     overflow_embedding_count += 1;
                 }
             }
+
             // http://www.unicode.org/reports/tr9/#X6a
             PDI => {
                 if overflow_isolate_count > 0 {
@@ -108,6 +110,7 @@ pub fn compute(
                     _ => {}
                 }
             }
+
             // http://www.unicode.org/reports/tr9/#X7
             PDF => {
                 if overflow_isolate_count > 0 {
@@ -124,8 +127,11 @@ pub fn compute(
                 // See the reference implementations for comparison.
                 levels[i] = stack.last().level;
             }
-            // http://www.unicode.org/reports/tr9/#X6
+
+            // Nothing
             B | BN => {}
+
+            // http://www.unicode.org/reports/tr9/#X6
             _ => {
                 let last = stack.last();
                 levels[i] = last.level;
@@ -136,6 +142,7 @@ pub fn compute(
                 }
             }
         }
+
         // Handle multi-byte characters.
         for j in 1..c.len_utf8() {
             levels[i + j] = levels[i];
@@ -166,6 +173,7 @@ impl DirectionalStatusStack {
     fn new() -> Self {
         DirectionalStatusStack { vec: Vec::with_capacity(Level::max_explicit_depth() as usize + 2) }
     }
+
     fn push(&mut self, level: Level, status: OverrideStatus) {
         self.vec
             .push(
@@ -175,6 +183,7 @@ impl DirectionalStatusStack {
                 },
             );
     }
+
     fn last(&self) -> &Status {
         self.vec.last().unwrap()
     }

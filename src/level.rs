@@ -222,11 +222,15 @@ impl From<u8> for Level {
 impl<'a> PartialEq<&'a str> for Level {
     #[inline]
     fn eq(&self, s: &&'a str) -> bool {
-        if *s == "x" {
-            true
-        } else {
-            *s == self.0.to_string()
-        }
+        *s == "x" || *s == self.0.to_string()
+    }
+}
+
+/// Used for matching levels in conformance tests
+impl<'a> PartialEq<String> for Level {
+    #[inline]
+    fn eq(&self, s: &String) -> bool {
+        self == &s.as_str()
     }
 }
 
@@ -336,9 +340,17 @@ mod tests {
     }
 
     #[test]
-    fn test_string_eq() {
+    fn test_str_eq() {
         assert_eq!(Level::vec(&[0, 1, 4, 125]), vec!["0", "1", "x", "125"]);
         assert_ne!(Level::vec(&[0, 1, 4, 125]), vec!["0", "1", "5", "125"]);
+    }
+
+    #[test]
+    fn test_string_eq() {
+        assert_eq!(
+            Level::vec(&[0, 1, 4, 125]),
+            vec!["0".to_string(), "1".to_string(), "x".to_string(), "125".to_string()]
+        );
     }
 }
 
