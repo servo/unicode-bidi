@@ -33,14 +33,12 @@ fn test_basic_conformance() {
     let test_data = include_str!("data/BidiTest.txt");
 
     // Test set state
-    let mut line_num: usize = 0;
     let mut passed_num: i32 = 0;
     let mut fails: Vec<Fail> = Vec::new();
     let mut exp_levels: Vec<String> = Vec::new();
     let mut exp_ordering: Vec<String> = Vec::new();
 
-    for line in test_data.lines() {
-        line_num += 1;
+    for (line_num, line) in test_data.lines().enumerate() {
         let line = line.trim();
 
         // Empty and comment lines
@@ -70,16 +68,16 @@ fn test_basic_conformance() {
         // Data lines
         {
             // Levels and ordering need to be set before any data line
-            assert!(exp_levels.len() > 0);
+            assert!(!exp_levels.is_empty());
             assert!(exp_ordering.len() <= exp_levels.len());
 
             let fields: Vec<&str> = line.split(';').collect();
             let input_classes: Vec<&str> = fields[0].split_whitespace().collect();
             let bitset: u8 = fields[1].trim().parse().unwrap();
-            assert!(input_classes.len() > 0);
+            assert!(!input_classes.is_empty());
             assert!(bitset > 0);
 
-            let input_string = get_sample_string_from_bidi_classes(input_classes.to_owned());
+            let input_string = get_sample_string_from_bidi_classes(&input_classes);
 
             for input_base_level in gen_base_levels_for_base_tests(bitset) {
                 let bidi_info = BidiInfo::new(&input_string, input_base_level);
@@ -99,7 +97,7 @@ fn test_basic_conformance() {
                             exp_ordering: exp_ordering.to_owned(),
                             actual_base_level: None,
                             actual_levels: levels.to_owned(),
-                        },
+                        }
                     );
                 } else {
                     passed_num += 1;
@@ -111,7 +109,7 @@ fn test_basic_conformance() {
         }
     }
 
-    if fails.len() > 0 {
+    if !fails.is_empty() {
         // TODO: Show a list of failed cases when the number is less than 1K
         panic!(
             "{} test cases failed! ({} passed) {{\n\
@@ -138,12 +136,10 @@ fn test_character_conformance() {
     let test_data = include_str!("data/BidiCharacterTest.txt");
 
     // Test set state
-    let mut line_num: usize = 0;
     let mut passed_num: i32 = 0;
     let mut fails: Vec<Fail> = Vec::new();
 
-    for line in test_data.lines() {
-        line_num += 1;
+    for (line_num, line) in test_data.lines().enumerate() {
         let line = line.trim();
 
         // Empty and comment lines
@@ -161,16 +157,13 @@ fn test_character_conformance() {
                 .map(|cp_u32| std::char::from_u32(cp_u32).unwrap())
                 .collect();
             let input_string: String = input_chars.into_iter().collect();
-            let input_base_level: Option<Level> = gen_base_level_for_characters_tests(fields[1].trim().parse().unwrap(),);
+            let input_base_level: Option<Level> =
+                gen_base_level_for_characters_tests(fields[1].trim().parse().unwrap());
             let exp_base_level: Level = Level::new(fields[2].trim().parse().unwrap()).unwrap();
-            let exp_levels: Vec<String> = fields[3]
-                .split_whitespace()
-                .map(|x| x.to_owned())
-                .collect();
-            let exp_ordering: Vec<String> = fields[4]
-                .split_whitespace()
-                .map(|x| x.to_owned())
-                .collect();
+            let exp_levels: Vec<String> =
+                fields[3].split_whitespace().map(|x| x.to_owned()).collect();
+            let exp_ordering: Vec<String> =
+                fields[4].split_whitespace().map(|x| x.to_owned()).collect();
 
             let bidi_info = BidiInfo::new(&input_string, input_base_level);
 
@@ -188,7 +181,7 @@ fn test_character_conformance() {
                         exp_ordering: exp_ordering.to_owned(),
                         actual_base_level: None,
                         actual_levels: levels.to_owned(),
-                    },
+                    }
                 );
             } else {
                 passed_num += 1;
@@ -199,7 +192,7 @@ fn test_character_conformance() {
         }
     }
 
-    if fails.len() > 0 {
+    if !fails.is_empty() {
         // TODO: Show a list of failed cases when the number is less than 1K
         panic!(
             "{} test cases failed! ({} passed) {{\n\
@@ -244,13 +237,10 @@ fn gen_levels_list_from_bidi_info(input_str: &str, bidi_info: &BidiInfo) -> Vec<
     let para = &bidi_info.paragraphs[0];
     let levels = bidi_info.reordered_levels(para, para.range.clone());
     // TODO: Move to impl BidiInfo as pub api
-    input_str
-        .char_indices()
-        .map(|(i, _)| levels[i])
-        .collect()
+    input_str.char_indices().map(|(i, _)| levels[i]).collect()
 }
 
-fn get_sample_string_from_bidi_classes(class_names: Vec<&str>) -> String {
+fn get_sample_string_from_bidi_classes(class_names: &[&str]) -> String {
     class_names
         .iter()
         .map(|class_name| gen_char_from_bidi_class(class_name))
@@ -290,7 +280,7 @@ fn gen_char_from_bidi_class(class_name: &str) -> char {
 #[test]
 fn test_gen_char_from_bidi_class() {
     use unicode_bidi::BidiClass::*;
-    for class in vec![
+    for &class in &[
         AL,
         AN,
         B,
