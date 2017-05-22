@@ -208,9 +208,9 @@ impl<'text> InitialInfo<'text> {
         assert!(original_classes.len() == text.len());
 
         InitialInfo {
-            text,
-            original_classes,
-            paragraphs,
+            text: text,
+            original_classes: original_classes,
+            paragraphs: paragraphs,
         }
     }
 }
@@ -284,10 +284,10 @@ impl<'text> BidiInfo<'text> {
         }
 
         BidiInfo {
-            text,
-            original_classes,
-            paragraphs,
-            levels,
+            text: text,
+            original_classes: original_classes,
+            paragraphs: paragraphs,
+            levels: levels,
         }
     }
 
@@ -460,7 +460,7 @@ mod tests {
         assert_eq!(
             InitialInfo::new(text, None),
             InitialInfo {
-                text,
+                text: &text,
                 original_classes: vec![L, EN],
                 paragraphs: vec![
                     ParagraphInfo {
@@ -475,7 +475,7 @@ mod tests {
         assert_eq!(
             InitialInfo::new(text, None),
             InitialInfo {
-                text,
+                text: &text,
                 original_classes: vec![AL, AL, WS, R, R],
                 paragraphs: vec![
                     ParagraphInfo {
@@ -490,7 +490,7 @@ mod tests {
         assert_eq!(
             InitialInfo::new(text, None),
             InitialInfo {
-                text,
+                text: &text,
                 original_classes: vec![L, B, B, B, L],
                 paragraphs: vec![
                     ParagraphInfo {
@@ -527,7 +527,7 @@ mod tests {
         assert_eq!(
             BidiInfo::new(text, Some(Level::ltr())),
             BidiInfo {
-                text,
+                text: &text,
                 levels: Level::vec(&[0, 0, 0, 0, 0, 0]),
                 original_classes: vec![L, L, L, EN, EN, EN],
                 paragraphs: vec![
@@ -543,7 +543,7 @@ mod tests {
         assert_eq!(
             BidiInfo::new(text, Some(Level::ltr())),
             BidiInfo {
-                text,
+                text: &text,
                 levels: Level::vec(&[0, 0, 0, 0, 1, 1, 1, 1, 1, 1]),
                 original_classes: vec![L, L, L, WS, R, R, R, R, R, R],
                 paragraphs: vec![
@@ -557,7 +557,7 @@ mod tests {
         assert_eq!(
             BidiInfo::new(text, Some(Level::rtl())),
             BidiInfo {
-                text,
+                text: &text,
                 levels: Level::vec(&[2, 2, 2, 1, 1, 1, 1, 1, 1, 1]),
                 original_classes: vec![L, L, L, WS, R, R, R, R, R, R],
                 paragraphs: vec![
@@ -573,7 +573,7 @@ mod tests {
         assert_eq!(
             BidiInfo::new(text, Some(Level::ltr())),
             BidiInfo {
-                text,
+                text: &text,
                 levels: Level::vec(&[1, 1, 1, 1, 1, 1, 0, 0, 0, 0]),
                 original_classes: vec![R, R, R, R, R, R, WS, L, L, L],
                 paragraphs: vec![
@@ -587,7 +587,7 @@ mod tests {
         assert_eq!(
             BidiInfo::new(text, None),
             BidiInfo {
-                text,
+                text: &text,
                 levels: Level::vec(&[1, 1, 1, 1, 1, 1, 1, 2, 2, 2]),
                 original_classes: vec![R, R, R, R, R, R, WS, L, L, L],
                 paragraphs: vec![
@@ -603,7 +603,7 @@ mod tests {
         assert_eq!(
             BidiInfo::new(text, Some(Level::ltr())),
             BidiInfo {
-                text,
+                text: &text,
                 levels: Level::vec(&[1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 1]),
                 original_classes: vec![AL, AL, EN, AL, AL, WS, R, R, EN, R, R],
                 paragraphs: vec![
@@ -619,7 +619,7 @@ mod tests {
         assert_eq!(
             BidiInfo::new(text, None),
             BidiInfo {
-                text,
+                text: &text,
                 original_classes: vec![L, WS, R, R, CS, B, R, R],
                 levels: Level::vec(&[0, 0, 1, 1, 0, 0, 1, 1]),
                 paragraphs: vec![
