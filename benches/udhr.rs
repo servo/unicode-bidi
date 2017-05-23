@@ -54,7 +54,7 @@ fn bench_bidi_info_new_for_ltr_texts(b: &mut Bencher) {
     b.iter(
         || for text in LTR_TEXTS {
             BidiInfo::new(text, None);
-        },
+        }
     );
 }
 
@@ -63,7 +63,7 @@ fn bench_bidi_info_new_for_bidi_texts(b: &mut Bencher) {
     b.iter(
         || for text in BIDI_TEXTS {
             BidiInfo::new(text, None);
-        },
+        }
     );
 }
 
@@ -75,7 +75,7 @@ fn bench_bidi_info_new_and_reordered_for_ltr_texts(b: &mut Bencher) {
             let para = &bidi_info.paragraphs[0];
             let line = para.range.clone();
             bidi_info.reordered_levels(para, line);
-        },
+        }
     );
 }
 
@@ -87,6 +87,6 @@ fn bench_bidi_info_new_and_reordered_for_bidi_texts(b: &mut Bencher) {
             let para = &bidi_info.paragraphs[0];
             let line = para.range.clone();
             bidi_info.reordered_levels(para, line);
-        },
+        }
     );
 }
