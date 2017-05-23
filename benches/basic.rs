@@ -19,35 +19,13 @@ use unicode_bidi::BidiInfo;
 
 
 const LTR_TEXTS: &[&str] = &[
-    include_str!("udhr_data/ltr/udhr_acu_1.txt"),
-    include_str!("udhr_data/ltr/udhr_auc.txt"),
-    include_str!("udhr_data/ltr/udhr_eng.txt"),
-    include_str!("udhr_data/ltr/udhr_knc.txt"),
-    include_str!("udhr_data/ltr/udhr_krl.txt"),
-    include_str!("udhr_data/ltr/udhr_kwi.txt"),
-    include_str!("udhr_data/ltr/udhr_lot.txt"),
-    include_str!("udhr_data/ltr/udhr_mly_latn.txt"),
-    include_str!("udhr_data/ltr/udhr_piu.txt"),
-    include_str!("udhr_data/ltr/udhr_qug.txt"),
-    include_str!("udhr_data/ltr/udhr_snn.txt"),
-    include_str!("udhr_data/ltr/udhr_tiv.txt"),
-    include_str!("udhr_data/ltr/udhr_uig_latn.txt"),
+    "abc\ndef\nghi",
+    "abc 123\ndef 456\nghi 789",
 ];
 
 const BIDI_TEXTS: &[&str] = &[
-    include_str!("udhr_data/bidi/udhr_aii.txt"),
-    include_str!("udhr_data/bidi/udhr_arb.txt"),
-    include_str!("udhr_data/bidi/udhr_mly_arab.txt"),
-    include_str!("udhr_data/bidi/udhr_pes_1.txt"),
-    include_str!("udhr_data/bidi/udhr_skr.txt"),
-    include_str!("udhr_data/bidi/udhr_urd.txt"),
-    include_str!("udhr_data/bidi/udhr_pes_2.txt"),
-    include_str!("udhr_data/bidi/udhr_uig_arab.txt"),
-    include_str!("udhr_data/bidi/udhr_urd_2.txt"),
-    include_str!("udhr_data/bidi/udhr_heb.txt"),
-    include_str!("udhr_data/bidi/udhr_pbu.txt"),
-    include_str!("udhr_data/bidi/udhr_pnb.txt"),
-    include_str!("udhr_data/bidi/udhr_ydd.txt"),
+    "ابجد\nهوز\nحتی",
+    "ابجد ۱۲۳\nهوز ۴۵۶\nحتی ۷۸۹",
 ];
 
 
