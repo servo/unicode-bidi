@@ -84,7 +84,8 @@ fn test_basic_conformance() {
 
                 // Check levels
                 let exp_levels: Vec<String> = exp_levels.iter().map(|x| x.to_owned()).collect();
-                let levels = gen_levels_list_from_bidi_info(&input_string, &bidi_info);
+                let para = &bidi_info.paragraphs[0];
+                let levels = bidi_info.reordered_levels_per_char(para, para.range.clone());
                 if levels != exp_levels {
                     fails.push(
                         Fail {
@@ -181,7 +182,8 @@ fn test_character_conformance() {
             let bidi_info = BidiInfo::new(&input_string, input_base_level);
 
             // Check levels
-            let levels = gen_levels_list_from_bidi_info(&input_string, &bidi_info);
+            let para = &bidi_info.paragraphs[0];
+            let levels = bidi_info.reordered_levels_per_char(para, para.range.clone());
             if levels != exp_levels {
                 fails.push(
                     Fail {
@@ -236,14 +238,6 @@ fn gen_base_level_for_characters_tests(idx: usize) -> Option<Level> {
 }
 
 
-/// We need to collaps levels to one-per-character from one-per-byte format.
-fn gen_levels_list_from_bidi_info(input_str: &str, bidi_info: &BidiInfo) -> Vec<Level> {
-    let para = &bidi_info.paragraphs[0];
-    let levels = bidi_info.reordered_levels(para, para.range.clone());
-    // TODO: Move to impl BidiInfo as pub api
-    input_str.char_indices().map(|(i, _)| levels[i]).collect()
-}
-
 fn get_sample_string_from_bidi_classes(class_names: &[&str]) -> String {
     class_names
         .iter()
@@ -251,7 +245,6 @@ fn get_sample_string_from_bidi_classes(class_names: &[&str]) -> String {
         .collect()
 }
 
-/// TODO: Auto-gen in tables.rs ?
 fn gen_char_from_bidi_class(class_name: &str) -> char {
     match class_name {
         "AL" => '\u{060B}',

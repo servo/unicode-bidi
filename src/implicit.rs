@@ -26,6 +26,9 @@ pub fn resolve_weak(sequence: &IsolatingRunSequence, processing_classes: &mut [B
     // by an "earlier" rule.  We should either split this into separate passes, or preserve
     // extra state so each rule can see the correct previous class.
 
+    // FIXME: Also, this could be the cause of increased failure for using longer-UTF-8 chars in
+    // conformance tests, like BidiTest:69635 (AL ET EN)
+
     let mut prev_class = sequence.sos;
     let mut last_strong_is_al = false;
     let mut et_run_indices = Vec::new(); // for W5
