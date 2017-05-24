@@ -28,7 +28,7 @@ struct Fail {
 }
 
 #[test]
-#[should_panic(expected = "250 test cases failed! (256497 passed)")]
+#[should_panic(expected = "314 test cases failed! (256433 passed)")]
 fn test_basic_conformance() {
     let test_data = include_str!("data/BidiTest.txt");
 
@@ -254,29 +254,29 @@ fn get_sample_string_from_bidi_classes(class_names: &[&str]) -> String {
 /// TODO: Auto-gen in tables.rs ?
 fn gen_char_from_bidi_class(class_name: &str) -> char {
     match class_name {
-        "AL" => '\u{060b}',
+        "AL" => '\u{060B}',
         "AN" => '\u{0605}',
-        "B" => '\u{000a}',
-        "BN" => '\u{0000}',
-        "CS" => '\u{002c}',
-        "EN" => '\u{0039}',
-        "ES" => '\u{002b}',
-        "ET" => '\u{0023}',
+        "B" => '\u{000A}',
+        "BN" => '\u{2060}',
+        "CS" => '\u{2044}',
+        "EN" => '\u{06F9}',
+        "ES" => '\u{208B}',
+        "ET" => '\u{20CF}',
         "FSI" => format_chars::FSI,
-        "L" => '\u{0041}',
+        "L" => '\u{02B8}',
         "LRE" => format_chars::LRE,
         "LRI" => format_chars::LRI,
         "LRO" => format_chars::LRO,
         "NSM" => '\u{0300}',
-        "ON" => '\u{0021}',
+        "ON" => '\u{03F6}',
         "PDF" => format_chars::PDF,
         "PDI" => format_chars::PDI,
         "R" => '\u{0590}',
         "RLE" => format_chars::RLE,
         "RLI" => format_chars::RLI,
         "RLO" => format_chars::RLO,
-        "S" => '\u{0009}',
-        "WS" => '\u{000c}',
+        "S" => '\u{001F}',
+        "WS" => '\u{200A}',
         &_ => panic!("Invalid Bidi_Class name: {}", class_name),
     }
 }
