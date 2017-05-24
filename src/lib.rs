@@ -313,7 +313,9 @@ impl<'text> BidiInfo<'text> {
     /// Re-order a line based on resolved levels and return the line in display order.
     pub fn reorder_line(&self, para: &ParagraphInfo, line: Range<usize>) -> Cow<'text, str> {
         let (levels, runs) = self.visual_runs(para, line.clone());
-        if runs.len() == 1 && levels[runs[0].start].is_ltr() {
+
+        // If all isolating run sequences are LTR, no reordering is needed
+        if runs.iter().all(|run| levels[run.start].is_ltr()) {
             return self.text[line.clone()].into();
         }
 
