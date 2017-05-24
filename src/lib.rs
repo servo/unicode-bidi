@@ -291,16 +291,31 @@ impl<'text> BidiInfo<'text> {
         }
     }
 
-    /// Re-order a line based on resolved levels and return only the embedding levels.
+    /// Re-order a line based on resolved levels and return only the embedding levels, one `Level`
+    /// per *byte*.
     pub fn reordered_levels(&self, para: &ParagraphInfo, line: Range<usize>) -> Vec<Level> {
         let (levels, _) = self.visual_runs(para, line.clone());
         levels
     }
 
+    /// Re-order a line based on resolved levels and return only the embedding levels, one `Level`
+    /// per *character*.
+    pub fn reordered_levels_per_char(
+        &self,
+        para: &ParagraphInfo,
+        line: Range<usize>,
+    ) -> Vec<Level> {
+        let levels = self.reordered_levels(para, line);
+        self.text.char_indices().map(|(i, _)| levels[i]).collect()
+    }
+
+
     /// Re-order a line based on resolved levels and return the line in display order.
     pub fn reorder_line(&self, para: &ParagraphInfo, line: Range<usize>) -> Cow<'text, str> {
         let (levels, runs) = self.visual_runs(para, line.clone());
-        if runs.len() == 1 && levels[runs[0].start].is_ltr() {
+
+        // If all isolating run sequences are LTR, no reordering is needed
+        if runs.iter().all(|run| levels[run.start].is_ltr()) {
             return self.text[line.clone()].into();
         }
 
@@ -333,10 +348,12 @@ impl<'text> BidiInfo<'text> {
         // Reset some whitespace chars to paragraph level.
         // http://www.unicode.org/reports/tr9/#L1
         let line_str: &str = &self.text[line.clone()];
-        let mut reset_from: Option<usize> = None;
+        let mut reset_from: Option<usize> = Some(0);
         let mut reset_to: Option<usize> = None;
         for (i, c) in line_str.char_indices() {
             match self.original_classes[i] {
+                // Ignored by X9
+                RLE | LRE | RLO | LRO | PDF | BN => {}
                 // Segment separator, Paragraph separator
                 B | S => {
                     assert!(reset_to == None);
@@ -635,6 +652,10 @@ mod tests {
                 ],
             }
         );
+
+        /// BidiTest:69635 (AL ET EN)
+        let bidi_info = BidiInfo::new("\u{060B}\u{20CF}\u{06F9}", None);
+        assert_eq!(bidi_info.original_classes, vec![AL, AL, ET, ET, ET, EN, EN]);
     }
 
     #[test]
@@ -703,6 +724,18 @@ mod tests {
         // Numbers being weak LTR characters, cannot reorder strong RTL
         assert_eq!(reorder_paras("123 אבג"), vec!["גבא 123"]);
 
+        assert_eq!(reorder_paras("abc\u{202A}def"), vec!["abc\u{202A}def"]);
+
+        assert_eq!(
+            reorder_paras("abc\u{202A}def\u{202C}ghi"),
+            vec!["abc\u{202A}def\u{202C}ghi"]
+        );
+
+        assert_eq!(
+            reorder_paras("abc\u{2066}def\u{2069}ghi"),
+            vec!["abc\u{2066}def\u{2069}ghi"]
+        );
+
         // Testing for RLE Character
         assert_eq!(
             reorder_paras("\u{202B}abc אבג\u{202C}"),
@@ -725,6 +758,7 @@ mod tests {
             reorder_paras("abc\u{2067}.-\u{2069}ghi"),
             vec!["abc\u{2067}-.\u{2069}ghi"]
         );
+
         assert_eq!(
             reorder_paras("Hello, \u{2068}\u{202E}world\u{202C}\u{2069}!"),
             vec!["Hello, \u{2068}\u{202E}\u{202C}dlrow\u{2069}!"]
@@ -738,6 +772,60 @@ mod tests {
             reorder_paras("אב(גד[&ef].)gh"),
             vec!["ef].)gh&[דג(בא"]
         );
+    }
+
+    fn reordered_levels_for_paras(text: &str) -> Vec<Vec<Level>> {
+        let bidi_info = BidiInfo::new(text, None);
+        bidi_info
+            .paragraphs
+            .iter()
+            .map(|para| bidi_info.reordered_levels(para, para.range.clone()))
+            .collect()
+    }
+
+    fn reordered_levels_per_char_for_paras(text: &str) -> Vec<Vec<Level>> {
+        let bidi_info = BidiInfo::new(text, None);
+        bidi_info
+            .paragraphs
+            .iter()
+            .map(|para| bidi_info.reordered_levels_per_char(para, para.range.clone()))
+            .collect()
+    }
+
+    #[test]
+    fn test_reordered_levels() {
+
+        /// BidiTest:946 (LRI PDI)
+        let text = "\u{2067}\u{2069}";
+        assert_eq!(
+            reordered_levels_for_paras(text),
+            vec![Level::vec(&[0, 0, 0, 0, 0, 0])]
+        );
+        assert_eq!(
+            reordered_levels_per_char_for_paras(text),
+            vec![Level::vec(&[0, 0])]
+        );
+
+        /* TODO
+        /// BidiTest:69635 (AL ET EN)
+        let text = "\u{060B}\u{20CF}\u{06F9}";
+        assert_eq!(
+            reordered_levels_for_paras(text),
+            vec![Level::vec(&[1, 1, 1, 1, 1, 2, 2])]
+        );
+        assert_eq!(
+            reordered_levels_per_char_for_paras(text),
+            vec![Level::vec(&[1, 1, 2])]
+        );
+         */
+
+        /* TODO
+        // BidiTest:291284 (AN RLI PDF R)
+        assert_eq!(
+            reordered_levels_per_char_for_paras("\u{0605}\u{2067}\u{202C}\u{0590}"),
+            vec![&["2", "0", "x", "1"]]
+        );
+         */
     }
 }
 
