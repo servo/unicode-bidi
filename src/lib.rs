@@ -150,7 +150,7 @@ impl<'text> InitialInfo<'text> {
                             range: para_start..para_end,
                             // P3. If no character is found in p2, set the paragraph level to zero.
                             level: para_level.unwrap_or(Level::ltr()),
-                        },
+                        }
                     );
                     // Reset state for the start of the next paragraph.
                     para_start = para_end;
@@ -182,7 +182,7 @@ impl<'text> InitialInfo<'text> {
                                         Level::rtl()
                                     } else {
                                         Level::ltr()
-                                    },
+                                    }
                                 );
                             }
                         }
@@ -202,7 +202,7 @@ impl<'text> InitialInfo<'text> {
                 ParagraphInfo {
                     range: para_start..text.len(),
                     level: para_level.unwrap_or(Level::ltr()),
-                },
+                }
             );
         }
         assert!(original_classes.len() == text.len());
@@ -301,8 +301,9 @@ impl<'text> BidiInfo<'text> {
     pub fn reorder_line(&self, para: &ParagraphInfo, line: Range<usize>) -> Cow<'text, str> {
         let (levels, runs) = self.visual_runs(para, line.clone());
         if runs.len() == 1 && levels[runs[0].start].is_ltr() {
-            return self.text.into();
+            return self.text[line.clone()].into();
         }
+
         let mut result = String::with_capacity(line.len());
         for run in runs {
             if levels[run.start].is_rtl() {
@@ -666,47 +667,76 @@ mod tests {
         assert_eq!(BidiInfo::new("אבּג\n123", None).has_rtl(), true);
     }
 
+    fn reorder_paras(text: &str) -> Vec<Cow<str>> {
+        let bidi_info = BidiInfo::new(text, None);
+        bidi_info
+            .paragraphs
+            .iter()
+            .map(|para| bidi_info.reorder_line(para, para.range.clone()))
+            .collect()
+    }
+
     #[test]
     fn test_reorder_line() {
-        fn reorder(text: &str) -> Cow<str> {
-            let bidi_info = BidiInfo::new(text, None);
-            let para = &bidi_info.paragraphs[0];
-            let line = para.range.clone();
-            bidi_info.reorder_line(para, line)
-        }
+        /// Bidi_Class: L L L B L L L B L L L
+        assert_eq!(
+            reorder_paras("abc\ndef\nghi"),
+            vec!["abc\n", "def\n", "ghi"]
+        );
 
-        assert_eq!(reorder("abc123"), "abc123");
-        assert_eq!(reorder("1.-2"), "1.-2");
-        assert_eq!(reorder("1-.2"), "1-.2");
-        assert_eq!(reorder("abc אבג"), "abc גבא");
+        /// Bidi_Class: L L EN B L L EN B L L EN
+        assert_eq!(
+            reorder_paras("ab1\nde2\ngh3"),
+            vec!["ab1\n", "de2\n", "gh3"]
+        );
+
+        /// Bidi_Class: L L L B AL AL AL
+        assert_eq!(reorder_paras("abc\nابج"), vec!["abc\n", "جبا"]);
+
+        /// Bidi_Class: AL AL AL B L L L
+        assert_eq!(reorder_paras("ابج\nabc"), vec!["\nجبا", "abc"]);
+
+        assert_eq!(reorder_paras("1.-2"), vec!["1.-2"]);
+        assert_eq!(reorder_paras("1-.2"), vec!["1-.2"]);
+        assert_eq!(reorder_paras("abc אבג"), vec!["abc גבא"]);
 
         // Numbers being weak LTR characters, cannot reorder strong RTL
-        assert_eq!(reorder("123 אבג"), "גבא 123");
+        assert_eq!(reorder_paras("123 אבג"), vec!["גבא 123"]);
 
         // Testing for RLE Character
         assert_eq!(
-            reorder("\u{202B}abc אבג\u{202C}"),
-            "\u{202B}\u{202C}גבא abc"
+            reorder_paras("\u{202B}abc אבג\u{202C}"),
+            vec!["\u{202B}\u{202C}גבא abc"]
         );
 
         // Testing neutral characters
-        assert_eq!(reorder("אבג? אבג"), "גבא ?גבא");
+        assert_eq!(reorder_paras("אבג? אבג"), vec!["גבא ?גבא"]);
 
         // Testing neutral characters with special case
-        assert_eq!(reorder("A אבג?"), "A גבא?");
+        assert_eq!(reorder_paras("A אבג?"), vec!["A גבא?"]);
 
         // Testing neutral characters with Implicit RTL Marker
-        // The given test highlights a possible non-conformance issue that will perhaps be fixed in
-        // the subsequent steps.
-        //assert_eq!(reorder("A אבג?\u{202f}"), "A \u{202f}?גבא");
-        assert_eq!(reorder("אבג abc"), "abc גבא");
         assert_eq!(
-            reorder("abc\u{2067}.-\u{2069}ghi"),
-            "abc\u{2067}-.\u{2069}ghi"
+            reorder_paras("A אבג?\u{200F}"),
+            vec!["A \u{200F}?גבא"]
+        );
+        assert_eq!(reorder_paras("אבג abc"), vec!["abc גבא"]);
+        assert_eq!(
+            reorder_paras("abc\u{2067}.-\u{2069}ghi"),
+            vec!["abc\u{2067}-.\u{2069}ghi"]
         );
         assert_eq!(
-            reorder("Hello, \u{2068}\u{202E}world\u{202C}\u{2069}!"),
-            "Hello, \u{2068}\u{202E}\u{202C}dlrow\u{2069}!"
+            reorder_paras("Hello, \u{2068}\u{202E}world\u{202C}\u{2069}!"),
+            vec!["Hello, \u{2068}\u{202E}\u{202C}dlrow\u{2069}!"]
+        );
+
+        // With mirrorable characters in RTL run
+        assert_eq!(reorder_paras("א(ב)ג."), vec![".ג)ב(א"]);
+
+        // With mirrorable characters on level boundry
+        assert_eq!(
+            reorder_paras("אב(גד[&ef].)gh"),
+            vec!["ef].)gh&[דג(בא"]
         );
     }
 }

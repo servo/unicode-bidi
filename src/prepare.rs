@@ -96,9 +96,7 @@ pub fn isolating_run_sequences(
             let level = levels[start];
 
             // Get the level of the last non-removed char before the runs.
-            let pred_level = match initial_classes[..start]
-                      .iter()
-                      .rposition(not_removed_by_x9) {
+            let pred_level = match initial_classes[..start].iter().rposition(not_removed_by_x9) {
                 Some(idx) => levels[idx],
                 None => para_level,
             };
@@ -118,7 +116,7 @@ pub fn isolating_run_sequences(
                 sos: max(level, pred_level).bidi_class(),
                 eos: max(level, succ_level).bidi_class(),
             }
-        },
+        }
     )
                .collect();
 }
