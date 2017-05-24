@@ -333,10 +333,12 @@ impl<'text> BidiInfo<'text> {
         // Reset some whitespace chars to paragraph level.
         // http://www.unicode.org/reports/tr9/#L1
         let line_str: &str = &self.text[line.clone()];
-        let mut reset_from: Option<usize> = None;
+        let mut reset_from: Option<usize> = Some(0);
         let mut reset_to: Option<usize> = None;
         for (i, c) in line_str.char_indices() {
             match self.original_classes[i] {
+                // Ignored by X9
+                RLE | LRE | RLO | LRO | PDF | BN => {}
                 // Segment separator, Paragraph separator
                 B | S => {
                     assert!(reset_to == None);
@@ -703,6 +705,18 @@ mod tests {
         // Numbers being weak LTR characters, cannot reorder strong RTL
         assert_eq!(reorder_paras("123 אבג"), vec!["גבא 123"]);
 
+        assert_eq!(reorder_paras("abc\u{202A}def"), vec!["abc\u{202A}def"]);
+
+        assert_eq!(
+            reorder_paras("abc\u{202A}def\u{202C}ghi"),
+            vec!["abc\u{202A}def\u{202C}ghi"]
+        );
+
+        assert_eq!(
+            reorder_paras("abc\u{2066}def\u{2069}ghi"),
+            vec!["abc\u{2066}def\u{2069}ghi"]
+        );
+
         // Testing for RLE Character
         assert_eq!(
             reorder_paras("\u{202B}abc אבג\u{202C}"),
@@ -725,6 +739,7 @@ mod tests {
             reorder_paras("abc\u{2067}.-\u{2069}ghi"),
             vec!["abc\u{2067}-.\u{2069}ghi"]
         );
+
         assert_eq!(
             reorder_paras("Hello, \u{2068}\u{202E}world\u{202C}\u{2069}!"),
             vec!["Hello, \u{2068}\u{202E}\u{202C}dlrow\u{2069}!"]
