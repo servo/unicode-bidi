@@ -130,6 +130,19 @@ fn test_basic_conformance() {
     }
 }
 
+// TODO: Support auto-RTL
+fn gen_base_levels_for_base_tests(bitset: u8) -> Vec<Option<Level>> {
+    /// Values: auto-LTR, LTR, RTL
+    const VALUES: &'static [Option<Level>] =
+        &[None, Some(level::LTR_LEVEL), Some(level::RTL_LEVEL)];
+    assert!(bitset < (1 << VALUES.len()));
+    (0..VALUES.len())
+        .filter(|bit| bitset & (1u8 << bit) == 1)
+        .map(|idx| VALUES[idx])
+        .collect()
+}
+
+
 #[test]
 #[should_panic(expected = "14558 test cases failed! (77141 passed)")]
 fn test_character_conformance() {
@@ -214,18 +227,6 @@ fn test_character_conformance() {
 }
 
 // TODO: Support auto-RTL
-fn gen_base_levels_for_base_tests(bitset: u8) -> Vec<Option<Level>> {
-    /// Values: auto-LTR, LTR, RTL
-    const VALUES: &'static [Option<Level>] =
-        &[None, Some(level::LTR_LEVEL), Some(level::RTL_LEVEL)];
-    assert!(bitset < (1 << VALUES.len()));
-    (0..VALUES.len())
-        .filter(|bit| bitset & (1u8 << bit) == 1)
-        .map(|idx| VALUES[idx])
-        .collect()
-}
-
-// TODO: Support auto-RTL
 fn gen_base_level_for_characters_tests(idx: usize) -> Option<Level> {
     /// Values: LTR, RTL, auto-LTR
     const VALUES: &'static [Option<Level>] =
@@ -233,6 +234,7 @@ fn gen_base_level_for_characters_tests(idx: usize) -> Option<Level> {
     assert!(idx < VALUES.len());
     VALUES[idx]
 }
+
 
 /// We need to collaps levels to one-per-character from one-per-byte format.
 fn gen_levels_list_from_bidi_info(input_str: &str, bidi_info: &BidiInfo) -> Vec<Level> {

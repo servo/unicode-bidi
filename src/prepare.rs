@@ -40,10 +40,10 @@ pub struct IsolatingRunSequence {
 /// Note: This function does *not* return the sequences in order by their first characters.
 pub fn isolating_run_sequences(
     para_level: Level,
-    initial_classes: &[BidiClass],
+    original_classes: &[BidiClass],
     levels: &[Level],
 ) -> Vec<IsolatingRunSequence> {
-    let runs = level_runs(levels, initial_classes);
+    let runs = level_runs(levels, original_classes);
 
     // Compute the set of isolating run sequences.
     // http://www.unicode.org/reports/tr9/#BD13
@@ -58,8 +58,8 @@ pub fn isolating_run_sequences(
         assert!(run.len() > 0);
         assert!(stack.len() > 0);
 
-        let start_class = initial_classes[run.start];
-        let end_class = initial_classes[run.end - 1];
+        let start_class = original_classes[run.start];
+        let end_class = original_classes[run.end - 1];
 
         let mut sequence = if start_class == PDI && stack.len() > 1 {
             // Continue a previous sequence interrupted by an isolate.
@@ -96,16 +96,18 @@ pub fn isolating_run_sequences(
             let level = levels[start];
 
             // Get the level of the last non-removed char before the runs.
-            let pred_level = match initial_classes[..start].iter().rposition(not_removed_by_x9) {
+            let pred_level = match original_classes[..start]
+                      .iter()
+                      .rposition(not_removed_by_x9) {
                 Some(idx) => levels[idx],
                 None => para_level,
             };
 
             // Get the level of the next non-removed char after the runs.
-            let succ_level = if matches!(initial_classes[end - 1], RLI | LRI | FSI) {
+            let succ_level = if matches!(original_classes[end - 1], RLI | LRI | FSI) {
                 para_level
             } else {
-                match initial_classes[end..].iter().position(not_removed_by_x9) {
+                match original_classes[end..].iter().position(not_removed_by_x9) {
                     Some(idx) => levels[idx],
                     None => para_level,
                 }
