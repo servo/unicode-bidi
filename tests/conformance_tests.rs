@@ -38,7 +38,7 @@ fn test_basic_conformance() {
     let mut exp_levels: Vec<String> = Vec::new();
     let mut exp_ordering: Vec<String> = Vec::new();
 
-    for (line_num, line) in test_data.lines().enumerate() {
+    for (line_idx, line) in test_data.lines().enumerate() {
         let line = line.trim();
 
         // Empty and comment lines
@@ -89,7 +89,7 @@ fn test_basic_conformance() {
                 if levels != exp_levels {
                     fails.push(
                         Fail {
-                            line_num: line_num,
+                            line_num: line_idx + 1,
                             input_base_level: input_base_level,
                             input_classes: input_classes.iter().map(|x| x.to_string()).collect(),
                             input_string: input_string.to_owned(),
@@ -153,7 +153,7 @@ fn test_character_conformance() {
     let mut passed_num: i32 = 0;
     let mut fails: Vec<Fail> = Vec::new();
 
-    for (line_num, line) in test_data.lines().enumerate() {
+    for (line_idx, line) in test_data.lines().enumerate() {
         let line = line.trim();
 
         // Empty and comment lines
@@ -187,7 +187,7 @@ fn test_character_conformance() {
             if levels != exp_levels {
                 fails.push(
                     Fail {
-                        line_num: line_num,
+                        line_num: line_idx + 1,
                         input_base_level: input_base_level,
                         input_classes: vec![],
                         input_string: input_string.to_owned(),
