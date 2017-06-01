@@ -24,7 +24,6 @@ const LTR_TEXTS: &[&str] = &[
     include_str!("udhr_data/ltr/udhr_eng.txt"),
     include_str!("udhr_data/ltr/udhr_knc.txt"),
     include_str!("udhr_data/ltr/udhr_krl.txt"),
-    include_str!("udhr_data/ltr/udhr_kwi.txt"),
     include_str!("udhr_data/ltr/udhr_lot.txt"),
     include_str!("udhr_data/ltr/udhr_mly_latn.txt"),
     include_str!("udhr_data/ltr/udhr_piu.txt"),
@@ -45,7 +44,6 @@ const BIDI_TEXTS: &[&str] = &[
     include_str!("udhr_data/bidi/udhr_uig_arab.txt"),
     include_str!("udhr_data/bidi/udhr_urd_2.txt"),
     include_str!("udhr_data/bidi/udhr_heb.txt"),
-    include_str!("udhr_data/bidi/udhr_pbu.txt"),
     include_str!("udhr_data/bidi/udhr_pnb.txt"),
     include_str!("udhr_data/bidi/udhr_ydd.txt"),
 ];
