@@ -1,5 +1,5 @@
-sudo: false
 language: rust
+sudo: false
 
 rust:
   - nightly
@@ -9,12 +9,16 @@ rust:
 
 matrix:
   fast_finish: true
+  allow_failures:
+    - rust: nightly
 
 notifications:
   webhooks: http://build.servo.org:54856/travis
+  email:
+    on_success: never
 
 before_script:
-    - pip install git+https://github.com/euclio/travis-cargo@kcov --user && export PATH=$HOME/.local/bin:$PATH
+  - pip install git+https://github.com/euclio/travis-cargo@kcov --user && export PATH=$HOME/.local/bin:$PATH
 
 script:
   - cargo build --verbose
