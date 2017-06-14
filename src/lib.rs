@@ -145,13 +145,11 @@ impl<'text> InitialInfo<'text> {
                     // P1. Split the text into separate paragraphs. The paragraph separator is kept
                     // with the previous paragraph.
                     let para_end = i + c.len_utf8();
-                    paragraphs.push(
-                        ParagraphInfo {
-                            range: para_start..para_end,
-                            // P3. If no character is found in p2, set the paragraph level to zero.
-                            level: para_level.unwrap_or(Level::ltr()),
-                        }
-                    );
+                    paragraphs.push(ParagraphInfo {
+                        range: para_start..para_end,
+                        // P3. If no character is found in p2, set the paragraph level to zero.
+                        level: para_level.unwrap_or(Level::ltr()),
+                    });
                     // Reset state for the start of the next paragraph.
                     para_start = para_end;
                     // TODO: Support defaulting to direction of previous paragraph
@@ -177,13 +175,11 @@ impl<'text> InitialInfo<'text> {
                                 // P2. Find the first character of type L, AL, or R, while skipping
                                 // any characters between an isolate initiator and its matching
                                 // PDI.
-                                para_level = Some(
-                                    if class != L {
-                                        Level::rtl()
-                                    } else {
-                                        Level::ltr()
-                                    }
-                                );
+                                para_level = Some(if class != L {
+                                    Level::rtl()
+                                } else {
+                                    Level::ltr()
+                                });
                             }
                         }
                     }
@@ -198,12 +194,10 @@ impl<'text> InitialInfo<'text> {
             }
         }
         if para_start < text.len() {
-            paragraphs.push(
-                ParagraphInfo {
-                    range: para_start..text.len(),
-                    level: para_level.unwrap_or(Level::ltr()),
-                }
-            );
+            paragraphs.push(ParagraphInfo {
+                range: para_start..text.len(),
+                level: para_level.unwrap_or(Level::ltr()),
+            });
         }
         assert!(original_classes.len() == text.len());
 
@@ -438,9 +432,9 @@ impl<'text> BidiInfo<'text> {
 
                 seq_start = seq_end;
             }
-            max_level
-                .lower(1)
-                .expect("Lowering embedding level below zero");
+            max_level.lower(1).expect(
+                "Lowering embedding level below zero",
+            );
         }
 
         (levels, runs)
@@ -788,7 +782,9 @@ mod tests {
         bidi_info
             .paragraphs
             .iter()
-            .map(|para| bidi_info.reordered_levels_per_char(para, para.range.clone()))
+            .map(|para| {
+                bidi_info.reordered_levels_per_char(para, para.range.clone())
+            })
             .collect()
     }
 

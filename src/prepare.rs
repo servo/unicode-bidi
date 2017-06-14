@@ -88,50 +88,48 @@ pub fn isolating_run_sequences(
     // http://www.unicode.org/reports/tr9/#X10
     sequences
         .into_iter()
-        .map(
-            |sequence: Vec<LevelRun>| {
-                assert!(!sequence.is_empty());
+        .map(|sequence: Vec<LevelRun>| {
+            assert!(!sequence.is_empty());
 
-                let start_of_seq = sequence[0].start;
-                let end_of_seq = sequence[sequence.len() - 1].end;
-                let seq_level = levels[start_of_seq];
+            let start_of_seq = sequence[0].start;
+            let end_of_seq = sequence[sequence.len() - 1].end;
+            let seq_level = levels[start_of_seq];
 
-                #[cfg(test)]
-                for run in sequence.clone() {
-                    for idx in run {
-                        if not_removed_by_x9(&original_classes[idx]) {
-                            assert_eq!(seq_level, levels[idx]);
-                        }
+            #[cfg(test)]
+            for run in sequence.clone() {
+                for idx in run {
+                    if not_removed_by_x9(&original_classes[idx]) {
+                        assert_eq!(seq_level, levels[idx]);
                     }
-                }
-
-                // Get the level of the last non-removed char before the runs.
-                let pred_level = match original_classes[..start_of_seq]
-                          .iter()
-                          .rposition(not_removed_by_x9) {
-                    Some(idx) => levels[idx],
-                    None => para_level,
-                };
-
-                // Get the level of the next non-removed char after the runs.
-                let succ_level = if matches!(original_classes[end_of_seq - 1], RLI | LRI | FSI) {
-                    para_level
-                } else {
-                    match original_classes[end_of_seq..]
-                              .iter()
-                              .position(not_removed_by_x9) {
-                        Some(idx) => levels[end_of_seq + idx],
-                        None => para_level,
-                    }
-                };
-
-                IsolatingRunSequence {
-                    runs: sequence,
-                    sos: max(seq_level, pred_level).bidi_class(),
-                    eos: max(seq_level, succ_level).bidi_class(),
                 }
             }
-        )
+
+            // Get the level of the last non-removed char before the runs.
+            let pred_level = match original_classes[..start_of_seq].iter().rposition(
+                not_removed_by_x9,
+            ) {
+                Some(idx) => levels[idx],
+                None => para_level,
+            };
+
+            // Get the level of the next non-removed char after the runs.
+            let succ_level = if matches!(original_classes[end_of_seq - 1], RLI | LRI | FSI) {
+                para_level
+            } else {
+                match original_classes[end_of_seq..].iter().position(
+                    not_removed_by_x9,
+                ) {
+                    Some(idx) => levels[end_of_seq + idx],
+                    None => para_level,
+                }
+            };
+
+            IsolatingRunSequence {
+                runs: sequence,
+                sos: max(seq_level, pred_level).bidi_class(),
+                eos: max(seq_level, succ_level).bidi_class(),
+            }
+        })
         .collect()
 }
 

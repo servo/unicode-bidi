@@ -87,19 +87,17 @@ fn test_basic_conformance() {
                 let para = &bidi_info.paragraphs[0];
                 let levels = bidi_info.reordered_levels_per_char(para, para.range.clone());
                 if levels != exp_levels {
-                    fails.push(
-                        Fail {
-                            line_num: line_idx + 1,
-                            input_base_level: input_base_level,
-                            input_classes: input_classes.iter().map(|x| x.to_string()).collect(),
-                            input_string: input_string.to_owned(),
-                            exp_base_level: None,
-                            exp_levels: exp_levels.to_owned(),
-                            exp_ordering: exp_ordering.to_owned(),
-                            actual_base_level: None,
-                            actual_levels: levels.to_owned(),
-                        }
-                    );
+                    fails.push(Fail {
+                        line_num: line_idx + 1,
+                        input_base_level: input_base_level,
+                        input_classes: input_classes.iter().map(|x| x.to_string()).collect(),
+                        input_string: input_string.to_owned(),
+                        exp_base_level: None,
+                        exp_levels: exp_levels.to_owned(),
+                        exp_ordering: exp_ordering.to_owned(),
+                        actual_base_level: None,
+                        actual_levels: levels.to_owned(),
+                    });
                 } else {
                     passed_num += 1;
                 }
@@ -185,19 +183,17 @@ fn test_character_conformance() {
             let para = &bidi_info.paragraphs[0];
             let levels = bidi_info.reordered_levels_per_char(para, para.range.clone());
             if levels != exp_levels {
-                fails.push(
-                    Fail {
-                        line_num: line_idx + 1,
-                        input_base_level: input_base_level,
-                        input_classes: vec![],
-                        input_string: input_string.to_owned(),
-                        exp_base_level: Some(exp_base_level),
-                        exp_levels: exp_levels.to_owned(),
-                        exp_ordering: exp_ordering.to_owned(),
-                        actual_base_level: None,
-                        actual_levels: levels.to_owned(),
-                    }
-                );
+                fails.push(Fail {
+                    line_num: line_idx + 1,
+                    input_base_level: input_base_level,
+                    input_classes: vec![],
+                    input_string: input_string.to_owned(),
+                    exp_base_level: Some(exp_base_level),
+                    exp_levels: exp_levels.to_owned(),
+                    exp_ordering: exp_ordering.to_owned(),
+                    actual_base_level: None,
+                    actual_levels: levels.to_owned(),
+                });
             } else {
                 passed_num += 1;
             }
@@ -301,7 +297,8 @@ fn test_gen_char_from_bidi_class() {
         RLO,
         S,
         WS,
-    ] {
+    ]
+    {
         let class_name = format!("{:?}", class);
         let sample_char = gen_char_from_bidi_class(&class_name);
         assert_eq!(bidi_class(sample_char), class);

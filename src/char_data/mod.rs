@@ -32,15 +32,13 @@ pub fn is_rtl(bidi_class: BidiClass) -> bool {
 }
 
 fn bsearch_range_value_table(c: char, r: &'static [(char, char, BidiClass)]) -> BidiClass {
-    match r.binary_search_by(
-        |&(lo, hi, _)| if lo <= c && c <= hi {
-            Equal
-        } else if hi < c {
-            Less
-        } else {
-            Greater
-        }
-    ) {
+    match r.binary_search_by(|&(lo, hi, _)| if lo <= c && c <= hi {
+        Equal
+    } else if hi < c {
+        Less
+    } else {
+        Greater
+    }) {
         Ok(idx) => {
             let (_, _, cat) = r[idx];
             cat
@@ -109,7 +107,8 @@ mod tests {
                 (0x1EEFF, AL),
                 (0x1EF00, R),
                 (0x1EFFF, R),
-            ] {
+            ]
+        {
             assert_eq!(bidi_class(char::from_u32(input).unwrap()), expected);
         }
     }
