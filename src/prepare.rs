@@ -41,6 +41,7 @@ pub struct IsolatingRunSequence {
 /// whose matching PDI is the first character of the next level run in the sequence.
 ///
 /// Note: This function does *not* return the sequences in order by their first characters.
+#[cfg_attr(feature="flame_it", flame)]
 pub fn isolating_run_sequences(
     para_level: Level,
     original_classes: &[BidiClass],

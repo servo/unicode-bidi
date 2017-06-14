@@ -7,7 +7,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![cfg(all(test, feature = "unstable"))]
+#![cfg(all(test, feature = "bench_it"))]
 #![feature(test)]
 
 extern crate test;

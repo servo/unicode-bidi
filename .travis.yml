@@ -1,5 +1,7 @@
 language: rust
 sudo: false
+os: linux
+dist: trusty
 
 rust:
   - nightly
@@ -17,12 +19,18 @@ notifications:
   email:
     on_success: never
 
-before_script:
-  - pip install git+https://github.com/euclio/travis-cargo@kcov --user && export PATH=$HOME/.local/bin:$PATH
-
 script:
   - cargo build --verbose
-  - cargo test  --verbose
-  - cargo test  --verbose --features with_serde
   - cargo doc   --verbose --no-deps
-  - travis-cargo bench
+
+  - RUST_BACKTRACE=1 cargo test  --verbose
+  - RUST_BACKTRACE=1 cargo test  --verbose --features with_serde
+
+  - if [ "$TRAVIS_RUST_VERSION" != "nightly" ] ; then exit ; fi
+
+  - RUST_BACKTRACE=1 cargo test --verbose --features bench_it
+  - RUST_BACKTRACE=1 cargo test --verbose --features flame_it
+
+  - cargo run --verbose --features flame_it --example flame_udhr
+
+  - cargo bench --verbose --features bench_it
