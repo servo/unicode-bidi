@@ -14,7 +14,7 @@ use super::*;
 /// Find the level runs within a line and return them in visual order.
 ///
 /// NOTE: This implementation is incomplete. The algorithm needs information about the text,
-/// including original BidiClass property of each character, to be able to perform correctly.
+/// including original `BidiClass` property of each character, to be able to perform correctly.
 /// Please see [`BidiInfo::visual_runs()`](../struct.BidiInfo.html#method.visual_runs) for the
 /// improved implementation.
 ///

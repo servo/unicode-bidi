@@ -19,7 +19,7 @@ use std::char;
 use self::tables::bidi_class_table;
 use BidiClass::*;
 
-/// Find the BidiClass of a single char.
+/// Find the `BidiClass` of a single char.
 pub fn bidi_class(c: char) -> BidiClass {
     bsearch_range_value_table(c, bidi_class_table)
 }
@@ -107,8 +107,7 @@ mod tests {
                 (0x1EEFF, AL),
                 (0x1EF00, R),
                 (0x1EFFF, R),
-            ]
-        {
+            ] {
             assert_eq!(bidi_class(char::from_u32(input).unwrap()), expected);
         }
     }

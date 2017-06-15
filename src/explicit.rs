@@ -18,7 +18,7 @@ use BidiClass::*;
 
 /// Compute explicit embedding levels for one paragraph of text (X1-X8).
 ///
-/// `processing_classes[i]` must contain the BidiClass of the char at byte index `i`,
+/// `processing_classes[i]` must contain the `BidiClass` of the char at byte index `i`,
 /// for each char in `text`.
 pub fn compute(
     text: &str,
@@ -27,7 +27,7 @@ pub fn compute(
     levels: &mut [Level],
     processing_classes: &mut [BidiClass],
 ) {
-    assert!(text.len() == original_classes.len());
+    assert_eq!(text.len(), original_classes.len());
 
     // http://www.unicode.org/reports/tr9/#X1
     let mut stack = DirectionalStatusStack::new();
@@ -61,8 +61,7 @@ pub fn compute(
                     last_level.new_explicit_next_ltr()
                 };
                 if new_level.is_ok() && overflow_isolate_count == 0 &&
-                    overflow_embedding_count == 0
-                {
+                   overflow_embedding_count == 0 {
                     let new_level = new_level.unwrap();
                     stack.push(
                         new_level,
@@ -96,8 +95,8 @@ pub fn compute(
                     loop {
                         // Pop everything up to and including the last Isolate status.
                         match stack.vec.pop() {
+                            None |
                             Some(Status { status: OverrideStatus::Isolate, .. }) => break,
-                            None => break,
                             _ => continue,
                         }
                     }
