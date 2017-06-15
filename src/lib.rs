@@ -57,6 +57,10 @@
 
 #![forbid(unsafe_code)]
 
+#![cfg_attr(feature="flame_it", feature(plugin, custom_attribute))]
+#![cfg_attr(feature="flame_it", plugin(flamer))]
+
+
 #[macro_use]
 extern crate matches;
 
@@ -66,6 +70,10 @@ extern crate serde_derive;
 
 #[cfg(all(feature = "with_serde", test))]
 extern crate serde_test;
+
+#[cfg(feature="flame_it")]
+extern crate flame;
+
 
 pub mod deprecated;
 pub mod format_chars;
@@ -77,7 +85,7 @@ mod implicit;
 mod prepare;
 
 pub use char_data::{BidiClass, bidi_class, UNICODE_VERSION};
-pub use level::Level;
+pub use level::{Level, LTR_LEVEL, RTL_LEVEL};
 pub use prepare::LevelRun;
 
 use std::borrow::Cow;
@@ -127,6 +135,7 @@ impl<'text> InitialInfo<'text> {
     /// Also sets the class for each First Strong Isolate initiator (FSI) to LRI or RLI if a strong
     /// character is found before the matching PDI.  If no strong character is found, the class will
     /// remain FSI, and it's up to later stages to treat these as LRI when needed.
+    #[cfg_attr(feature="flame_it", flame)]
     pub fn new(text: &str, default_para_level: Option<Level>) -> InitialInfo {
         let mut original_classes = Vec::with_capacity(text.len());
 
@@ -137,21 +146,31 @@ impl<'text> InitialInfo<'text> {
         let mut para_start = 0;
         let mut para_level = default_para_level;
 
+        #[cfg(feature="flame_it")]
+        flame::start("InitialInfo::new(): iter text.char_indices()");
+
         for (i, c) in text.char_indices() {
             let class = bidi_class(c);
+
+            #[cfg(feature="flame_it")]
+            flame::start("original_classes.extend()");
+
             original_classes.extend(repeat(class).take(c.len_utf8()));
+
+            #[cfg(feature="flame_it")]
+            flame::end("original_classes.extend()");
+
             match class {
+
                 B => {
                     // P1. Split the text into separate paragraphs. The paragraph separator is kept
                     // with the previous paragraph.
                     let para_end = i + c.len_utf8();
-                    paragraphs.push(
-                        ParagraphInfo {
-                            range: para_start..para_end,
-                            // P3. If no character is found in p2, set the paragraph level to zero.
-                            level: para_level.unwrap_or(Level::ltr()),
-                        }
-                    );
+                    paragraphs.push(ParagraphInfo {
+                        range: para_start..para_end,
+                        // P3. If no character is found in p2, set the paragraph level to zero.
+                        level: para_level.unwrap_or(LTR_LEVEL),
+                    });
                     // Reset state for the start of the next paragraph.
                     para_start = para_end;
                     // TODO: Support defaulting to direction of previous paragraph
@@ -160,6 +179,7 @@ impl<'text> InitialInfo<'text> {
                     para_level = default_para_level;
                     isolate_stack.clear();
                 }
+
                 L | R | AL => {
                     match isolate_stack.last() {
                         Some(&start) => {
@@ -172,40 +192,39 @@ impl<'text> InitialInfo<'text> {
                                 }
                             }
                         }
+
                         None => {
                             if para_level.is_none() {
                                 // P2. Find the first character of type L, AL, or R, while skipping
                                 // any characters between an isolate initiator and its matching
                                 // PDI.
-                                para_level = Some(
-                                    if class != L {
-                                        Level::rtl()
-                                    } else {
-                                        Level::ltr()
-                                    }
-                                );
+                                para_level = Some(if class != L { RTL_LEVEL } else { LTR_LEVEL });
                             }
                         }
                     }
                 }
+
                 RLI | LRI | FSI => {
                     isolate_stack.push(i);
                 }
+
                 PDI => {
                     isolate_stack.pop();
                 }
+
                 _ => {}
             }
         }
         if para_start < text.len() {
-            paragraphs.push(
-                ParagraphInfo {
-                    range: para_start..text.len(),
-                    level: para_level.unwrap_or(Level::ltr()),
-                }
-            );
+            paragraphs.push(ParagraphInfo {
+                range: para_start..text.len(),
+                level: para_level.unwrap_or(LTR_LEVEL),
+            });
         }
-        assert!(original_classes.len() == text.len());
+        assert_eq!(original_classes.len(), text.len());
+
+        #[cfg(feature="flame_it")]
+        flame::end("InitialInfo::new(): iter text.char_indices()");
 
         InitialInfo {
             text: text,
@@ -246,11 +265,12 @@ impl<'text> BidiInfo<'text> {
     /// text that is entirely LTR.  See the `nsBidi` class from Gecko for comparison.
     ///
     /// TODO: Support auto-RTL base direction
+    #[cfg_attr(feature="flame_it", flame)]
     pub fn new(text: &str, default_para_level: Option<Level>) -> BidiInfo {
         let InitialInfo {
-            text: _,
             original_classes,
             paragraphs,
+            ..
         } = InitialInfo::new(text, default_para_level);
 
         let mut levels = Vec::<Level>::with_capacity(text.len());
@@ -268,19 +288,19 @@ impl<'text> BidiInfo<'text> {
             explicit::compute(
                 text,
                 para.level,
-                &original_classes,
+                original_classes,
                 levels,
                 processing_classes,
             );
 
-            let sequences = prepare::isolating_run_sequences(para.level, &original_classes, levels);
+            let sequences = prepare::isolating_run_sequences(para.level, original_classes, levels);
             for sequence in &sequences {
                 implicit::resolve_weak(sequence, processing_classes);
                 implicit::resolve_neutral(sequence, levels, processing_classes);
             }
             implicit::resolve_levels(processing_classes, levels);
 
-            assign_levels_to_removed_chars(para.level, &original_classes, levels);
+            assign_levels_to_removed_chars(para.level, original_classes, levels);
         }
 
         BidiInfo {
@@ -293,6 +313,7 @@ impl<'text> BidiInfo<'text> {
 
     /// Re-order a line based on resolved levels and return only the embedding levels, one `Level`
     /// per *byte*.
+    #[cfg_attr(feature="flame_it", flame)]
     pub fn reordered_levels(&self, para: &ParagraphInfo, line: Range<usize>) -> Vec<Level> {
         let (levels, _) = self.visual_runs(para, line.clone());
         levels
@@ -300,6 +321,7 @@ impl<'text> BidiInfo<'text> {
 
     /// Re-order a line based on resolved levels and return only the embedding levels, one `Level`
     /// per *character*.
+    #[cfg_attr(feature="flame_it", flame)]
     pub fn reordered_levels_per_char(
         &self,
         para: &ParagraphInfo,
@@ -311,6 +333,7 @@ impl<'text> BidiInfo<'text> {
 
 
     /// Re-order a line based on resolved levels and return the line in display order.
+    #[cfg_attr(feature="flame_it", flame)]
     pub fn reorder_line(&self, para: &ParagraphInfo, line: Range<usize>) -> Cow<'text, str> {
         let (levels, runs) = self.visual_runs(para, line.clone());
 
@@ -335,6 +358,7 @@ impl<'text> BidiInfo<'text> {
     /// `line` is a range of bytes indices within `levels`.
     ///
     /// http://www.unicode.org/reports/tr9/#Reordering_Resolved_Levels
+    #[cfg_attr(feature="flame_it", flame)]
     pub fn visual_runs(
         &self,
         para: &ParagraphInfo,
@@ -356,7 +380,7 @@ impl<'text> BidiInfo<'text> {
                 RLE | LRE | RLO | LRO | PDF | BN => {}
                 // Segment separator, Paragraph separator
                 B | S => {
-                    assert!(reset_to == None);
+                    assert_eq!(reset_to, None);
                     reset_to = Some(i + c.len_utf8());
                     if reset_from == None {
                         reset_from = Some(i);
@@ -438,9 +462,9 @@ impl<'text> BidiInfo<'text> {
 
                 seq_start = seq_end;
             }
-            max_level
-                .lower(1)
-                .expect("Lowering embedding level below zero");
+            max_level.lower(1).expect(
+                "Lowering embedding level below zero",
+            );
         }
 
         (levels, runs)
@@ -459,6 +483,7 @@ impl<'text> BidiInfo<'text> {
 ///
 /// The levels assigned to these characters are not specified by the algorithm.  This function
 /// assigns each one the level of the previous character, to avoid breaking level runs.
+#[cfg_attr(feature="flame_it", flame)]
 fn assign_levels_to_removed_chars(para_level: Level, classes: &[BidiClass], levels: &mut [Level]) {
     for i in 0..levels.len() {
         if prepare::removed_by_x9(classes[i]) {
@@ -483,7 +508,7 @@ mod tests {
                 paragraphs: vec![
                     ParagraphInfo {
                         range: 0..2,
-                        level: Level::ltr(),
+                        level: LTR_LEVEL,
                     },
                 ],
             }
@@ -498,7 +523,7 @@ mod tests {
                 paragraphs: vec![
                     ParagraphInfo {
                         range: 0..5,
-                        level: Level::rtl(),
+                        level: RTL_LEVEL,
                     },
                 ],
             }
@@ -513,11 +538,11 @@ mod tests {
                 paragraphs: vec![
                     ParagraphInfo {
                         range: 0..4,
-                        level: Level::ltr(),
+                        level: LTR_LEVEL,
                     },
                     ParagraphInfo {
                         range: 4..5,
-                        level: Level::ltr(),
+                        level: LTR_LEVEL,
                     },
                 ],
             }
@@ -532,7 +557,7 @@ mod tests {
                 paragraphs: vec![
                     ParagraphInfo {
                         range: 0..9,
-                        level: Level::ltr(),
+                        level: LTR_LEVEL,
                     },
                 ],
             }
@@ -543,7 +568,7 @@ mod tests {
     fn test_process_text() {
         let text = "abc123";
         assert_eq!(
-            BidiInfo::new(text, Some(Level::ltr())),
+            BidiInfo::new(text, Some(LTR_LEVEL)),
             BidiInfo {
                 text: &text,
                 levels: Level::vec(&[0, 0, 0, 0, 0, 0]),
@@ -551,7 +576,7 @@ mod tests {
                 paragraphs: vec![
                     ParagraphInfo {
                         range: 0..6,
-                        level: Level::ltr(),
+                        level: LTR_LEVEL,
                     },
                 ],
             }
@@ -559,7 +584,7 @@ mod tests {
 
         let text = "abc אבג";
         assert_eq!(
-            BidiInfo::new(text, Some(Level::ltr())),
+            BidiInfo::new(text, Some(LTR_LEVEL)),
             BidiInfo {
                 text: &text,
                 levels: Level::vec(&[0, 0, 0, 0, 1, 1, 1, 1, 1, 1]),
@@ -567,13 +592,13 @@ mod tests {
                 paragraphs: vec![
                     ParagraphInfo {
                         range: 0..10,
-                        level: Level::ltr(),
+                        level: LTR_LEVEL,
                     },
                 ],
             }
         );
         assert_eq!(
-            BidiInfo::new(text, Some(Level::rtl())),
+            BidiInfo::new(text, Some(RTL_LEVEL)),
             BidiInfo {
                 text: &text,
                 levels: Level::vec(&[2, 2, 2, 1, 1, 1, 1, 1, 1, 1]),
@@ -581,7 +606,7 @@ mod tests {
                 paragraphs: vec![
                     ParagraphInfo {
                         range: 0..10,
-                        level: Level::rtl(),
+                        level: RTL_LEVEL,
                     },
                 ],
             }
@@ -589,7 +614,7 @@ mod tests {
 
         let text = "אבג abc";
         assert_eq!(
-            BidiInfo::new(text, Some(Level::ltr())),
+            BidiInfo::new(text, Some(LTR_LEVEL)),
             BidiInfo {
                 text: &text,
                 levels: Level::vec(&[1, 1, 1, 1, 1, 1, 0, 0, 0, 0]),
@@ -597,7 +622,7 @@ mod tests {
                 paragraphs: vec![
                     ParagraphInfo {
                         range: 0..10,
-                        level: Level::ltr(),
+                        level: LTR_LEVEL,
                     },
                 ],
             }
@@ -611,7 +636,7 @@ mod tests {
                 paragraphs: vec![
                     ParagraphInfo {
                         range: 0..10,
-                        level: Level::rtl(),
+                        level: RTL_LEVEL,
                     },
                 ],
             }
@@ -619,7 +644,7 @@ mod tests {
 
         let text = "غ2ظ א2ג";
         assert_eq!(
-            BidiInfo::new(text, Some(Level::ltr())),
+            BidiInfo::new(text, Some(LTR_LEVEL)),
             BidiInfo {
                 text: &text,
                 levels: Level::vec(&[1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 1]),
@@ -627,7 +652,7 @@ mod tests {
                 paragraphs: vec![
                     ParagraphInfo {
                         range: 0..11,
-                        level: Level::ltr(),
+                        level: LTR_LEVEL,
                     },
                 ],
             }
@@ -643,11 +668,11 @@ mod tests {
                 paragraphs: vec![
                     ParagraphInfo {
                         range: 0..6,
-                        level: Level::ltr(),
+                        level: LTR_LEVEL,
                     },
                     ParagraphInfo {
                         range: 6..8,
-                        level: Level::rtl(),
+                        level: RTL_LEVEL,
                     },
                 ],
             }
@@ -662,24 +687,18 @@ mod tests {
     fn test_bidi_info_has_rtl() {
         // ASCII only
         assert_eq!(BidiInfo::new("123", None).has_rtl(), false);
-        assert_eq!(BidiInfo::new("123", Some(Level::ltr())).has_rtl(), false);
-        assert_eq!(BidiInfo::new("123", Some(Level::rtl())).has_rtl(), false);
+        assert_eq!(BidiInfo::new("123", Some(LTR_LEVEL)).has_rtl(), false);
+        assert_eq!(BidiInfo::new("123", Some(RTL_LEVEL)).has_rtl(), false);
         assert_eq!(BidiInfo::new("abc", None).has_rtl(), false);
-        assert_eq!(BidiInfo::new("abc", Some(Level::ltr())).has_rtl(), false);
-        assert_eq!(BidiInfo::new("abc", Some(Level::rtl())).has_rtl(), false);
+        assert_eq!(BidiInfo::new("abc", Some(LTR_LEVEL)).has_rtl(), false);
+        assert_eq!(BidiInfo::new("abc", Some(RTL_LEVEL)).has_rtl(), false);
         assert_eq!(BidiInfo::new("abc 123", None).has_rtl(), false);
         assert_eq!(BidiInfo::new("abc\n123", None).has_rtl(), false);
 
         // With Hebrew
         assert_eq!(BidiInfo::new("אבּג", None).has_rtl(), true);
-        assert_eq!(
-            BidiInfo::new("אבּג", Some(Level::ltr())).has_rtl(),
-            true
-        );
-        assert_eq!(
-            BidiInfo::new("אבּג", Some(Level::rtl())).has_rtl(),
-            true
-        );
+        assert_eq!(BidiInfo::new("אבּג", Some(LTR_LEVEL)).has_rtl(), true);
+        assert_eq!(BidiInfo::new("אבּג", Some(RTL_LEVEL)).has_rtl(), true);
         assert_eq!(BidiInfo::new("abc אבּג", None).has_rtl(), true);
         assert_eq!(BidiInfo::new("abc\nאבּג", None).has_rtl(), true);
         assert_eq!(BidiInfo::new("אבּג abc", None).has_rtl(), true);
@@ -788,7 +807,9 @@ mod tests {
         bidi_info
             .paragraphs
             .iter()
-            .map(|para| bidi_info.reordered_levels_per_char(para, para.range.clone()))
+            .map(|para| {
+                bidi_info.reordered_levels_per_char(para, para.range.clone())
+            })
             .collect()
     }
 

@@ -18,8 +18,9 @@ use BidiClass::*;
 
 /// Compute explicit embedding levels for one paragraph of text (X1-X8).
 ///
-/// `processing_classes[i]` must contain the BidiClass of the char at byte index `i`,
+/// `processing_classes[i]` must contain the `BidiClass` of the char at byte index `i`,
 /// for each char in `text`.
+#[cfg_attr(feature="flame_it", flame)]
 pub fn compute(
     text: &str,
     para_level: Level,
@@ -27,7 +28,7 @@ pub fn compute(
     levels: &mut [Level],
     processing_classes: &mut [BidiClass],
 ) {
-    assert!(text.len() == original_classes.len());
+    assert_eq!(text.len(), original_classes.len());
 
     // http://www.unicode.org/reports/tr9/#X1
     let mut stack = DirectionalStatusStack::new();
@@ -64,12 +65,13 @@ pub fn compute(
                    overflow_embedding_count == 0 {
                     let new_level = new_level.unwrap();
                     stack.push(
-                        new_level, match original_classes[i] {
+                        new_level,
+                        match original_classes[i] {
                             RLO => OverrideStatus::RTL,
                             LRO => OverrideStatus::LTR,
                             RLI | LRI | FSI => OverrideStatus::Isolate,
                             _ => OverrideStatus::Neutral,
-                        }
+                        },
                     );
                     if is_isolate {
                         valid_isolate_count += 1;
@@ -94,8 +96,8 @@ pub fn compute(
                     loop {
                         // Pop everything up to and including the last Isolate status.
                         match stack.vec.pop() {
+                            None |
                             Some(Status { status: OverrideStatus::Isolate, .. }) => break,
-                            None => break,
                             _ => continue,
                         }
                     }
@@ -174,13 +176,10 @@ impl DirectionalStatusStack {
     }
 
     fn push(&mut self, level: Level, status: OverrideStatus) {
-        self.vec
-            .push(
-                Status {
-                    level: level,
-                    status: status,
-                }
-            );
+        self.vec.push(Status {
+            level: level,
+            status: status,
+        });
     }
 
     fn last(&self) -> &Status {
