@@ -41,7 +41,7 @@ pub struct IsolatingRunSequence {
 /// whose matching PDI is the first character of the next level run in the sequence.
 ///
 /// Note: This function does *not* return the sequences in order by their first characters.
-#[cfg_attr(feature="flame_it", flame)]
+#[cfg_attr(feature = "flame_it", flame)]
 pub fn isolating_run_sequences(
     para_level: Level,
     original_classes: &[BidiClass],
@@ -106,9 +106,9 @@ pub fn isolating_run_sequences(
             }
 
             // Get the level of the last non-removed char before the runs.
-            let pred_level = match original_classes[..start_of_seq].iter().rposition(
-                not_removed_by_x9,
-            ) {
+            let pred_level = match original_classes[..start_of_seq]
+                .iter()
+                .rposition(not_removed_by_x9) {
                 Some(idx) => levels[idx],
                 None => para_level,
             };
@@ -117,9 +117,9 @@ pub fn isolating_run_sequences(
             let succ_level = if matches!(original_classes[end_of_seq - 1], RLI | LRI | FSI) {
                 para_level
             } else {
-                match original_classes[end_of_seq..].iter().position(
-                    not_removed_by_x9,
-                ) {
+                match original_classes[end_of_seq..]
+                    .iter()
+                    .position(not_removed_by_x9) {
                     Some(idx) => levels[end_of_seq + idx],
                     None => para_level,
                 }

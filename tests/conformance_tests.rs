@@ -297,7 +297,8 @@ fn test_gen_char_from_bidi_class() {
         RLO,
         S,
         WS,
-    ] {
+    ]
+    {
         let class_name = format!("{:?}", class);
         let sample_char = gen_char_from_bidi_class(&class_name);
         assert_eq!(bidi_class(sample_char), class);

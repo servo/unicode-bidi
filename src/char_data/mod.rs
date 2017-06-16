@@ -107,7 +107,8 @@ mod tests {
                 (0x1EEFF, AL),
                 (0x1EF00, R),
                 (0x1EFFF, R),
-            ] {
+            ]
+        {
             assert_eq!(bidi_class(char::from_u32(input).unwrap()), expected);
         }
     }

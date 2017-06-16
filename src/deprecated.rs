@@ -79,9 +79,9 @@ pub fn visual_runs(line: Range<usize>, levels: &[Level]) -> Vec<LevelRun> {
 
             seq_start = seq_end;
         }
-        max_level.lower(1).expect(
-            "Lowering embedding level below zero",
-        );
+        max_level
+            .lower(1)
+            .expect("Lowering embedding level below zero");
     }
 
     runs

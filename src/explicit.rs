@@ -20,7 +20,7 @@ use BidiClass::*;
 ///
 /// `processing_classes[i]` must contain the `BidiClass` of the char at byte index `i`,
 /// for each char in `text`.
-#[cfg_attr(feature="flame_it", flame)]
+#[cfg_attr(feature = "flame_it", flame)]
 pub fn compute(
     text: &str,
     para_level: Level,
@@ -62,7 +62,8 @@ pub fn compute(
                     last_level.new_explicit_next_ltr()
                 };
                 if new_level.is_ok() && overflow_isolate_count == 0 &&
-                   overflow_embedding_count == 0 {
+                    overflow_embedding_count == 0
+                {
                     let new_level = new_level.unwrap();
                     stack.push(
                         new_level,

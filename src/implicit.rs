@@ -20,7 +20,7 @@ use BidiClass::*;
 /// 3.3.4 Resolving Weak Types
 ///
 /// http://www.unicode.org/reports/tr9/#Resolving_Weak_Types
-#[cfg_attr(feature="flame_it", flame)]
+#[cfg_attr(feature = "flame_it", flame)]
 pub fn resolve_weak(sequence: &IsolatingRunSequence, processing_classes: &mut [BidiClass]) {
     // FIXME (#8): This function applies steps W1-W6 in a single pass.  This can produce
     // incorrect results in cases where a "later" rule changes the value of `prev_class` seen
@@ -38,9 +38,11 @@ pub fn resolve_weak(sequence: &IsolatingRunSequence, processing_classes: &mut [B
     fn id(x: LevelRun) -> LevelRun {
         x
     }
-    let mut indices = sequence.runs.iter().cloned().flat_map(
-        id as fn(LevelRun) -> LevelRun,
-    );
+    let mut indices = sequence
+        .runs
+        .iter()
+        .cloned()
+        .flat_map(id as fn(LevelRun) -> LevelRun);
 
     while let Some(i) = indices.next() {
         match processing_classes[i] {
@@ -135,7 +137,7 @@ pub fn resolve_weak(sequence: &IsolatingRunSequence, processing_classes: &mut [B
 /// 3.3.5 Resolving Neutral Types
 ///
 /// http://www.unicode.org/reports/tr9/#Resolving_Neutral_Types
-#[cfg_attr(feature="flame_it", flame)]
+#[cfg_attr(feature = "flame_it", flame)]
 pub fn resolve_neutral(
     sequence: &IsolatingRunSequence,
     levels: &[Level],
@@ -200,7 +202,7 @@ pub fn resolve_neutral(
 /// Returns the maximum embedding level in the paragraph.
 ///
 /// http://www.unicode.org/reports/tr9/#Resolving_Implicit_Levels
-#[cfg_attr(feature="flame_it", flame)]
+#[cfg_attr(feature = "flame_it", flame)]
 pub fn resolve_levels(original_classes: &[BidiClass], levels: &mut [Level]) -> Level {
     let mut max_level = Level::ltr();
 
