@@ -19,18 +19,21 @@ notifications:
   email:
     on_success: never
 
+env:
+  - RUST_BACKTRACE=1
+
 script:
   - cargo build --verbose
   - cargo doc   --verbose --no-deps
 
-  - RUST_BACKTRACE=1 cargo test  --verbose
-  - RUST_BACKTRACE=1 cargo test  --verbose --features with_serde
+  - cargo test  --verbose
+  - cargo test  --verbose --features 'with_serde'
 
+  # Stop here if not running on nightly rust
   - if [ "$TRAVIS_RUST_VERSION" != "nightly" ] ; then exit ; fi
 
-  - RUST_BACKTRACE=1 cargo test --verbose --features bench_it
-  - RUST_BACKTRACE=1 cargo test --verbose --features flame_it
+  - cargo test  --verbose --features 'bench_it'
+  - cargo bench --verbose --features 'bench_it'
 
-  - cargo run --verbose --features flame_it --example flame_udhr
-
-  - cargo bench --verbose --features bench_it
+  - cargo test  --verbose --features 'flame_it'
+  - cargo run   --verbose --features 'flame_it' --example 'flame_udhr'
