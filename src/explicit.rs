@@ -9,7 +9,7 @@
 
 //! 3.3.2 Explicit Levels and Directions
 //!
-//! http://www.unicode.org/reports/tr9/#Explicit_Levels_and_Directions
+//! <http://www.unicode.org/reports/tr9/#Explicit_Levels_and_Directions>
 
 use super::char_data::{BidiClass, is_rtl};
 use super::level::Level;
@@ -30,7 +30,7 @@ pub fn compute(
 ) {
     assert_eq!(text.len(), original_classes.len());
 
-    // http://www.unicode.org/reports/tr9/#X1
+    // <http://www.unicode.org/reports/tr9/#X1>
     let mut stack = DirectionalStatusStack::new();
     stack.push(para_level, OverrideStatus::Neutral);
 
@@ -88,7 +88,7 @@ pub fn compute(
                 }
             }
 
-            // http://www.unicode.org/reports/tr9/#X6a
+            // <http://www.unicode.org/reports/tr9/#X6a>
             PDI => {
                 if overflow_isolate_count > 0 {
                     overflow_isolate_count -= 1;
@@ -113,7 +113,7 @@ pub fn compute(
                 }
             }
 
-            // http://www.unicode.org/reports/tr9/#X7
+            // <http://www.unicode.org/reports/tr9/#X7>
             PDF => {
                 if overflow_isolate_count > 0 {
                     continue;
@@ -133,7 +133,7 @@ pub fn compute(
             // Nothing
             B | BN => {}
 
-            // http://www.unicode.org/reports/tr9/#X6
+            // <http://www.unicode.org/reports/tr9/#X6>
             _ => {
                 let last = stack.last();
                 levels[i] = last.level;

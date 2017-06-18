@@ -53,7 +53,7 @@
 //! ]);
 //! ```
 //!
-//! [tr9]: http://www.unicode.org/reports/tr9/
+//! [tr9]: <http://www.unicode.org/reports/tr9/>
 
 #![forbid(unsafe_code)]
 
@@ -107,13 +107,13 @@ pub struct ParagraphInfo {
 
     /// The paragraph embedding level.
     ///
-    /// http://www.unicode.org/reports/tr9/#BD4
+    /// <http://www.unicode.org/reports/tr9/#BD4>
     pub level: Level,
 }
 
-/// Initial bidi information of the text
+/// Initial bidi information of the text.
 ///
-/// Contains the paragraphs and BidiClasses in a string of text.
+/// Contains the text paragraphs and `BidiClass` of its characters.
 #[derive(PartialEq, Debug)]
 pub struct InitialInfo<'text> {
     /// The text
@@ -130,7 +130,7 @@ pub struct InitialInfo<'text> {
 impl<'text> InitialInfo<'text> {
     /// Find the paragraphs and BidiClasses in a string of text.
     ///
-    /// http://www.unicode.org/reports/tr9/#The_Paragraph_Level
+    /// <http://www.unicode.org/reports/tr9/#The_Paragraph_Level>
     ///
     /// Also sets the class for each First Strong Isolate initiator (FSI) to LRI or RLI if a strong
     /// character is found before the matching PDI.  If no strong character is found, the class will
@@ -172,7 +172,7 @@ impl<'text> InitialInfo<'text> {
                     para_start = para_end;
                     // TODO: Support defaulting to direction of previous paragraph
                     //
-                    // http://www.unicode.org/reports/tr9/#HL1
+                    // <http://www.unicode.org/reports/tr9/#HL1>
                     para_level = default_para_level;
                     isolate_stack.clear();
                 }
@@ -230,7 +230,7 @@ impl<'text> InitialInfo<'text> {
     }
 }
 
-/// Bidi information of the text
+/// Bidi information of the text.
 ///
 /// The `original_classes` and `levels` vectors are indexed by byte offsets into the text.  If a
 /// character is multiple bytes wide, then its class and level will appear multiple times in these
@@ -353,7 +353,7 @@ impl<'text> BidiInfo<'text> {
     ///
     /// `line` is a range of bytes indices within `levels`.
     ///
-    /// http://www.unicode.org/reports/tr9/#Reordering_Resolved_Levels
+    /// <http://www.unicode.org/reports/tr9/#Reordering_Resolved_Levels>
     #[cfg_attr(feature = "flame_it", flame)]
     pub fn visual_runs(
         &self,
@@ -366,7 +366,7 @@ impl<'text> BidiInfo<'text> {
         let mut levels = self.levels.clone();
 
         // Reset some whitespace chars to paragraph level.
-        // http://www.unicode.org/reports/tr9/#L1
+        // <http://www.unicode.org/reports/tr9/#L1>
         let line_str: &str = &self.text[line.clone()];
         let mut reset_from: Option<usize> = Some(0);
         let mut reset_to: Option<usize> = None;
@@ -393,6 +393,7 @@ impl<'text> BidiInfo<'text> {
                 }
             }
             if let (Some(from), Some(to)) = (reset_from, reset_to) {
+                #[cfg_attr(feature="cargo-clippy", allow(needless_range_loop))]
                 for j in from..to {
                     levels[j] = para.level;
                 }
@@ -401,6 +402,7 @@ impl<'text> BidiInfo<'text> {
             }
         }
         if let Some(from) = reset_from {
+            #[cfg_attr(feature="cargo-clippy", allow(needless_range_loop))]
             for j in from..line_str.len() {
                 levels[j] = para.level;
             }
@@ -409,20 +411,18 @@ impl<'text> BidiInfo<'text> {
         // Find consecutive level runs.
         let mut runs = Vec::new();
         let mut start = line.start;
-        let mut level = levels[start];
-        let mut min_level = level;
-        let mut max_level = level;
+        let mut run_level = levels[start];
+        let mut min_level = run_level;
+        let mut max_level = run_level;
 
-        for i in (start + 1)..line.end {
-            let new_level = levels[i];
-            if new_level != level {
+        for (i, &new_level) in levels.iter().enumerate().take(line.end).skip(start + 1) {
+            if new_level != run_level {
                 // End of the previous run, start of a new one.
                 runs.push(start..i);
                 start = i;
-                level = new_level;
-
-                min_level = min(level, min_level);
-                max_level = max(level, max_level);
+                run_level = new_level;
+                min_level = min(run_level, min_level);
+                max_level = max(run_level, max_level);
             }
         }
         runs.push(start..line.end);
@@ -430,7 +430,7 @@ impl<'text> BidiInfo<'text> {
         let run_count = runs.len();
 
         // Re-order the odd runs.
-        // http://www.unicode.org/reports/tr9/#L2
+        // <http://www.unicode.org/reports/tr9/#L2>
 
         // Stop at the lowest *odd* level.
         min_level = min_level.new_lowest_ge_rtl().expect("Level error");

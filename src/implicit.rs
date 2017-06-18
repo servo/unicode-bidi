@@ -19,7 +19,7 @@ use BidiClass::*;
 
 /// 3.3.4 Resolving Weak Types
 ///
-/// http://www.unicode.org/reports/tr9/#Resolving_Weak_Types
+/// <http://www.unicode.org/reports/tr9/#Resolving_Weak_Types>
 #[cfg_attr(feature = "flame_it", flame)]
 pub fn resolve_weak(sequence: &IsolatingRunSequence, processing_classes: &mut [BidiClass]) {
     // FIXME (#8): This function applies steps W1-W6 in a single pass.  This can produce
@@ -46,7 +46,7 @@ pub fn resolve_weak(sequence: &IsolatingRunSequence, processing_classes: &mut [B
 
     while let Some(i) = indices.next() {
         match processing_classes[i] {
-            // http://www.unicode.org/reports/tr9/#W1
+            // <http://www.unicode.org/reports/tr9/#W1>
             NSM => {
                 processing_classes[i] = match prev_class {
                     RLI | LRI | FSI | PDI => ON,
@@ -65,10 +65,10 @@ pub fn resolve_weak(sequence: &IsolatingRunSequence, processing_classes: &mut [B
                     et_run_indices.clear();
                 }
             }
-            // http://www.unicode.org/reports/tr9/#W3
+            // <http://www.unicode.org/reports/tr9/#W3>
             AL => processing_classes[i] = R,
 
-            // http://www.unicode.org/reports/tr9/#W4
+            // <http://www.unicode.org/reports/tr9/#W4>
             ES | CS => {
                 let next_class = indices
                     .clone()
@@ -81,7 +81,7 @@ pub fn resolve_weak(sequence: &IsolatingRunSequence, processing_classes: &mut [B
                     (_, _, _) => ON,
                 }
             }
-            // http://www.unicode.org/reports/tr9/#W5
+            // <http://www.unicode.org/reports/tr9/#W5>
             ET => {
                 match prev_class {
                     EN => processing_classes[i] = EN,
@@ -136,7 +136,7 @@ pub fn resolve_weak(sequence: &IsolatingRunSequence, processing_classes: &mut [B
 
 /// 3.3.5 Resolving Neutral Types
 ///
-/// http://www.unicode.org/reports/tr9/#Resolving_Neutral_Types
+/// <http://www.unicode.org/reports/tr9/#Resolving_Neutral_Types>
 #[cfg_attr(feature = "flame_it", flame)]
 pub fn resolve_neutral(
     sequence: &IsolatingRunSequence,
@@ -180,8 +180,8 @@ pub fn resolve_neutral(
 
             // N1-N2.
             //
-            // http://www.unicode.org/reports/tr9/#N1
-            // http://www.unicode.org/reports/tr9/#N2
+            // <http://www.unicode.org/reports/tr9/#N1>
+            // <http://www.unicode.org/reports/tr9/#N2>
             let new_class = match (prev_class, next_class) {
                 (L, L) => L,
                 (R, R) | (R, AN) | (R, EN) | (AN, R) | (AN, AN) | (AN, EN) | (EN, R) |
@@ -201,7 +201,7 @@ pub fn resolve_neutral(
 ///
 /// Returns the maximum embedding level in the paragraph.
 ///
-/// http://www.unicode.org/reports/tr9/#Resolving_Implicit_Levels
+/// <http://www.unicode.org/reports/tr9/#Resolving_Implicit_Levels>
 #[cfg_attr(feature = "flame_it", flame)]
 pub fn resolve_levels(original_classes: &[BidiClass], levels: &mut [Level]) -> Level {
     let mut max_level = Level::ltr();
@@ -223,7 +223,7 @@ pub fn resolve_levels(original_classes: &[BidiClass], levels: &mut [Level]) -> L
 
 /// Neutral or Isolate formatting character (B, S, WS, ON, FSI, LRI, RLI, PDI)
 ///
-/// http://www.unicode.org/reports/tr9/#NI
+/// <http://www.unicode.org/reports/tr9/#NI>
 #[allow(non_snake_case)]
 fn is_NI(class: BidiClass) -> bool {
     matches!(class, B | S | WS | ON | FSI | LRI | RLI | PDI)

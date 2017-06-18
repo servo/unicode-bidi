@@ -10,11 +10,11 @@ pub const UNICODE_VERSION: (u64, u64, u64) = (9, 0, 0);
 #[allow(non_camel_case_types)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 /// Represents values of the Unicode character property
-/// [Bidi_Class](http://www.unicode.org/reports/tr44/#Bidi_Class), also
+/// [`Bidi_Class`](http://www.unicode.org/reports/tr44/#Bidi_Class), also
 /// known as the *bidirectional character type*.
 ///
-/// * http://www.unicode.org/reports/tr9/#Bidirectional_Character_Types
-/// * http://www.unicode.org/reports/tr44/#Bidi_Class_Values
+/// * <http://www.unicode.org/reports/tr9/#Bidirectional_Character_Types>
+/// * <http://www.unicode.org/reports/tr44/#Bidi_Class_Values>
 pub enum BidiClass {
     AL,
     AN,
