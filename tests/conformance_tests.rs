@@ -89,7 +89,7 @@ fn test_basic_conformance() {
                 if levels != exp_levels {
                     fails.push(Fail {
                         line_num: line_idx + 1,
-                        input_base_level: input_base_level,
+                        input_base_level,
                         input_classes: input_classes.iter().map(|x| x.to_string()).collect(),
                         input_string: input_string.to_owned(),
                         exp_base_level: None,
@@ -132,7 +132,7 @@ fn test_basic_conformance() {
 // TODO: Support auto-RTL
 fn gen_base_levels_for_base_tests(bitset: u8) -> Vec<Option<Level>> {
     /// Values: auto-LTR, LTR, RTL
-    const VALUES: &'static [Option<Level>] =
+    const VALUES: &[Option<Level>] =
         &[None, Some(level::LTR_LEVEL), Some(level::RTL_LEVEL)];
     assert!(bitset < (1 << VALUES.len()));
     (0..VALUES.len())
@@ -185,7 +185,7 @@ fn test_character_conformance() {
             if levels != exp_levels {
                 fails.push(Fail {
                     line_num: line_idx + 1,
-                    input_base_level: input_base_level,
+                    input_base_level,
                     input_classes: vec![],
                     input_string: input_string.to_owned(),
                     exp_base_level: Some(exp_base_level),
@@ -227,7 +227,7 @@ fn test_character_conformance() {
 // TODO: Support auto-RTL
 fn gen_base_level_for_characters_tests(idx: usize) -> Option<Level> {
     /// Values: LTR, RTL, auto-LTR
-    const VALUES: &'static [Option<Level>] =
+    const VALUES: &[Option<Level>] =
         &[Some(level::LTR_LEVEL), Some(level::RTL_LEVEL), None];
     assert!(idx < VALUES.len());
     VALUES[idx]
