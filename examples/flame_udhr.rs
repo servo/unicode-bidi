@@ -29,7 +29,7 @@ use unicode_bidi::BidiInfo;
 
 #[cfg(feature = "flame_it")]
 fn main() {
-    const BIDI_TEXT: &'static str = include_str!("../data/udhr/bidi/udhr_pes_1.txt");
+    const BIDI_TEXT: str = include_str!("../data/udhr/bidi/udhr_pes_1.txt");
 
     flame::start("main(): BidiInfo::new()");
     let bidi_info = BidiInfo::new(BIDI_TEXT, None);

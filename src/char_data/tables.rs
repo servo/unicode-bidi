@@ -42,7 +42,7 @@ pub enum BidiClass {
 }
 
 use self::BidiClass::*;
-pub const bidi_class_table: &'static [(char, char, BidiClass)] = &[
+pub const bidi_class_table: &[(char, char, BidiClass)] = &[
     ('\u{0}', '\u{8}', BN), ('\u{9}', '\u{9}', S), ('\u{a}', '\u{a}', B), ('\u{b}', '\u{b}', S),
     ('\u{c}', '\u{c}', WS), ('\u{d}', '\u{d}', B), ('\u{e}', '\u{1b}', BN), ('\u{1c}', '\u{1e}', B),
     ('\u{1f}', '\u{1f}', S), ('\u{20}', '\u{20}', WS), ('\u{21}', '\u{22}', ON), ('\u{23}',
