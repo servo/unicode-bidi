@@ -28,7 +28,7 @@ use super::char_data::BidiClass;
 ///
 /// <http://www.unicode.org/reports/tr9/#BD2>
 #[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "with_serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Level(u8);
 
 pub const LTR_LEVEL: Level = Level(0);
@@ -354,7 +354,7 @@ mod tests {
     }
 }
 
-#[cfg(all(feature = "with_serde", test))]
+#[cfg(all(feature = "serde", test))]
 mod serde_tests {
     use serde_test::{Token, assert_tokens};
     use super::*;

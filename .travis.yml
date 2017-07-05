@@ -28,6 +28,7 @@ script:
   - cargo doc   --verbose --no-deps
 
   - cargo test  --verbose
+  - cargo test  --verbose --features 'serde'
   - cargo test  --verbose --features 'with_serde'
 
   - if [ "$TRAVIS_RUST_VERSION" == "nightly" ]; then
