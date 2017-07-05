@@ -19,18 +19,22 @@ notifications:
   email:
     on_success: never
 
+env:
+  global:
+    - RUST_BACKTRACE=full
+
 script:
   - cargo build --verbose
   - cargo doc   --verbose --no-deps
 
-  - RUST_BACKTRACE=1 cargo test  --verbose
-  - RUST_BACKTRACE=1 cargo test  --verbose --features with_serde
+  - cargo test  --verbose
+  - cargo test  --verbose --features 'serde'
+  - cargo test  --verbose --features 'with_serde'
 
-  - if [ "$TRAVIS_RUST_VERSION" != "nightly" ] ; then exit ; fi
+  - if [ "$TRAVIS_RUST_VERSION" == "nightly" ]; then
+      cargo bench --verbose --features 'bench_it';
+    fi
 
-  - RUST_BACKTRACE=1 cargo test --verbose --features bench_it
-  - RUST_BACKTRACE=1 cargo test --verbose --features flame_it
-
-  - cargo run --verbose --features flame_it --example flame_udhr
-
-  - cargo bench --verbose --features bench_it
+  - if [ "$TRAVIS_RUST_VERSION" == "nightly" ]; then
+      cargo run   --verbose --features 'flame_it' --example 'flame_udhr';
+    fi

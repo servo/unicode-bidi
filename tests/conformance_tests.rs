@@ -132,8 +132,7 @@ fn test_basic_conformance() {
 // TODO: Support auto-RTL
 fn gen_base_levels_for_base_tests(bitset: u8) -> Vec<Option<Level>> {
     /// Values: auto-LTR, LTR, RTL
-    const VALUES: &[Option<Level>] =
-        &[None, Some(level::LTR_LEVEL), Some(level::RTL_LEVEL)];
+    const VALUES: &[Option<Level>] = &[None, Some(level::LTR_LEVEL), Some(level::RTL_LEVEL)];
     assert!(bitset < (1 << VALUES.len()));
     (0..VALUES.len())
         .filter(|bit| bitset & (1u8 << bit) == 1)
@@ -227,8 +226,7 @@ fn test_character_conformance() {
 // TODO: Support auto-RTL
 fn gen_base_level_for_characters_tests(idx: usize) -> Option<Level> {
     /// Values: LTR, RTL, auto-LTR
-    const VALUES: &[Option<Level>] =
-        &[Some(level::LTR_LEVEL), Some(level::RTL_LEVEL), None];
+    const VALUES: &[Option<Level>] = &[Some(level::LTR_LEVEL), Some(level::RTL_LEVEL), None];
     assert!(idx < VALUES.len());
     VALUES[idx]
 }
@@ -297,7 +295,8 @@ fn test_gen_char_from_bidi_class() {
         RLO,
         S,
         WS,
-    ] {
+    ]
+    {
         let class_name = format!("{:?}", class);
         let sample_char = gen_char_from_bidi_class(&class_name);
         assert_eq!(bidi_class(sample_char), class);

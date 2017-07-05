@@ -4,8 +4,7 @@
 #
 # Copyright 2011-2013 The Rust Project Developers.
 # Copyright 2015 The Servo Project Developers. See the COPYRIGHT
-# file at the top-level directory of this distribution and at
-# http://rust-lang.org/COPYRIGHT.
+# file at the top-level directory of this distribution.
 #
 # Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
 # http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
@@ -88,7 +87,7 @@ def load_unicode_data():
         bidi_class[bidi].append(code)
 
     # Default Bidi_Class for unassigned codepoints.
-    # http://www.unicode.org/Public/UNIDATA/extracted/DerivedBidiClass.txt
+    # <http://www.unicode.org/Public/UNIDATA/extracted/DerivedBidiClass.txt>
     default_ranges = [
         (0x0600, 0x07BF, "AL"), (0x08A0, 0x08FF, "AL"),
         (0xFB50, 0xFDCF, "AL"), (0xFDF0, 0xFDFF, "AL"),
@@ -176,11 +175,11 @@ def emit_bidi_module(file_, bidi_class_table, cats):
 #[allow(non_camel_case_types)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 /// Represents values of the Unicode character property
-/// [Bidi_Class](http://www.unicode.org/reports/tr44/#Bidi_Class), also
+/// [`Bidi_Class`](http://www.unicode.org/reports/tr44/#Bidi_Class), also
 /// known as the *bidirectional character type*.
 ///
-/// * http://www.unicode.org/reports/tr9/#Bidirectional_Character_Types
-/// * http://www.unicode.org/reports/tr44/#Bidi_Class_Values
+/// * <http://www.unicode.org/reports/tr9/#Bidirectional_Character_Types>
+/// * <http://www.unicode.org/reports/tr44/#Bidi_Class_Values>
 pub enum BidiClass {
 """)
     for cat in cats:
