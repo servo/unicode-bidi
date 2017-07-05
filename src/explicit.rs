@@ -177,10 +177,7 @@ impl DirectionalStatusStack {
     }
 
     fn push(&mut self, level: Level, status: OverrideStatus) {
-        self.vec.push(Status {
-            level,
-            status,
-        });
+        self.vec.push(Status { level, status });
     }
 
     fn last(&self) -> &Status {

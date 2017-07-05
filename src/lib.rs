@@ -393,7 +393,7 @@ impl<'text> BidiInfo<'text> {
                 }
             }
             if let (Some(from), Some(to)) = (reset_from, reset_to) {
-                #[cfg_attr(feature="cargo-clippy", allow(needless_range_loop))]
+                #[cfg_attr(feature = "cargo-clippy", allow(needless_range_loop))]
                 for j in from..to {
                     levels[j] = para.level;
                 }
@@ -402,7 +402,7 @@ impl<'text> BidiInfo<'text> {
             }
         }
         if let Some(from) = reset_from {
-            #[cfg_attr(feature="cargo-clippy", allow(needless_range_loop))]
+            #[cfg_attr(feature = "cargo-clippy", allow(needless_range_loop))]
             for j in from..line_str.len() {
                 levels[j] = para.level;
             }
@@ -458,9 +458,9 @@ impl<'text> BidiInfo<'text> {
 
                 seq_start = seq_end;
             }
-            max_level
-                .lower(1)
-                .expect("Lowering embedding level below zero");
+            max_level.lower(1).expect(
+                "Lowering embedding level below zero",
+            );
         }
 
         (levels, runs)
