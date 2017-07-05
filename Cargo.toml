@@ -8,7 +8,14 @@ repository = "https://github.com/servo/unicode-bidi"
 documentation = "http://doc.servo.org/unicode_bidi/"
 keywords = ["rtl", "unicode", "text", "layout", "bidi"]
 
-exclude = ["*.txt"]
+# No data is shipped; benches, examples and tests also depend on data.
+exclude = [
+    "benches/",
+    "data/",
+    "examples/",
+    "tests/",
+    "tools/",
+]
 
 [lib]
 name = "unicode_bidi"

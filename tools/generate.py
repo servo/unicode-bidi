@@ -16,7 +16,7 @@
 import fileinput, re, os, sys, operator
 
 
-DATA_DIR = 'data'
+DATA_DIR = 'data/ucd'
 TESTS_DATA_DIR = 'tests/data'
 README_NAME = "ReadMe.txt"
 UNICODE_DATA_NAME = "UnicodeData.txt"
