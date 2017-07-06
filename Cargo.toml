@@ -1,6 +1,6 @@
 [package]
 name = "unicode-bidi"
-version = "0.3.3"
+version = "0.3.4"
 authors = ["The Servo Project Developers"]
 license = "MIT / Apache-2.0"
 description = "Implementation of the Unicode Bidirectional Algorithm"
@@ -10,11 +10,11 @@ keywords = ["rtl", "unicode", "text", "layout", "bidi"]
 
 # No data is shipped; benches, examples and tests also depend on data.
 exclude = [
-    "benches/",
-    "data/",
-    "examples/",
-    "tests/",
-    "tools/",
+    "benches/**",
+    "data/**",
+    "examples/**",
+    "tests/**",
+    "tools/**",
 ]
 
 [lib]

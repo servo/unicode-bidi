@@ -31,10 +31,8 @@ script:
   - cargo test  --verbose --features 'serde'
   - cargo test  --verbose --features 'with_serde'
 
-  - if [ "$TRAVIS_RUST_VERSION" == "nightly" ]; then
-      cargo bench --verbose --features 'bench_it';
-    fi
+  - test "$TRAVIS_RUST_VERSION" != "nightly" ||
+    cargo bench --verbose --features 'bench_it'
 
-  - if [ "$TRAVIS_RUST_VERSION" == "nightly" ]; then
-      cargo run   --verbose --features 'flame_it' --example 'flame_udhr';
-    fi
+  - test "$TRAVIS_RUST_VERSION" != "nightly" ||
+    cargo run   --verbose --features 'flame_it' --example 'flame_udhr'
