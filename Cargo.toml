@@ -10,11 +10,11 @@ keywords = ["rtl", "unicode", "text", "layout", "bidi"]
 
 # No data is shipped; benches, examples and tests also depend on data.
 exclude = [
-    "benches/",
-    "data/",
-    "examples/",
-    "tests/",
-    "tools/",
+    "benches/**",
+    "data/**",
+    "examples/**",
+    "tests/**",
+    "tools/**",
 ]
 
 [lib]
