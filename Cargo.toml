@@ -17,6 +17,10 @@ exclude = [
     "tools/**",
 ]
 
+[badges]
+travis-ci = { repository = "servo/unicode-bidi" }
+appveyor = { repository = "servo/unicode-bidi" }
+
 [lib]
 name = "unicode_bidi"
 
