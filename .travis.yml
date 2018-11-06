@@ -15,7 +15,6 @@ matrix:
     - rust: nightly
 
 notifications:
-  webhooks: http://build.servo.org:54856/travis
   email:
     on_success: never
 
