@@ -11,17 +11,20 @@
 
 mod tables;
 
-pub use self::tables::{BidiClass, UNICODE_VERSION};
+pub use self::tables::{BidiClass};
 
 use std::cmp::Ordering::{Equal, Less, Greater};
 use std::char;
 
-use self::tables::bidi_class_table;
 use BidiClass::*;
+use self::tables::BIDI_CLASS;
+
+/// The [Unicode version](http://www.unicode.org/versions/) of data
+pub const UNICODE_VERSION: (u64, u64, u64) = (12, 1, 0);
 
 /// Find the `BidiClass` of a single char.
 pub fn bidi_class(c: char) -> BidiClass {
-    bsearch_range_value_table(c, bidi_class_table)
+    bsearch_range_value_table(c, BIDI_CLASS)
 }
 
 pub fn is_rtl(bidi_class: BidiClass) -> bool {
@@ -31,7 +34,8 @@ pub fn is_rtl(bidi_class: BidiClass) -> bool {
     }
 }
 
-fn bsearch_range_value_table(c: char, r: &'static [(char, char, BidiClass)]) -> BidiClass {
+fn bsearch_range_value_table(c: char, r: &'static [(u32, u32, BidiClass)]) -> BidiClass {
+    let c = c as u32;
     match r.binary_search_by(|&(lo, hi, _)| if lo <= c && c <= hi {
         Equal
     } else if hi < c {
