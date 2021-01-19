@@ -60,10 +60,6 @@
 #![cfg_attr(feature="flame_it", feature(plugin, custom_attribute))]
 #![cfg_attr(feature="flame_it", plugin(flamer))]
 
-
-#[macro_use]
-extern crate matches;
-
 #[cfg(feature = "serde")]
 #[macro_use]
 extern crate serde;
