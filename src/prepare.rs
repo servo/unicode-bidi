@@ -13,11 +13,10 @@
 
 use std::cmp::max;
 use std::ops::Range;
+use matches::matches;
 
-use super::char_data::BidiClass;
+use super::BidiClass::{self, *};
 use super::level::Level;
-
-use BidiClass::*;
 
 /// A maximal substring of characters with the same embedding level.
 ///
@@ -186,7 +185,7 @@ mod tests {
     }
 
     // From <http://www.unicode.org/reports/tr9/#BD13>
-    #[cfg_attr(rustfmt, rustfmt_skip)]
+    #[rustfmt::skip]
     #[test]
     fn test_isolating_run_sequences() {
 
@@ -231,7 +230,7 @@ mod tests {
     }
 
     // From <http://www.unicode.org/reports/tr9/#X10>
-    #[cfg_attr(rustfmt, rustfmt_skip)]
+    #[rustfmt::skip]
     #[test]
     fn test_isolating_run_sequences_sos_and_eos() {
 

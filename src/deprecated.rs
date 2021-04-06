@@ -9,9 +9,6 @@
 
 //! This module holds deprecated assets only.
 
-// Doesn't worth updating API here
-#![cfg_attr(feature="cargo-clippy", allow(needless_pass_by_value))]
-
 use super::*;
 
 /// Find the level runs within a line and return them in visual order.

@@ -7,10 +7,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![cfg(test)]
-
-extern crate unicode_bidi;
-
 use unicode_bidi::{bidi_class, BidiInfo, format_chars, level, Level};
 
 #[derive(Debug)]
