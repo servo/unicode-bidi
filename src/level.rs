@@ -328,7 +328,8 @@ mod tests {
     #[test]
     fn test_into() {
         let level = Level::rtl();
-        assert_eq!(1u8, level.into());
+        let number: u8 = level.into();
+        assert_eq!(1u8, number);
     }
 
     #[test]
