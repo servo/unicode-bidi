@@ -20,7 +20,7 @@ use super::level::Level;
 ///
 /// `processing_classes[i]` must contain the `BidiClass` of the char at byte index `i`,
 /// for each char in `text`.
-#[cfg_attr(feature = "flame_it", flame)]
+#[cfg_attr(feature = "flame_it", flamer::flame)]
 pub fn compute(
     text: &str,
     para_level: Level,
