@@ -17,7 +17,7 @@ use std::cmp::Ordering::{Equal, Less, Greater};
 use std::char;
 
 use self::tables::bidi_class_table;
-use BidiClass::*;
+use crate::BidiClass::*;
 
 /// Find the `BidiClass` of a single char.
 pub fn bidi_class(c: char) -> BidiClass {

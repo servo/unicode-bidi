@@ -11,10 +11,10 @@
 //!
 //! <http://www.unicode.org/reports/tr9/#Explicit_Levels_and_Directions>
 
-use super::char_data::{BidiClass, is_rtl};
-use super::level::Level;
+use matches::matches;
 
-use BidiClass::*;
+use super::char_data::{BidiClass::{self, *}, is_rtl};
+use super::level::Level;
 
 /// Compute explicit embedding levels for one paragraph of text (X1-X8).
 ///

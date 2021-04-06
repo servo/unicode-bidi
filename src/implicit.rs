@@ -10,12 +10,11 @@
 //! 3.3.4 - 3.3.6. Resolve implicit levels and types.
 
 use std::cmp::max;
+use matches::matches;
 
-use super::char_data::BidiClass;
+use super::char_data::BidiClass::{self, *};
 use super::prepare::{IsolatingRunSequence, LevelRun, not_removed_by_x9, removed_by_x9};
 use super::level::Level;
-
-use BidiClass::*;
 
 /// 3.3.4 Resolving Weak Types
 ///

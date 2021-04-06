@@ -10,25 +10,14 @@
 
 //! Profiling example
 
-#![allow(unused_imports)]
-
 #![cfg_attr(feature="flame_it", feature(plugin, custom_attribute))]
 #![cfg_attr(feature="flame_it", plugin(flamer))]
 
-
-#[cfg(feature = "flame_it")]
-extern crate flame;
-
-extern crate unicode_bidi;
-
-
-use std::fs::File;
-
-use unicode_bidi::BidiInfo;
-
-
 #[cfg(feature = "flame_it")]
 fn main() {
+    use std::fs::File;
+    use unicode_bidi::BidiInfo;
+
     const BIDI_TEXT: &str = include_str!("../data/udhr/bidi/udhr_pes_1.txt");
 
     flame::start("main(): BidiInfo::new()");
