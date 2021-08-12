@@ -11,9 +11,9 @@
 //!
 //! <http://www.unicode.org/reports/tr9/#Preparations_for_Implicit_Processing>
 
-use std::cmp::max;
-use std::ops::Range;
-use matches::matches;
+use core::cmp::max;
+use core::ops::Range;
+use alloc::vec::Vec;
 
 use super::BidiClass::{self, *};
 use super::level::Level;
@@ -73,7 +73,7 @@ pub fn isolating_run_sequences(
 
         sequence.push(run);
 
-        if matches!(end_class, RLI | LRI | FSI) {
+        if let RLI | LRI | FSI = end_class {
             // Resume this sequence after the isolate.
             stack.push(sequence);
         } else {
@@ -113,7 +113,7 @@ pub fn isolating_run_sequences(
             };
 
             // Get the level of the next non-removed char after the runs.
-            let succ_level = if matches!(original_classes[end_of_seq - 1], RLI | LRI | FSI) {
+            let succ_level = if let RLI | LRI | FSI = original_classes[end_of_seq - 1] {
                 para_level
             } else {
                 match original_classes[end_of_seq..].iter().position(
@@ -163,7 +163,10 @@ fn level_runs(levels: &[Level], original_classes: &[BidiClass]) -> Vec<LevelRun>
 ///
 /// <http://www.unicode.org/reports/tr9/#X9>
 pub fn removed_by_x9(class: BidiClass) -> bool {
-    matches!(class, RLE | LRE | RLO | LRO | PDF | BN)
+    match class {
+        RLE | LRE | RLO | LRO | PDF | BN => true,
+        _ => false,
+    }
 }
 
 // For use as a predicate for `position` / `rposition`

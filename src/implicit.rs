@@ -9,8 +9,8 @@
 
 //! 3.3.4 - 3.3.6. Resolve implicit levels and types.
 
-use std::cmp::max;
-use matches::matches;
+use core::cmp::max;
+use alloc::vec::Vec;
 
 use super::char_data::BidiClass::{self, *};
 use super::prepare::{IsolatingRunSequence, LevelRun, not_removed_by_x9, removed_by_x9};
@@ -223,5 +223,8 @@ pub fn resolve_levels(original_classes: &[BidiClass], levels: &mut [Level]) -> L
 /// <http://www.unicode.org/reports/tr9/#NI>
 #[allow(non_snake_case)]
 fn is_NI(class: BidiClass) -> bool {
-    matches!(class, B | S | WS | ON | FSI | LRI | RLI | PDI)
+    match class {
+        B | S | WS | ON | FSI | LRI | RLI | PDI => true,
+        _ => false,
+    }
 }

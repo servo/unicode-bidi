@@ -9,6 +9,11 @@ documentation = "https://docs.rs/unicode-bidi/"
 keywords = ["rtl", "unicode", "text", "layout", "bidi"]
 readme="README.md"
 edition = "2018"
+categories = [
+    "no-std",
+    "encoding",
+    "text-processing",
+]
 
 # No data is shipped; benches, examples and tests also depend on data.
 exclude = [
@@ -29,14 +34,16 @@ name = "unicode_bidi"
 [dependencies]
 flame = { version = "0.2", optional = true }
 flamer = { version = "0.4", optional = true }
-matches = "0.1"
-serde = { version = ">=0.8, <2.0", optional = true, features = ["derive"] }
+serde = { version = ">=0.8, <2.0", default-features = false, optional = true, features = ["derive"] }
 
 [dev-dependencies]
 serde_test = ">=0.8, <2.0"
 
 [features]
-default = []
+# Note: We don't actually use the `std` feature for anything other than making
+# doctests work. But it may come in handy in the future.
+default = ["std"]
+std = []
 unstable = []  # travis-cargo needs it
 bench_it = []
 flame_it = ["flame", "flamer"]

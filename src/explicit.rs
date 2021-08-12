@@ -11,7 +11,7 @@
 //!
 //! <http://www.unicode.org/reports/tr9/#Explicit_Levels_and_Directions>
 
-use matches::matches;
+use alloc::vec::Vec;
 
 use super::char_data::{BidiClass::{self, *}, is_rtl};
 use super::level::Level;
@@ -46,7 +46,10 @@ pub fn compute(
                 let last_level = stack.last().level;
 
                 // X5a-X5c: Isolate initiators get the level of the last entry on the stack.
-                let is_isolate = matches!(original_classes[i], RLI | LRI | FSI);
+                let is_isolate = match original_classes[i] {
+                    RLI | LRI | FSI => true,
+                    _ => false,
+                };
                 if is_isolate {
                     levels[i] = last_level;
                     match stack.last().status {

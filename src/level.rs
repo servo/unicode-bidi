@@ -13,7 +13,9 @@
 //!
 //! <http://www.unicode.org/reports/tr9/#BD2>
 
-use std::convert::{From, Into};
+use alloc::vec::Vec;
+use core::convert::{From, Into};
+use alloc::string::{String, ToString};
 
 use super::char_data::BidiClass;
 
