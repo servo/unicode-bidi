@@ -11,9 +11,10 @@
 //!
 //! <http://www.unicode.org/reports/tr9/#Preparations_for_Implicit_Processing>
 
-use std::cmp::max;
-use std::ops::Range;
+use core::cmp::max;
+use core::ops::Range;
 use matches::matches;
+use alloc::vec::Vec;
 
 use super::BidiClass::{self, *};
 use super::level::Level;

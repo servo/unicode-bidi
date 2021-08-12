@@ -53,9 +53,23 @@
 //! ]);
 //! ```
 //!
+//! # Features
+//!
+//! - `std`: Enabled by default, but can be disabled to make `unicode_bidi`
+//!   `#![no_std]` + `alloc` compatible.
+//! - `serde`: Adds [`serde::Serialize`] and [`serde::Deserialize`]
+//!   implementations to relevant types.
+//!
 //! [tr9]: <http://www.unicode.org/reports/tr9/>
 
 #![forbid(unsafe_code)]
+
+#![no_std]
+// We need to link to std to make doc tests work on older Rust versions
+#![cfg(feature = "std")]
+extern crate std;
+#[macro_use]
+extern crate alloc;
 
 pub mod deprecated;
 pub mod format_chars;
@@ -70,10 +84,12 @@ pub use crate::char_data::{BidiClass, bidi_class, UNICODE_VERSION};
 pub use crate::level::{Level, LTR_LEVEL, RTL_LEVEL};
 pub use crate::prepare::LevelRun;
 
-use std::borrow::Cow;
-use std::cmp::{max, min};
-use std::iter::repeat;
-use std::ops::Range;
+use alloc::borrow::Cow;
+use alloc::vec::Vec;
+use alloc::string::String;
+use core::cmp::{max, min};
+use core::iter::repeat;
+use core::ops::Range;
 
 use crate::BidiClass::*;
 use crate::format_chars as chars;

@@ -12,6 +12,7 @@
 //! <http://www.unicode.org/reports/tr9/#Explicit_Levels_and_Directions>
 
 use matches::matches;
+use alloc::vec::Vec;
 
 use super::char_data::{BidiClass::{self, *}, is_rtl};
 use super::level::Level;
