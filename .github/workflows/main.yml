@@ -30,3 +30,7 @@ jobs:
         with:
           command: test
           args: --features "serde"
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --no-default-features
