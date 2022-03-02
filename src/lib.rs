@@ -14,6 +14,7 @@
 //! ## Example
 //!
 //! ```rust
+//! # #[cfg(feature = "hardcoded-data")] {
 //! use unicode_bidi::BidiInfo;
 //!
 //! // This example text is defined using `concat!` because some browsers
@@ -51,12 +52,14 @@
 //!   "ב",
 //!   "א",
 //! ]);
+//! # } // feature = "hardcoded-data"
 //! ```
 //!
 //! # Features
 //!
 //! - `std`: Enabled by default, but can be disabled to make `unicode_bidi`
 //!   `#![no_std]` + `alloc` compatible.
+//! - `hardcoded-data`: Enabled by default. Includes hardcoded Unicode bidi data and more convenient APIs.
 //! - `serde`: Adds [`serde::Serialize`] and [`serde::Deserialize`]
 //!   implementations to relevant types.
 //!
@@ -528,6 +531,7 @@ fn assign_levels_to_removed_chars(para_level: Level, classes: &[BidiClass], leve
 
 
 #[cfg(test)]
+#[cfg(feature = "hardcoded-data")]
 mod tests {
     use super::*;
 
@@ -599,6 +603,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "hardcoded-data")]
     fn test_process_text() {
         let text = "abc123";
         assert_eq!(
@@ -718,6 +723,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "hardcoded-data")]
     fn test_bidi_info_has_rtl() {
         // ASCII only
         assert_eq!(BidiInfo::new("123", None).has_rtl(), false);
@@ -741,6 +747,7 @@ mod tests {
         assert_eq!(BidiInfo::new("אבּג\n123", None).has_rtl(), true);
     }
 
+    #[cfg(feature = "hardcoded-data")]
     fn reorder_paras(text: &str) -> Vec<Cow<'_, str>> {
         let bidi_info = BidiInfo::new(text, None);
         bidi_info
@@ -751,6 +758,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "hardcoded-data")]
     fn test_reorder_line() {
         // Bidi_Class: L L L B L L L B L L L
         assert_eq!(
@@ -848,6 +856,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "hardcoded-data")]
     fn test_reordered_levels() {
 
         // BidiTest:946 (LRI PDI)
