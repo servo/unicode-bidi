@@ -42,6 +42,8 @@ pub enum BidiClass {
 }
 
 use self::BidiClass::*;
+
+#[cfg(feature = "hardcoded-data")]
 pub const bidi_class_table: &'static [(char, char, BidiClass)] = &[
     ('\u{0}', '\u{8}', BN), ('\u{9}', '\u{9}', S), ('\u{a}', '\u{a}', B), ('\u{b}', '\u{b}', S),
     ('\u{c}', '\u{c}', WS), ('\u{d}', '\u{d}', B), ('\u{e}', '\u{1b}', BN), ('\u{1c}', '\u{1e}', B),

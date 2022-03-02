@@ -12,15 +12,20 @@
 mod tables;
 
 pub use self::tables::{BidiClass, UNICODE_VERSION};
-
+#[cfg(feature = "hardcoded-data")]
 use core::cmp::Ordering::{Equal, Less, Greater};
+#[cfg(feature = "hardcoded-data")]
 use core::char;
 
+#[cfg(feature = "hardcoded-data")]
 use self::tables::bidi_class_table;
 use crate::BidiClass::*;
+#[cfg(feature = "hardcoded-data")]
 use crate::BidiDataSource;
 
 /// Hardcoded Bidi data that ships with the unicode-bidi crate.
+///
+/// This can be enabled with the default `hardcoded-data` Cargo feature.
 #[cfg(feature = "hardcoded-data")]
 pub struct HardcodedBidiData;
 
