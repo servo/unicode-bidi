@@ -18,6 +18,16 @@ use core::char;
 
 use self::tables::bidi_class_table;
 use crate::BidiClass::*;
+use crate::BidiDataSource;
+
+/// Hardcoded Bidi data that ships with the unicode-bidi crate.
+pub struct HardcodedBidiData;
+
+impl BidiDataSource for HardcodedBidiData {
+    fn bidi_class(&self, c: char) -> BidiClass {
+        bsearch_range_value_table(c, bidi_class_table)
+    }
+}
 
 /// Find the `BidiClass` of a single char.
 pub fn bidi_class(c: char) -> BidiClass {

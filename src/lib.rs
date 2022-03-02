@@ -76,13 +76,15 @@ pub mod format_chars;
 pub mod level;
 
 mod char_data;
+mod data_source;
 mod explicit;
 mod implicit;
 mod prepare;
 
-pub use crate::char_data::{BidiClass, bidi_class, UNICODE_VERSION};
+pub use crate::char_data::{BidiClass, HardcodedBidiData, bidi_class, UNICODE_VERSION};
 pub use crate::level::{Level, LTR_LEVEL, RTL_LEVEL};
 pub use crate::prepare::LevelRun;
+pub use crate::data_source::BidiDataSource;
 
 use alloc::borrow::Cow;
 use alloc::vec::Vec;
