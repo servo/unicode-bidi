@@ -81,10 +81,13 @@ mod explicit;
 mod implicit;
 mod prepare;
 
-pub use crate::char_data::{BidiClass, HardcodedBidiData, bidi_class, UNICODE_VERSION};
+pub use crate::char_data::{BidiClass, UNICODE_VERSION};
 pub use crate::level::{Level, LTR_LEVEL, RTL_LEVEL};
 pub use crate::prepare::LevelRun;
 pub use crate::data_source::BidiDataSource;
+
+#[cfg(feature = "hardcoded-data")]
+pub use crate::char_data::{bidi_class, HardcodedBidiData};
 
 use alloc::borrow::Cow;
 use alloc::vec::Vec;
@@ -127,6 +130,7 @@ pub struct InitialInfo<'text> {
 }
 
 impl<'text> InitialInfo<'text> {
+
     /// Find the paragraphs and BidiClasses in a string of text.
     ///
     /// <http://www.unicode.org/reports/tr9/#The_Paragraph_Level>
@@ -134,8 +138,25 @@ impl<'text> InitialInfo<'text> {
     /// Also sets the class for each First Strong Isolate initiator (FSI) to LRI or RLI if a strong
     /// character is found before the matching PDI.  If no strong character is found, the class will
     /// remain FSI, and it's up to later stages to treat these as LRI when needed.
+    ///
+    /// The `hardcoded-data` Cargo feature (enabled by default) must be enabled to use this.
     #[cfg_attr(feature = "flame_it", flamer::flame)]
+    #[cfg(feature = "hardcoded-data")]
     pub fn new(text: &str, default_para_level: Option<Level>) -> InitialInfo<'_> {
+        Self::new_with_data_source(&HardcodedBidiData, text, default_para_level)
+    }
+
+    /// Find the paragraphs and BidiClasses in a string of text, with a custom [`BidiDataSource`]
+    /// for Bidi data. If you just wish to use the hardcoded Bidi data, please use [`InitialInfo::new()`]
+    /// instead (enabled with tbe default `hardcoded-data` Cargo feature)
+    ///
+    /// <http://www.unicode.org/reports/tr9/#The_Paragraph_Level>
+    ///
+    /// Also sets the class for each First Strong Isolate initiator (FSI) to LRI or RLI if a strong
+    /// character is found before the matching PDI.  If no strong character is found, the class will
+    /// remain FSI, and it's up to later stages to treat these as LRI when needed.
+    #[cfg_attr(feature = "flame_it", flamer::flame)]
+    pub fn new_with_data_source<'a, D: BidiDataSource>(data_source: &D, text: &'a str, default_para_level: Option<Level>) -> InitialInfo<'a> {
         let mut original_classes = Vec::with_capacity(text.len());
 
         // The stack contains the starting byte index for each nested isolate we're inside.
@@ -148,7 +169,7 @@ impl<'text> InitialInfo<'text> {
         #[cfg(feature = "flame_it")] flame::start("InitialInfo::new(): iter text.char_indices()");
 
         for (i, c) in text.char_indices() {
-            let class = bidi_class(c);
+            let class = data_source.bidi_class(c);
 
             #[cfg(feature = "flame_it")] flame::start("original_classes.extend()");
 
@@ -254,19 +275,37 @@ pub struct BidiInfo<'text> {
 }
 
 impl<'text> BidiInfo<'text> {
+
     /// Split the text into paragraphs and determine the bidi embedding levels for each paragraph.
+    ///
+    ///
+    /// The `hardcoded-data` Cargo feature (enabled by default) must be enabled to use this.
     ///
     /// TODO: In early steps, check for special cases that allow later steps to be skipped. like
     /// text that is entirely LTR.  See the `nsBidi` class from Gecko for comparison.
     ///
     /// TODO: Support auto-RTL base direction
     #[cfg_attr(feature = "flame_it", flamer::flame)]
+    #[cfg(feature = "hardcoded-data")]
     pub fn new(text: &str, default_para_level: Option<Level>) -> BidiInfo<'_> {
+        Self::new_with_data_source(&HardcodedBidiData, text, default_para_level)
+    }
+
+    /// Split the text into paragraphs and determine the bidi embedding levels for each paragraph, with a custom [`BidiDataSource`]
+    /// for Bidi data. If you just wish to use the hardcoded Bidi data, please use [`BidiInfo::new()`]
+    /// instead (enabled with tbe default `hardcoded-data` Cargo feature).
+    ///
+    /// TODO: In early steps, check for special cases that allow later steps to be skipped. like
+    /// text that is entirely LTR.  See the `nsBidi` class from Gecko for comparison.
+    ///
+    /// TODO: Support auto-RTL base direction
+    #[cfg_attr(feature = "flame_it", flamer::flame)]
+    pub fn new_with_data_source<'a, D: BidiDataSource>(data_source: &D, text: &'a str, default_para_level: Option<Level>) -> BidiInfo<'a> {
         let InitialInfo {
             original_classes,
             paragraphs,
             ..
-        } = InitialInfo::new(text, default_para_level);
+        } = InitialInfo::new_with_data_source(data_source, text, default_para_level);
 
         let mut levels = Vec::<Level>::with_capacity(text.len());
         let mut processing_classes = original_classes.clone();

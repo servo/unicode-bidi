@@ -21,8 +21,10 @@ use crate::BidiClass::*;
 use crate::BidiDataSource;
 
 /// Hardcoded Bidi data that ships with the unicode-bidi crate.
+#[cfg(feature = "hardcoded-data")]
 pub struct HardcodedBidiData;
 
+#[cfg(feature = "hardcoded-data")]
 impl BidiDataSource for HardcodedBidiData {
     fn bidi_class(&self, c: char) -> BidiClass {
         bsearch_range_value_table(c, bidi_class_table)
@@ -30,6 +32,7 @@ impl BidiDataSource for HardcodedBidiData {
 }
 
 /// Find the `BidiClass` of a single char.
+#[cfg(feature = "hardcoded-data")]
 pub fn bidi_class(c: char) -> BidiClass {
     bsearch_range_value_table(c, bidi_class_table)
 }
@@ -41,6 +44,7 @@ pub fn is_rtl(bidi_class: BidiClass) -> bool {
     }
 }
 
+#[cfg(feature = "hardcoded-data")]
 fn bsearch_range_value_table(c: char, r: &'static [(char, char, BidiClass)]) -> BidiClass {
     match r.binary_search_by(|&(lo, hi, _)| if lo <= c && c <= hi {
         Equal
@@ -59,7 +63,7 @@ fn bsearch_range_value_table(c: char, r: &'static [(char, char, BidiClass)]) -> 
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "hardcoded-data"))]
 mod tests {
     use super::*;
 
