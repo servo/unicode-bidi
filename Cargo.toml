@@ -2,7 +2,7 @@
 name = "unicode-bidi"
 version = "0.3.7"
 authors = ["The Servo Project Developers"]
-license = "MIT / Apache-2.0"
+license = "MIT OR Apache-2.0"
 description = "Implementation of the Unicode Bidirectional Algorithm"
 repository = "https://github.com/servo/unicode-bidi"
 documentation = "https://docs.rs/unicode-bidi/"
@@ -25,7 +25,6 @@ exclude = [
 ]
 
 [badges]
-travis-ci = { repository = "servo/unicode-bidi" }
 appveyor = { repository = "servo/unicode-bidi" }
 
 [lib]
