@@ -66,7 +66,7 @@ def load_unicode_data():
         if is_surrogate(cp):
             continue
         if range_start >= 0:
-            for i in xrange(range_start, cp):
+            for i in range(range_start, cp):
                 udict[i] = data;
             range_start = -1;
         if data[1].endswith(", First>"):
@@ -186,7 +186,10 @@ pub enum BidiClass {
         file_.write("    " + cat + ",\n")
     file_.write("""}
 
+#[cfg(feature = "hardcoded-data")]
 use self::BidiClass::*;
+
+#[cfg(feature = "hardcoded-data")]
 """)
 
     emit_table(

@@ -42,9 +42,14 @@ serde_test = ">=0.8, <2.0"
 [features]
 # Note: We don't actually use the `std` feature for anything other than making
 # doctests work. But it may come in handy in the future.
-default = ["std"]
+default = ["std", "hardcoded-data"]
+hardcoded-data = [] # Include hardcoded Bidi data
 std = []
 unstable = []  # travis-cargo needs it
 bench_it = []
 flame_it = ["flame", "flamer"]
 with_serde = ["serde"]  # DEPRECATED, please use `serde` feature, instead.
+
+[[test]]
+name = "conformance_tests"
+required-features = ["hardcoded-data"]

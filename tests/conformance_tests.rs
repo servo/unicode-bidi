@@ -7,7 +7,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use unicode_bidi::{bidi_class, BidiInfo, format_chars, level, Level};
+use unicode_bidi::bidi_class;
+use unicode_bidi::{BidiInfo, format_chars, level, Level};
 
 #[derive(Debug)]
 struct Fail {
@@ -226,7 +227,6 @@ fn gen_base_level_for_characters_tests(idx: usize) -> Option<Level> {
     assert!(idx < VALUES.len());
     VALUES[idx]
 }
-
 
 fn get_sample_string_from_bidi_classes(class_names: &[&str]) -> String {
     class_names
