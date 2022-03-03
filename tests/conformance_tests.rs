@@ -7,7 +7,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#[cfg(feature = "hardcoded-data")]
 use unicode_bidi::bidi_class;
 use unicode_bidi::{BidiInfo, format_chars, level, Level};
 
@@ -27,7 +26,6 @@ struct Fail {
 
 #[test]
 #[should_panic(expected = "314 test cases failed! (256433 passed)")]
-#[cfg(feature = "hardcoded-data")]
 fn test_basic_conformance() {
     let test_data = include_str!("data/BidiTest.txt");
 
@@ -142,7 +140,6 @@ fn gen_base_levels_for_base_tests(bitset: u8) -> Vec<Option<Level>> {
 
 #[test]
 #[should_panic(expected = "14558 test cases failed! (77141 passed)")]
-#[cfg(feature = "hardcoded-data")]
 fn test_character_conformance() {
     let test_data = include_str!("data/BidiCharacterTest.txt");
 
@@ -231,7 +228,6 @@ fn gen_base_level_for_characters_tests(idx: usize) -> Option<Level> {
     VALUES[idx]
 }
 
-
 fn get_sample_string_from_bidi_classes(class_names: &[&str]) -> String {
     class_names
         .iter()
@@ -269,7 +265,6 @@ fn gen_char_from_bidi_class(class_name: &str) -> char {
 }
 
 #[test]
-#[cfg(feature = "hardcoded-data")]
 fn test_gen_char_from_bidi_class() {
     use unicode_bidi::BidiClass::*;
     for &class in &[

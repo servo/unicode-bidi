@@ -186,6 +186,7 @@ pub enum BidiClass {
         file_.write("    " + cat + ",\n")
     file_.write("""}
 
+#[cfg(feature = "hardcoded-data")]
 use self::BidiClass::*;
 
 #[cfg(feature = "hardcoded-data")]

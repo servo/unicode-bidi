@@ -49,3 +49,7 @@ unstable = []  # travis-cargo needs it
 bench_it = []
 flame_it = ["flame", "flamer"]
 with_serde = ["serde"]  # DEPRECATED, please use `serde` feature, instead.
+
+[[test]]
+name = "conformance_tests"
+required-features = ["hardcoded-data"]

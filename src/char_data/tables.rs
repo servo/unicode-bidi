@@ -41,6 +41,7 @@ pub enum BidiClass {
     WS,
 }
 
+#[cfg(feature = "hardcoded-data")]
 use self::BidiClass::*;
 
 #[cfg(feature = "hardcoded-data")]
