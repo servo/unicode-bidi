@@ -8,7 +8,7 @@
 // except according to those terms.
 
 use unicode_bidi::bidi_class;
-use unicode_bidi::{BidiInfo, format_chars, level, Level};
+use unicode_bidi::{format_chars, level, BidiInfo, Level};
 
 #[derive(Debug)]
 struct Fail {
@@ -136,7 +136,6 @@ fn gen_base_levels_for_base_tests(bitset: u8) -> Vec<Option<Level>> {
         .map(|idx| VALUES[idx])
         .collect()
 }
-
 
 #[test]
 #[should_panic(expected = "14562 test cases failed! (77145 passed)")]
@@ -268,31 +267,9 @@ fn gen_char_from_bidi_class(class_name: &str) -> char {
 fn test_gen_char_from_bidi_class() {
     use unicode_bidi::BidiClass::*;
     for &class in &[
-        AL,
-        AN,
-        B,
-        BN,
-        CS,
-        EN,
-        ES,
-        ET,
-        FSI,
-        L,
-        LRE,
-        LRI,
-        LRO,
-        NSM,
-        ON,
-        PDF,
-        PDI,
-        R,
-        RLE,
-        RLI,
-        RLO,
-        S,
-        WS,
-    ]
-    {
+        AL, AN, B, BN, CS, EN, ES, ET, FSI, L, LRE, LRI, LRO, NSM, ON, PDF, PDI, R, RLE, RLI, RLO,
+        S, WS,
+    ] {
         let class_name = format!("{:?}", class);
         let sample_char = gen_char_from_bidi_class(&class_name);
         assert_eq!(bidi_class(sample_char), class);
