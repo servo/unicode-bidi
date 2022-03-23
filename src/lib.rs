@@ -116,6 +116,13 @@ pub struct ParagraphInfo {
     pub level: Level,
 }
 
+impl ParagraphInfo {
+    /// Gets the length of the paragraph in the source text.
+    pub fn len(&self) -> usize{
+        self.range.end - self.range.start
+    }
+}
+
 /// Initial bidi information of the text.
 ///
 /// Contains the text paragraphs and `BidiClass` of its characters.
@@ -898,6 +905,26 @@ mod tests {
         );
          */
     }
+
+    #[test]
+    fn test_paragraph_info_len() {
+        let text = "hello world";
+        let bidi_info = BidiInfo::new(text, None);
+        assert_eq!(bidi_info.paragraphs.len(), 1);
+        assert_eq!(bidi_info.paragraphs[0].len(), text.len());
+        
+        let text2 = "How are you";
+        let whole_text = format!("{}\n{}", text, text2);
+        let bidi_info = BidiInfo::new(&whole_text, None);
+        assert_eq!(bidi_info.paragraphs.len(), 2);
+        
+        // The first paragraph include the paragraph separator.
+        // TODO: investigate if the paragraph separator character
+        // should not be part of any paragraph.
+        assert_eq!(bidi_info.paragraphs[0].len(), text.len() + 1);
+        assert_eq!(bidi_info.paragraphs[1].len(), text2.len());
+    }
+
 }
 
 
