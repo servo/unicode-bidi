@@ -7,7 +7,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-
 //! Profiling example
 
 #[cfg(feature = "flame_it")]

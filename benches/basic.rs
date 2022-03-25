@@ -17,29 +17,29 @@ use test::Bencher;
 
 use unicode_bidi::BidiInfo;
 
-
 const LTR_TEXTS: &[&str] = &["abc\ndef\nghi", "abc 123\ndef 456\nghi 789"];
 
-const BIDI_TEXTS: &[&str] =
-    &["ابجد\nهوز\nحتی", "ابجد ۱۲۳\nهوز ۴۵۶\nحتی ۷۸۹"];
-
+const BIDI_TEXTS: &[&str] = &["ابجد\nهوز\nحتی", "ابجد ۱۲۳\nهوز ۴۵۶\nحتی ۷۸۹"];
 
 fn bench_bidi_info_new(b: &mut Bencher, texts: &[&str]) {
     for text in texts {
-        b.iter(|| { BidiInfo::new(text, None); });
+        b.iter(|| {
+            BidiInfo::new(text, None);
+        });
     }
 }
 
 fn bench_reorder_line(b: &mut Bencher, texts: &[&str]) {
     for text in texts {
         let bidi_info = BidiInfo::new(text, None);
-        b.iter(|| for para in &bidi_info.paragraphs {
-            let line = para.range.clone();
-            bidi_info.reorder_line(para, line);
+        b.iter(|| {
+            for para in &bidi_info.paragraphs {
+                let line = para.range.clone();
+                bidi_info.reorder_line(para, line);
+            }
         });
     }
 }
-
 
 #[bench]
 fn bench_1_bidi_info_new_for_ltr_texts(b: &mut Bencher) {

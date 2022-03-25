@@ -13,9 +13,9 @@ mod tables;
 
 pub use self::tables::{BidiClass, UNICODE_VERSION};
 #[cfg(feature = "hardcoded-data")]
-use core::cmp::Ordering::{Equal, Less, Greater};
-#[cfg(feature = "hardcoded-data")]
 use core::char;
+#[cfg(feature = "hardcoded-data")]
+use core::cmp::Ordering::{Equal, Greater, Less};
 
 #[cfg(feature = "hardcoded-data")]
 use self::tables::bidi_class_table;
@@ -51,12 +51,14 @@ pub fn is_rtl(bidi_class: BidiClass) -> bool {
 
 #[cfg(feature = "hardcoded-data")]
 fn bsearch_range_value_table(c: char, r: &'static [(char, char, BidiClass)]) -> BidiClass {
-    match r.binary_search_by(|&(lo, hi, _)| if lo <= c && c <= hi {
-        Equal
-    } else if hi < c {
-        Less
-    } else {
-        Greater
+    match r.binary_search_by(|&(lo, hi, _)| {
+        if lo <= c && c <= hi {
+            Equal
+        } else if hi < c {
+            Less
+        } else {
+            Greater
+        }
     }) {
         Ok(idx) => {
             let (_, _, cat) = r[idx];
