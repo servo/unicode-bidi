@@ -101,6 +101,13 @@ use core::ops::Range;
 use crate::format_chars as chars;
 use crate::BidiClass::*;
 
+#[derive(PartialEq, Debug)]
+pub enum Direction {
+    Ltr,
+    Rtl,
+    Mixed,
+}
+
 /// Bidi information about a single paragraph
 #[derive(Debug, PartialEq)]
 pub struct ParagraphInfo {
@@ -530,6 +537,52 @@ impl<'text> BidiInfo<'text> {
     }
 }
 
+/// Contains a reference of `BidiInfo` and one of its `paragraphs`.
+/// And it supports all operation in the `Paragraph` that needs also its
+/// `BidiInfo` such as `direction`.
+#[derive(Debug)]
+pub struct Paragraph<'a, 'text> {
+    pub info: &'a BidiInfo<'text>,
+    pub para: &'a ParagraphInfo,
+}
+
+impl<'a, 'text> Paragraph<'a, 'text> {
+    pub fn new(info: &'a BidiInfo<'text>, para: &'a ParagraphInfo) -> Paragraph<'a, 'text> {
+        Paragraph { info, para }
+    }
+
+    /// Returns if the paragraph is Left direction, right direction or mixed.
+    pub fn direction(&self) -> Direction {
+        let mut ltr = false;
+        let mut rtl = false;
+        for i in self.para.range.clone() {
+            if self.info.levels[i].is_ltr() {
+                ltr = true;
+            }
+
+            if self.info.levels[i].is_rtl() {
+                rtl = true;
+            }
+        }
+
+        if ltr && rtl {
+            return Direction::Mixed;
+        }
+
+        if ltr {
+            return Direction::Ltr;
+        }
+
+        Direction::Rtl
+    }
+
+    /// Returns the `Level` of a certain character in the paragraph.
+    pub fn level_at(&self, pos: usize) -> Level {
+        let actual_position = self.para.range.start + pos;
+        self.info.levels[actual_position]
+    }
+}
+
 /// Assign levels to characters removed by rule X9.
 ///
 /// The levels assigned to these characters are not specified by the algorithm.  This function
@@ -902,6 +955,71 @@ mod tests {
         // should not be part of any paragraph.
         assert_eq!(bidi_info.paragraphs[0].len(), text.len() + 1);
         assert_eq!(bidi_info.paragraphs[1].len(), text2.len());
+    }
+
+    #[test]
+    fn test_direction() {
+        let ltr_text = "hello world";
+        let rtl_text = "أهلا بكم";
+        let all_paragraphs = format!("{}\n{}\n{}{}", ltr_text, rtl_text, ltr_text, rtl_text);
+        let bidi_info = BidiInfo::new(&all_paragraphs, None);
+        assert_eq!(bidi_info.paragraphs.len(), 3);
+        let p_ltr = Paragraph::new(&bidi_info, &bidi_info.paragraphs[0]);
+        let p_rtl = Paragraph::new(&bidi_info, &bidi_info.paragraphs[1]);
+        let p_mixed = Paragraph::new(&bidi_info, &bidi_info.paragraphs[2]);
+        assert_eq!(p_ltr.direction(), Direction::Ltr);
+        assert_eq!(p_rtl.direction(), Direction::Rtl);
+        assert_eq!(p_mixed.direction(), Direction::Mixed);
+    }
+
+    #[test]
+    fn test_edge_cases_direction() {
+        // No paragraphs for empty text.
+        let empty = "";
+        let bidi_info = BidiInfo::new(empty, Option::from(RTL_LEVEL));
+        assert_eq!(bidi_info.paragraphs.len(), 0);
+        // The paragraph separator will take the value of the default direction
+        // which is left to right.
+        let empty = "\n";
+        let bidi_info = BidiInfo::new(empty, None);
+        assert_eq!(bidi_info.paragraphs.len(), 1);
+        let p = Paragraph::new(&bidi_info, &bidi_info.paragraphs[0]);
+        assert_eq!(p.direction(), Direction::Ltr);
+        // The paragraph separator will take the value of the given initial direction
+        // which is left to right.
+        let empty = "\n";
+        let bidi_info = BidiInfo::new(empty, Option::from(LTR_LEVEL));
+        assert_eq!(bidi_info.paragraphs.len(), 1);
+        let p = Paragraph::new(&bidi_info, &bidi_info.paragraphs[0]);
+        assert_eq!(p.direction(), Direction::Ltr);
+
+        // The paragraph separator will take the value of the given initial direction
+        // which is right to left.
+        let empty = "\n";
+        let bidi_info = BidiInfo::new(empty, Option::from(RTL_LEVEL));
+        assert_eq!(bidi_info.paragraphs.len(), 1);
+        let p = Paragraph::new(&bidi_info, &bidi_info.paragraphs[0]);
+        assert_eq!(p.direction(), Direction::Rtl);
+    }
+
+    #[test]
+    fn test_level_at() {
+        let ltr_text = "hello world";
+        let rtl_text = "أهلا بكم";
+        let all_paragraphs = format!("{}\n{}\n{}{}", ltr_text, rtl_text, ltr_text, rtl_text);
+        let bidi_info = BidiInfo::new(&all_paragraphs, None);
+        assert_eq!(bidi_info.paragraphs.len(), 3);
+
+        let p_ltr = Paragraph::new(&bidi_info, &bidi_info.paragraphs[0]);
+        let p_rtl = Paragraph::new(&bidi_info, &bidi_info.paragraphs[1]);
+        let p_mixed = Paragraph::new(&bidi_info, &bidi_info.paragraphs[2]);
+
+        assert_eq!(p_ltr.level_at(0), LTR_LEVEL);
+        assert_eq!(p_rtl.level_at(0), RTL_LEVEL);
+        assert_eq!(p_mixed.level_at(0), LTR_LEVEL);
+        assert_eq!(p_mixed.info.levels.len(), 54);
+        assert_eq!(p_mixed.para.range.start, 28);
+        assert_eq!(p_mixed.level_at(ltr_text.len()), RTL_LEVEL);
     }
 }
 
