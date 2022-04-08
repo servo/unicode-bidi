@@ -73,12 +73,12 @@ extern crate std;
 #[macro_use]
 extern crate alloc;
 
+pub mod data_source;
 pub mod deprecated;
 pub mod format_chars;
 pub mod level;
 
 mod char_data;
-mod data_source;
 mod explicit;
 mod implicit;
 mod prepare;
