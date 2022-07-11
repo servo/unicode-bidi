@@ -456,7 +456,7 @@ impl<'text> BidiInfo<'text> {
     /// ]);
     ///
     /// let line = para.range.clone();
-    /// let order = bidi_info.reorder_index(para, line);
+    /// let order = bidi_info.reorder_index(para);
     ///
     /// assert_eq!(order, [ 6, 7, 8, 4, 2, 0 ]);
     /// assert_eq!(bidi_info.text[6..].chars().next().unwrap(), 'a');
@@ -467,7 +467,8 @@ impl<'text> BidiInfo<'text> {
     /// assert_eq!(bidi_info.text[0..].chars().next().unwrap(), 'א');
     /// # } // feature = "hardcoded-data"
     ///
-    pub fn reorder_index(&self, para: &ParagraphInfo, line: Range<usize>) -> Vec<usize> {
+    pub fn reorder_index(&self, para: &ParagraphInfo) -> Vec<usize> {
+        let line = para.range.clone();
         let (levels, runs) = self.visual_runs(para, line);
 
         let mut result: Vec<usize> = Vec::with_capacity(levels.len());
