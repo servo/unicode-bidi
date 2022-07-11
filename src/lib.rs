@@ -411,6 +411,64 @@ impl<'text> BidiInfo<'text> {
         result.into()
     }
 
+    /// Reorder the levels
+    ///   # # Example
+    /// ```
+    /// use unicode_bidi::BidiInfo;
+    /// use unicode_bidi::Level;
+    ///
+    /// let l0 = Level::from(0);
+    /// let l1 = Level::from(1);
+    /// let l2 = Level::from(2);
+    /// let levels: Vec<Level> = vec![l0, l0, l0, l1, l1, l1, l2, l2];
+    ///
+    /// let index_map = BidiInfo::reorder_visual(&levels);
+    /// assert_eq!(levels.len(), index_map.len());
+    /// assert_eq!(index_map, [0, 1, 2, 5, 4, 3, 6, 7]);
+    /// ```
+    pub fn reorder_visual(levels: &Vec<Level>) -> Vec<usize> {
+        // Extract the ranges of continuos sequence of levels
+        fn ranges(levels: &Vec<level::Level>) -> Vec<Range<usize>> {
+            let mut result: Vec<Range<usize>> = Vec::new();
+            if levels.is_empty() {
+                return result;
+            }
+
+            let mut current_level = levels[0];
+            let mut start_index: usize = 0;
+            let mut i: usize = 1;
+            while i < levels.len() {
+                if levels[i] != current_level {
+                    result.push(start_index..i);
+                    start_index = i;
+                    current_level = levels[i];
+                }
+                i += 1;
+            }
+
+            result.push(start_index..levels.len());
+            result
+        }
+
+        let mut result: Vec<usize> = Vec::with_capacity(levels.len());
+        if levels.is_empty() {
+            return result;
+        }
+
+        (0..levels.len()).for_each(|index| {
+            result.push(index);
+        });
+
+        let ranges = ranges(&levels);
+        for range in ranges {
+            if levels[range.start].is_rtl() {
+                result[range].reverse();
+            }
+        }
+
+        result
+    }
+
     /// Find the level runs within a line and return them in visual order.
     ///
     /// `line` is a range of bytes indices within `levels`.
