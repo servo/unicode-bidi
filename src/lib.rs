@@ -411,6 +411,79 @@ impl<'text> BidiInfo<'text> {
         result.into()
     }
 
+    /// Returns a map from the visual order to the logical order.
+    ///
+    ///   ## Example
+    ///
+    /// ```rust
+    /// # #[cfg(feature = "hardcoded-data")] {
+    /// use unicode_bidi::BidiInfo;
+    ///
+    /// // This example text is defined using `concat!` because some browsers
+    /// // and text editors have trouble displaying bidi strings.
+    /// let text = concat![
+    ///   "א",
+    ///   "ב",
+    ///   "ג",
+    ///   "a",
+    ///   "b",
+    ///   "c",
+    /// ];
+    ///
+    /// // Resolve embedding levels within the text.  Pass `None` to detect the
+    /// // paragraph level automatically.
+    /// let bidi_info = BidiInfo::new(&text, None);
+    ///
+    /// // This paragraph has embedding level 1 because its first strong character is RTL.
+    /// assert_eq!(bidi_info.paragraphs.len(), 1);
+    /// let para = &bidi_info.paragraphs[0];
+    /// assert_eq!(para.level.number(), 1);
+    /// assert_eq!(para.level.is_rtl(), true);
+    ///
+    /// // Re-ordering is done after wrapping each paragraph into a sequence of
+    /// // lines. For this example, I'll just use a single line that spans the
+    /// // entire paragraph.
+    /// let line = para.range.clone();
+    ///
+    /// let display = bidi_info.reorder_line(para, line);
+    /// assert_eq!(display, concat![
+    ///   "a",
+    ///   "b",
+    ///   "c",
+    ///   "ג",
+    ///   "ב",
+    ///   "א",
+    /// ]);
+    ///
+    /// let line = para.range.clone();
+    /// let order = bidi_info.reorder_index(para, line);
+    ///
+    /// assert_eq!(order, [ 6, 7, 8, 4, 2, 0 ]);
+    /// assert_eq!(bidi_info.text[6..].chars().next().unwrap(), 'a');
+    /// assert_eq!(bidi_info.text[7..].chars().next().unwrap(), 'b');
+    /// assert_eq!(bidi_info.text[8..].chars().next().unwrap(), 'c');
+    /// assert_eq!(bidi_info.text[4..].chars().next().unwrap(), 'ג');
+    /// assert_eq!(bidi_info.text[2..].chars().next().unwrap(), 'ב');
+    /// assert_eq!(bidi_info.text[0..].chars().next().unwrap(), 'א');
+    /// # } // feature = "hardcoded-data"
+    ///
+    pub fn reorder_index(&self, para: &ParagraphInfo, line: Range<usize>) -> Vec<usize> {
+        let (levels, runs) = self.visual_runs(para, line);
+
+        let mut result: Vec<usize> = Vec::with_capacity(levels.len());
+        for run in runs {
+            let shift = run.start;
+
+            if levels[run.start].is_rtl() {
+                result.extend(self.text[run].char_indices().map(|x| x.0 + shift).rev());
+            } else {
+                result.extend(self.text[run].char_indices().map(|x| x.0 + shift));
+            }
+        }
+
+        result
+    }
+
     /// Find the level runs within a line and return them in visual order.
     ///
     /// `line` is a range of bytes indices within `levels`.
