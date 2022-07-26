@@ -428,12 +428,12 @@ impl<'text> BidiInfo<'text> {
     /// let l0 = Level::from(0);
     /// let l1 = Level::from(1);
     /// let l2 = Level::from(2);
-    /// 
+    ///
     /// let levels = vec![l0, l0, l0, l0];
     /// let index_map = BidiInfo::reorder_visual(&levels);
     /// assert_eq!(levels.len(), index_map.len());
     /// assert_eq!(index_map, [0, 1, 2, 3]);
-    /// 
+    ///
     /// let levels: Vec<Level> = vec![l0, l0, l0, l1, l1, l1, l2, l2];
     /// let index_map = BidiInfo::reorder_visual(&levels);
     /// assert_eq!(levels.len(), index_map.len());
