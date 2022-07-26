@@ -440,21 +440,21 @@ impl<'text> BidiInfo<'text> {
     /// assert_eq!(index_map, [0, 1, 2, 5, 4, 3, 6, 7]);
     /// ```
     pub fn reorder_visual(levels: &[Level]) -> Vec<usize> {
-        // Gets the next range and the next start_index
-        fn next_range(levels: &[level::Level], start_index: usize) -> (Range<usize>, usize) {
+        // Gets the next range
+        fn next_range(levels: &[level::Level], start_index: usize) -> Range<usize> {
             if levels.is_empty() || start_index >= levels.len() {
-                return (start_index..start_index, start_index);
+                return start_index..start_index;
             }
 
             let mut end_index = start_index + 1;
             while end_index < levels.len() {
                 if levels[start_index] != levels[end_index] {
-                    return (start_index..end_index, end_index);
+                    return start_index..end_index;
                 }
                 end_index += 1;
             }
 
-            (start_index..end_index, end_index)
+            start_index..end_index
         }
 
         let mut result: Vec<usize> = Vec::with_capacity(levels.len());
@@ -466,15 +466,14 @@ impl<'text> BidiInfo<'text> {
             result.push(index);
         });
 
-        let mut start_index = 0;
-        let mut range: Range<usize>;
+        let mut range: Range<usize> = 0..0;
         loop {
-            (range, start_index) = next_range(levels, start_index);
+            range = next_range(levels, range.end);
             if levels[range.start].is_rtl() {
-                result[range].reverse();
+                result[range.clone()].reverse();
             }
 
-            if start_index >= levels.len() {
+            if range.end >= levels.len() {
                 break;
             }
         }
