@@ -97,7 +97,6 @@ use alloc::vec::Vec;
 use core::cmp::{max, min};
 use core::iter::repeat;
 use core::ops::Range;
-use core::usize;
 
 use crate::format_chars as chars;
 use crate::BidiClass::*;
