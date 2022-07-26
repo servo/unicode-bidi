@@ -97,6 +97,7 @@ use alloc::vec::Vec;
 use core::cmp::{max, min};
 use core::iter::repeat;
 use core::ops::Range;
+use core::usize;
 
 use crate::format_chars as chars;
 use crate::BidiClass::*;
@@ -411,7 +412,14 @@ impl<'text> BidiInfo<'text> {
         result.into()
     }
 
-    /// Reorder the levels
+    /// Reorders pre-calculated levels of a sequence of characters.
+    ///
+    /// NOTE: This is a convenience method that does not use a `Paragraph`  object. It is
+    /// intended to be used when an application has determined the levels of the objects (character sequences)
+    /// and just needs to have them reordered.
+    ///
+    /// the index map will result in `indexMap[visualIndex]==logicalIndex`.
+    ///
     ///   # # Example
     /// ```
     /// use unicode_bidi::BidiInfo;
@@ -420,34 +428,33 @@ impl<'text> BidiInfo<'text> {
     /// let l0 = Level::from(0);
     /// let l1 = Level::from(1);
     /// let l2 = Level::from(2);
+    /// 
+    /// let levels = vec![l0, l0, l0, l0];
+    /// let index_map = BidiInfo::reorder_visual(&levels);
+    /// assert_eq!(levels.len(), index_map.len());
+    /// assert_eq!(index_map, [0, 1, 2, 3]);
+    /// 
     /// let levels: Vec<Level> = vec![l0, l0, l0, l1, l1, l1, l2, l2];
-    ///
     /// let index_map = BidiInfo::reorder_visual(&levels);
     /// assert_eq!(levels.len(), index_map.len());
     /// assert_eq!(index_map, [0, 1, 2, 5, 4, 3, 6, 7]);
     /// ```
-    pub fn reorder_visual(levels: &Vec<Level>) -> Vec<usize> {
-        // Extract the ranges of continuos sequence of levels
-        fn ranges(levels: &Vec<level::Level>) -> Vec<Range<usize>> {
-            let mut result: Vec<Range<usize>> = Vec::new();
-            if levels.is_empty() {
-                return result;
+    pub fn reorder_visual(levels: &[Level]) -> Vec<usize> {
+        // Gets the next range and the next start_index
+        fn next_range(levels: &[level::Level], start_index: usize) -> (Range<usize>, usize) {
+            if levels.is_empty() || start_index >= levels.len() {
+                return (start_index..start_index, start_index);
             }
 
-            let mut current_level = levels[0];
-            let mut start_index: usize = 0;
-            let mut i: usize = 1;
-            while i < levels.len() {
-                if levels[i] != current_level {
-                    result.push(start_index..i);
-                    start_index = i;
-                    current_level = levels[i];
+            let mut end_index = start_index + 1;
+            while end_index < levels.len() {
+                if levels[start_index] != levels[end_index] {
+                    return (start_index..end_index, end_index);
                 }
-                i += 1;
+                end_index += 1;
             }
 
-            result.push(start_index..levels.len());
-            result
+            (start_index..end_index, end_index)
         }
 
         let mut result: Vec<usize> = Vec::with_capacity(levels.len());
@@ -459,10 +466,16 @@ impl<'text> BidiInfo<'text> {
             result.push(index);
         });
 
-        let ranges = ranges(&levels);
-        for range in ranges {
+        let mut start_index = 0;
+        let mut range: Range<usize>;
+        loop {
+            (range, start_index) = next_range(levels, start_index);
             if levels[range.start].is_rtl() {
                 result[range].reverse();
+            }
+
+            if start_index >= levels.len() {
+                break;
             }
         }
 
