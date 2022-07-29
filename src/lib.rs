@@ -411,6 +411,75 @@ impl<'text> BidiInfo<'text> {
         result.into()
     }
 
+    /// Reorders pre-calculated levels of a sequence of characters.
+    ///
+    /// NOTE: This is a convenience method that does not use a `Paragraph`  object. It is
+    /// intended to be used when an application has determined the levels of the objects (character sequences)
+    /// and just needs to have them reordered.
+    ///
+    /// the index map will result in `indexMap[visualIndex]==logicalIndex`.
+    ///
+    ///   # # Example
+    /// ```
+    /// use unicode_bidi::BidiInfo;
+    /// use unicode_bidi::Level;
+    ///
+    /// let l0 = Level::from(0);
+    /// let l1 = Level::from(1);
+    /// let l2 = Level::from(2);
+    ///
+    /// let levels = vec![l0, l0, l0, l0];
+    /// let index_map = BidiInfo::reorder_visual(&levels);
+    /// assert_eq!(levels.len(), index_map.len());
+    /// assert_eq!(index_map, [0, 1, 2, 3]);
+    ///
+    /// let levels: Vec<Level> = vec![l0, l0, l0, l1, l1, l1, l2, l2];
+    /// let index_map = BidiInfo::reorder_visual(&levels);
+    /// assert_eq!(levels.len(), index_map.len());
+    /// assert_eq!(index_map, [0, 1, 2, 5, 4, 3, 6, 7]);
+    /// ```
+    pub fn reorder_visual(levels: &[Level]) -> Vec<usize> {
+        // Gets the next range
+        fn next_range(levels: &[level::Level], start_index: usize) -> Range<usize> {
+            if levels.is_empty() || start_index >= levels.len() {
+                return start_index..start_index;
+            }
+
+            let mut end_index = start_index + 1;
+            while end_index < levels.len() {
+                if levels[start_index] != levels[end_index] {
+                    return start_index..end_index;
+                }
+                end_index += 1;
+            }
+
+            start_index..end_index
+        }
+
+        let mut result: Vec<usize> = Vec::with_capacity(levels.len());
+        if levels.is_empty() {
+            return result;
+        }
+
+        (0..levels.len()).for_each(|index| {
+            result.push(index);
+        });
+
+        let mut range: Range<usize> = 0..0;
+        loop {
+            range = next_range(levels, range.end);
+            if levels[range.start].is_rtl() {
+                result[range.clone()].reverse();
+            }
+
+            if range.end >= levels.len() {
+                break;
+            }
+        }
+
+        result
+    }
+
     /// Find the level runs within a line and return them in visual order.
     ///
     /// `line` is a range of bytes indices within `levels`.
