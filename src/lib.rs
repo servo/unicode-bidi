@@ -456,14 +456,10 @@ impl<'text> BidiInfo<'text> {
             start_index..end_index
         }
 
-        let mut result: Vec<usize> = Vec::with_capacity(levels.len());
         if levels.is_empty() {
-            return result;
+            return vec![];
         }
-
-        (0..levels.len()).for_each(|index| {
-            result.push(index);
-        });
+        let mut result: Vec<usize> = (0..levels.len()).collect();
 
         let mut range: Range<usize> = 0..0;
         loop {
