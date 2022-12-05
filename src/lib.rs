@@ -1088,7 +1088,7 @@ mod tests {
     }
 }
 
-#[cfg(all(feature = "serde", test))]
+#[cfg(all(feature = "serde", feature = "hardcoded-data", test))]
 mod serde_tests {
     use super::*;
     use serde_test::{assert_tokens, Token};
