@@ -20,6 +20,9 @@ DATA_DIR = 'data/ucd'
 TESTS_DATA_DIR = 'tests/data'
 README_NAME = "ReadMe.txt"
 UNICODE_DATA_NAME = "UnicodeData.txt"
+BIDI_BRACKETS_NAME = "BidiBrackets.txt"
+# UNIDATA_SOURCE = "14.0.0/ucd" # For fetching a particular version
+UNIDATA_SOURCE = "UNIDATA" # For fetching the latest
 TABLES_PATH = os.path.join("src", "char_data", "tables.rs")
 
 PREAMBLE = '''// NOTE:
@@ -34,7 +37,7 @@ surrogate_codepoints = (0xD800, 0xDFFF)
 
 def fetch(name, dst):
     if not os.path.exists(dst):
-        os.system("curl -o '%s' 'http://www.unicode.org/Public/UNIDATA/%s'" % (dst, name))
+        os.system("curl -o '%s' 'http://www.unicode.org/Public/%s/%s'" % (dst, unidata, name))
     if not os.path.exists(dst):
         sys.stderr.write("cannot fetch %s" % name)
         exit(1)
@@ -52,6 +55,22 @@ def open_data(name):
 
 def is_surrogate(n):
     return surrogate_codepoints[0] <= n <= surrogate_codepoints[1]
+
+def load_bidi_pairs():
+    fetch_data(BIDI_BRACKETS_NAME)
+    arr = []
+    for line in fileinput.input(os.path.join(DATA_DIR, BIDI_BRACKETS_NAME)):
+        data = line.split(';');
+        if len(data) != 3:
+            continue
+        if not data[2].strip().startswith("o"):
+            # Only make a map of opening to closing, we can
+            # get the reverse from it
+            continue
+        cp1 = int(data[0], 16);
+        cp2 = int(data[1], 16);
+        arr += [(cp1, cp2)]
+    return arr
 
 def load_unicode_data():
     fetch_data(UNICODE_DATA_NAME)
@@ -170,7 +189,7 @@ def emit_table(
     format_table_content(file_, data, 4)
     file_.write("\n];\n\n")
 
-def emit_bidi_module(file_, bidi_class_table, cats):
+def emit_bidi_module(file_, bidi_class_table, cats, bidi_pairs_table):
     file_.write("""
 #[allow(non_camel_case_types)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -200,6 +219,14 @@ use self::BidiClass::*;
         pfun=lambda x: "(%s,%s,%s)" % (escape_char(x[0]), escape_char(x[1]), x[2]),
     )
 
+    emit_table(
+        file_,
+        "bidi_pairs_table",
+        bidi_pairs_table,
+        "&'static [(char, char)]",
+        pfun=lambda x: "(%s,%s)" % (escape_char(x[0]), escape_char(x[1])),
+    )
+
 def get_unicode_version():
     fetch_data(README_NAME)
     with open_data(README_NAME) as readme:
@@ -223,7 +250,8 @@ pub const UNICODE_VERSION: (u64, u64, u64) = (%s, %s, %s);
 """ % unicode_version)
 
         (bidi_categories, bidi_class_table) = load_unicode_data()
-        emit_bidi_module(file_, bidi_class_table, bidi_categories)
+        bidi_pairs_table = load_bidi_pairs()
+        emit_bidi_module(file_, bidi_class_table, bidi_categories, bidi_pairs_table)
 
     # Fetch test data files
     fetch_test_data("BidiTest.txt")
