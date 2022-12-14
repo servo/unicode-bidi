@@ -13,4 +13,8 @@ use crate::BidiClass;
 /// character
 pub trait BidiDataSource {
     fn bidi_class(&self, c: char) -> BidiClass;
+    /// If this character is a bracket according to BidiBrackets.txt,
+    /// return its corresponding matched bracket, and whether or not it is an
+    /// opening bracket
+    fn bidi_matched_bracket(&self, c: char) -> Option<(char, bool)>;
 }

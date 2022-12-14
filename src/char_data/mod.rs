@@ -18,7 +18,7 @@ use core::char;
 use core::cmp::Ordering::{Equal, Greater, Less};
 
 #[cfg(feature = "hardcoded-data")]
-use self::tables::bidi_class_table;
+use self::tables::{bidi_class_table, bidi_pairs_table};
 use crate::BidiClass::*;
 #[cfg(feature = "hardcoded-data")]
 use crate::BidiDataSource;
@@ -34,12 +34,30 @@ impl BidiDataSource for HardcodedBidiData {
     fn bidi_class(&self, c: char) -> BidiClass {
         bsearch_range_value_table(c, bidi_class_table)
     }
+
+    fn bidi_matched_bracket(&self, c: char) -> Option<(char, bool)> {
+        bidi_matched_bracket(c)
+    }
 }
 
 /// Find the `BidiClass` of a single char.
 #[cfg(feature = "hardcoded-data")]
 pub fn bidi_class(c: char) -> BidiClass {
     bsearch_range_value_table(c, bidi_class_table)
+}
+
+#[cfg(feature = "hardcoded-data")]
+/// If this character is an opening bracket according to BidiBrackets.txt,
+/// return its corresponding closing bracket.
+fn bidi_matched_bracket(c: char) -> Option<(char, bool)> {
+    for pair in bidi_pairs_table {
+        if pair.0 == c {
+            return Some((pair.1, true));
+        } else if pair.1 == c {
+            return Some((pair.0, false));
+        }
+    }
+    None
 }
 
 pub fn is_rtl(bidi_class: BidiClass) -> bool {
