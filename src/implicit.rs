@@ -181,8 +181,8 @@ pub fn resolve_neutral<D: BidiDataSource>(
         // `pair` is [start, end) so we will end up processing the opening character but not the closing one.
         //
         // Note: Given that processing_classes has been modified in the previous runs, and resolve_weak
-        // modifies processing_classes ONLY at character boundaries (and not for the trailing bytes for multibyte characters),
-        // this and the later iteration will end up iterating over obsolete classes.
+        // modifies processing_classes inconsistently at non-character-boundaries,
+        // this and the later iteration will end up iterating over some obsolete classes.
         // This is fine since all we care about is looking for strong
         // classes, and strong_classes do not change in resolve_weak. The alternative is calling `.char_indices()`
         // on the text (or checking `text.get(idx).is_some()`), which would be a way to avoid hitting these
@@ -230,24 +230,33 @@ pub fn resolve_neutral<D: BidiDataSource>(
         }
 
         if let Some(class_to_set) = class_to_set {
-            processing_classes[pair.start] = class_to_set;
-            processing_classes[pair.end] = class_to_set;
+            // update all processing classes corresponding to the start and end elements, as requested.
+            // We should include all bytes of the character, not the first one.
+            let start_len_utf8 = text[pair.start..].chars().next().unwrap().len_utf8();
+            let end_len_utf8 = text[pair.start..].chars().next().unwrap().len_utf8();
+            for class in &mut processing_classes[pair.start..pair.start + start_len_utf8] {
+                *class = class_to_set;
+            }
+            for class in &mut processing_classes[pair.end..pair.end + end_len_utf8] {
+                *class = class_to_set;
+            }
             // Any number of characters that had original bidirectional character type NSM prior to the application of
             // W1 that immediately follow a paired bracket which changed to L or R under N0 should change to match the type of their preceding bracket.
 
-            // We do use char_indices here because it's cleaner in this case.
-            // We have to use `.char_indices()` or `.len_utf8()` to skip the bracket itself anyway,
-            // and the rest of the code isn't complicated much by using `char_indices()`
-            for (idx, _ch) in text[pair.start..].char_indices().skip(1) {
-                if original_classes[pair.start + idx] == BidiClass::NSM {
-                    processing_classes[pair.start + idx] = class_to_set;
+            // This rule deals with sequences of NSMs, so we can just update them all at once, we don't need to worry
+            // about character boundaries. We do need to be careful to skip the full set of bytes for the parentheses characters.
+            let nsm_start = pair.start + start_len_utf8;
+            for (idx, class) in original_classes[nsm_start..].iter().enumerate() {
+                if *class == BidiClass::NSM {
+                    processing_classes[nsm_start + idx] = class_to_set;
                 } else {
                     break;
                 }
             }
-            for (idx, _ch) in text[pair.end..].char_indices().skip(1) {
-                if original_classes[pair.start + idx] == BidiClass::NSM {
-                    processing_classes[pair.start + idx] = class_to_set;
+            let nsm_end = pair.end + end_len_utf8;
+            for (idx, class) in original_classes[nsm_end..].iter().enumerate() {
+                if *class == BidiClass::NSM {
+                    processing_classes[nsm_end + idx] = class_to_set;
                 } else {
                     break;
                 }
