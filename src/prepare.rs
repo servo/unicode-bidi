@@ -133,6 +133,17 @@ pub fn isolating_run_sequences(
         .collect()
 }
 
+impl IsolatingRunSequence {
+    /// Returns the full range of text represented by this isolating run sequence
+    pub(crate) fn text_range(&self) -> Range<usize> {
+        if let (Some(start), Some(end)) = (self.runs.first(), self.runs.last()) {
+            start.start..end.end
+        } else {
+            return 0..0;
+        }
+    }
+}
+
 /// Finds the level runs in a paragraph.
 ///
 /// <http://www.unicode.org/reports/tr9/#BD7>

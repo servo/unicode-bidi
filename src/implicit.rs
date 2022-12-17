@@ -236,7 +236,7 @@ pub fn resolve_neutral<D: BidiDataSource>(
             // W1 that immediately follow a paired bracket which changed to L or R under N0 should change to match the type of their preceding bracket.
 
             // We do use char_indices here because it's cleaner in this case.
-            // We have to use `.char_indices()` or `.utf8_len()` to skip the bracket itself anyway,
+            // We have to use `.char_indices()` or `.len_utf8()` to skip the bracket itself anyway,
             // and the rest of the code isn't complicated much by using `char_indices()`
             for (idx, _ch) in text[pair.start..].char_indices().skip(1) {
                 if original_classes[pair.start + idx] == BidiClass::NSM {
@@ -259,7 +259,7 @@ pub fn resolve_neutral<D: BidiDataSource>(
 
     // N1 and N2
     // indices of every byte in this isolating run sequence
-    // XXXManishearth Note for later: is it okay to iterate over every index here, since 
+    // XXXManishearth Note for later: is it okay to iterate over every index here, since
     // that includes char boundaries?
     let mut indices = sequence.runs.iter().flat_map(Clone::clone);
     let mut prev_class = sequence.sos;
@@ -331,12 +331,7 @@ fn identify_bracket_pairs<D: BidiDataSource>(
     let mut ret = vec![];
     let mut stack = vec![];
 
-    let index_range =
-        if let (Some(start), Some(end)) = (run_sequence.runs.first(), run_sequence.runs.last()) {
-            start.start..end.end
-        } else {
-            return ret;
-        };
+    let index_range = run_sequence.text_range();
     let slice = if let Some(slice) = text.get(index_range.clone()) {
         slice
     } else {
