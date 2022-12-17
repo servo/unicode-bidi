@@ -139,19 +139,131 @@ pub fn resolve_weak(sequence: &IsolatingRunSequence, processing_classes: &mut [B
 ///
 /// <http://www.unicode.org/reports/tr9/#Resolving_Neutral_Types>
 #[cfg_attr(feature = "flame_it", flamer::flame)]
-pub fn resolve_neutral(
+pub fn resolve_neutral<D: BidiDataSource>(
+    text: &str,
+    data_source: &D,
     sequence: &IsolatingRunSequence,
     levels: &[Level],
+    original_classes: &[BidiClass],
     processing_classes: &mut [BidiClass],
 ) {
+    // e = embedding direction
     let e: BidiClass = levels[sequence.runs[0].start].bidi_class();
+    let e_is_l = e == BidiClass::L;
+    // N0. Process bracket pairs.
+
+    // Identify the bracket pairs in the current isolating run sequence according to BD16.
+    let bracket_pairs = identify_bracket_pairs(text, data_source, sequence, original_classes);
+
+    // For each bracket-pair element in the list of pairs of text positions
+    // Note: Rust ranges are interpreted as [start..end), be careful using `pair` directly
+    // for indexing as it will include the opening bracket pair but not the closing one
+    for pair in bracket_pairs {
+        #[cfg(feature = "std")]
+        debug_assert!(
+            pair.start < processing_classes.len(),
+            "identify_bracket_pairs returned a range that is out of bounds!"
+        );
+        #[cfg(feature = "std")]
+        debug_assert!(
+            pair.end < processing_classes.len(),
+            "identify_bracket_pairs returned a range that is out of bounds!"
+        );
+        let mut found_l = false;
+        let mut found_r = false;
+        let mut class_to_set = None;
+        // Inspect the bidirectional types of the characters enclosed within the bracket pair.
+        // Note: the algorithm wants us to inspect the types of the *enclosed* characters,
+        // not the brackets themselves, however since the brackets will never be L or R, we can
+        // just scan them as well and not worry about trying to skip them in the array (they may take
+        // up multiple indices in processing_classes if they're multibyte!).
+        //
+        // `pair` is [start, end) so we will end up processing the opening character but not the closing one.
+        //
+        // Note: Given that processing_classes has been modified in the previous runs, and resolve_weak
+        // modifies processing_classes ONLY at character boundaries (and not for the trailing bytes for multibyte characters),
+        // this and the later iteration will end up iterating over obsolete classes.
+        // This is fine since all we care about is looking for strong
+        // classes, and strong_classes do not change in resolve_weak. The alternative is calling `.char_indices()`
+        // on the text (or checking `text.get(idx).is_some()`), which would be a way to avoid hitting these
+        // processing_classes of bytes not on character boundaries. This is both cleaner and likely to be faster
+        // (this is worth benchmarking, though!) so we'll stick with the current approach of iterating over processing_classes.
+        for &class in &processing_classes[pair.clone()] {
+            if class == BidiClass::R {
+                found_r = true;
+            } else if class == BidiClass::L {
+                found_l = true;
+            }
+
+            // if we have found a character with the class of the embedding direction
+            // we can bail early
+            if found_l && e_is_l || found_r {
+                break;
+            }
+        }
+        // If any strong type (either L or R) matching the embedding direction is found
+        if found_l && e_is_l || found_r {
+            // set the type for both brackets in the pair to match the embedding direction
+            class_to_set = Some(e);
+        // Otherwise, if there is a strong type it must be opposite the embedding direction
+        } else if found_l || found_r {
+            // Therefore, test for an established context with a preceding strong type by
+            // checking backwards before the opening paired bracket
+            // until the first strong type (L, R, or sos) is found.
+            // (see note above about processing_classes and character boundaries)
+            let previous_strong = processing_classes[..pair.start]
+                .iter()
+                .copied()
+                .rev()
+                .find(|class| *class == BidiClass::L || *class == BidiClass::R)
+                .unwrap_or(sequence.sos);
+
+            // If the preceding strong type is also opposite the embedding direction,
+            // context is established,
+            // so set the type for both brackets in the pair to that direction.
+            // AND
+            // Otherwise set the type for both brackets in the pair to the embedding direction.
+            // Either way it gets set to previous_strong
+            // XXXManishearth perhaps the reason the spec writes these as two separate lines is
+            // because sos is supposed to be handled differently?
+            class_to_set = Some(previous_strong);
+        }
+
+        if let Some(class_to_set) = class_to_set {
+            processing_classes[pair.start] = class_to_set;
+            processing_classes[pair.end] = class_to_set;
+            // Any number of characters that had original bidirectional character type NSM prior to the application of
+            // W1 that immediately follow a paired bracket which changed to L or R under N0 should change to match the type of their preceding bracket.
+
+            // We do use char_indices here because it's cleaner in this case.
+            // We have to use `.char_indices()` or `.utf8_len()` to skip the bracket itself anyway,
+            // and the rest of the code isn't complicated much by using `char_indices()`
+            for (idx, _ch) in text[pair.start..].char_indices().skip(1) {
+                if original_classes[pair.start + idx] == BidiClass::NSM {
+                    processing_classes[pair.start + idx] = class_to_set;
+                } else {
+                    break;
+                }
+            }
+            for (idx, _ch) in text[pair.end..].char_indices().skip(1) {
+                if original_classes[pair.start + idx] == BidiClass::NSM {
+                    processing_classes[pair.start + idx] = class_to_set;
+                } else {
+                    break;
+                }
+            }
+        }
+        // Otherwise, there are no strong types within the bracket pair
+        // Therefore, do not set the type for that bracket pair
+    }
+
+    // N1 and N2
+    // indices of every byte in this isolating run sequence
+    // XXXManishearth Note for later: is it okay to iterate over every index here, since 
+    // that includes char boundaries?
     let mut indices = sequence.runs.iter().flat_map(Clone::clone);
     let mut prev_class = sequence.sos;
-
     while let Some(mut i) = indices.next() {
-        // N0. Process bracket pairs.
-        // TODO
-
         // Process sequences of NI characters.
         let mut ni_run = Vec::new();
         if is_NI(processing_classes[i]) {
