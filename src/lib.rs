@@ -355,7 +355,14 @@ impl<'text> BidiInfo<'text> {
             let sequences = prepare::isolating_run_sequences(para.level, original_classes, levels);
             for sequence in &sequences {
                 implicit::resolve_weak(sequence, processing_classes);
-                implicit::resolve_neutral(sequence, levels, processing_classes);
+                implicit::resolve_neutral(
+                    text,
+                    data_source,
+                    sequence,
+                    levels,
+                    original_classes,
+                    processing_classes,
+                );
             }
             implicit::resolve_levels(processing_classes, levels);
 

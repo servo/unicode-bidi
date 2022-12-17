@@ -11,10 +11,12 @@
 
 use alloc::vec::Vec;
 use core::cmp::max;
+use core::ops::Range;
 
 use super::char_data::BidiClass::{self, *};
 use super::level::Level;
 use super::prepare::{not_removed_by_x9, removed_by_x9, IsolatingRunSequence, LevelRun};
+use super::BidiDataSource;
 
 /// 3.3.4 Resolving Weak Types
 ///
@@ -201,6 +203,93 @@ pub fn resolve_neutral(
         }
         prev_class = processing_classes[i];
     }
+}
+
+/// 3.1.3 Identifying Bracket Pairs
+///
+/// Returns all paired brackets in the source
+///
+/// <https://www.unicode.org/reports/tr9/#BD16>
+fn identify_bracket_pairs<D: BidiDataSource>(
+    text: &str,
+    data_source: &D,
+    run_sequence: &IsolatingRunSequence,
+    original_classes: &[BidiClass],
+) -> Vec<Range<usize>> {
+    let mut ret = vec![];
+    let mut stack = vec![];
+
+    let index_range =
+        if let (Some(start), Some(end)) = (run_sequence.runs.first(), run_sequence.runs.last()) {
+            start.start..end.end
+        } else {
+            return ret;
+        };
+    let slice = if let Some(slice) = text.get(index_range.clone()) {
+        slice
+    } else {
+        #[cfg(feature = "std")]
+        std::debug_assert!(
+            false,
+            "Found broken indices in isolating run sequence: found indices {}..{} for string {:?}",
+            index_range.start,
+            index_range.end,
+            text
+        );
+        return ret;
+    };
+
+    // XXXManishearth perhaps try and coalesce this into one of the earlier
+    // full-string iterator runs, perhaps explicit::compute()
+    for (i, ch) in slice.char_indices() {
+        // all paren characters are ON
+        // From BidiBrackets.txt:
+        // > The Unicode property value stability policy guarantees that characters
+        // > which have bpt=o or bpt=c also have bc=ON and Bidi_M=Y
+        if original_classes[i] != BidiClass::ON {
+            continue;
+        }
+
+        if let Some((matched, is_open)) = data_source.bidi_matched_bracket(ch) {
+            if is_open {
+                // If an opening paired bracket is found ...
+
+                // ... and there is no room in the stack,
+                // stop processing BD16 for the remainder of the isolating run sequence.
+                if stack.len() >= 63 {
+                    break;
+                }
+                // ... push its Bidi_Paired_Bracket property value and its text position onto the stack
+                stack.push((matched, i))
+            } else {
+                // If a closing paired bracket is found, do the following
+
+                // Declare a variable that holds a reference to the current stack element
+                // and initialize it with the top element of the stack.
+                // AND
+                // Else, if the current stack element is not at the bottom of the stack
+                for (stack_index, element) in stack.iter().enumerate().rev() {
+                    // Compare the closing paired bracket being inspected or its canonical
+                    // equivalent to the bracket in the current stack element.
+                    if element.0 == ch {
+                        // If the values match, meaning the two characters form a bracket pair, then
+
+                        // Append the text position in the current stack element together with the
+                        // text position of the closing paired bracket to the list.
+                        ret.push(element.1..i);
+
+                        // Pop the stack through the current stack element inclusively.
+                        stack.truncate(stack_index);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    // Sort the list of pairs of text positions in ascending order based on
+    // the text position of the opening paired bracket.
+    ret.sort_by_key(|r| r.start);
+    ret
 }
 
 /// 3.3.6 Resolving Implicit Levels
