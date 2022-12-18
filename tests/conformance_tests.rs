@@ -25,7 +25,7 @@ struct Fail {
 }
 
 #[test]
-#[should_panic(expected = "198 test cases failed! (256549 passed)")]
+#[should_panic(expected = "131 test cases failed! (256616 passed)")]
 fn test_basic_conformance() {
     let test_data = include_str!("data/BidiTest.txt");
 
