@@ -22,7 +22,11 @@ use super::BidiDataSource;
 ///
 /// <http://www.unicode.org/reports/tr9/#Resolving_Weak_Types>
 #[cfg_attr(feature = "flame_it", flamer::flame)]
-pub fn resolve_weak(sequence: &IsolatingRunSequence, processing_classes: &mut [BidiClass]) {
+pub fn resolve_weak(
+    text: &str,
+    sequence: &IsolatingRunSequence,
+    processing_classes: &mut [BidiClass],
+) {
     // FIXME (#8): This function applies steps W1-W6 in a single pass.  This can produce
     // incorrect results in cases where a "later" rule changes the value of `prev_class` seen
     // by an "earlier" rule.  We should either split this into separate passes, or preserve
@@ -71,15 +75,25 @@ pub fn resolve_weak(sequence: &IsolatingRunSequence, processing_classes: &mut [B
 
             // <http://www.unicode.org/reports/tr9/#W4>
             ES | CS => {
-                let next_class = indices
-                    .clone()
-                    .map(|j| processing_classes[j])
-                    .find(not_removed_by_x9)
-                    .unwrap_or(sequence.eos);
-                processing_classes[i] = match (prev_class, processing_classes[i], next_class) {
-                    (EN, ES, EN) | (EN, CS, EN) => EN,
-                    (AN, CS, AN) => AN,
-                    (_, _, _) => ON,
+                // see https://github.com/servo/unicode-bidi/issues/86
+                // We want to make sure we check the correct next character by skipping past the rest
+                // of this one
+                if let Some(ch) = text.get(i..).and_then(|s| s.chars().next()) {
+                    let next_class = indices
+                        .clone()
+                        .skip(ch.len_utf8() - 1)
+                        .map(|j| processing_classes[j])
+                        .find(not_removed_by_x9)
+                        .unwrap_or(sequence.eos);
+                    processing_classes[i] = match (prev_class, processing_classes[i], next_class) {
+                        (EN, ES, EN) | (EN, CS, EN) => EN,
+                        (AN, CS, AN) => AN,
+                        (_, _, _) => ON,
+                    }
+                } else {
+                    // we're in the middle of a character, copy over work done for previous bytes
+                    // since it's going to be the same answer
+                    processing_classes[i] = prev_class;
                 }
             }
             // <http://www.unicode.org/reports/tr9/#W5>
