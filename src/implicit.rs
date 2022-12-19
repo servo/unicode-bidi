@@ -198,6 +198,13 @@ pub fn resolve_neutral<D: BidiDataSource>(
                 found_e = true;
             } else if class == not_e {
                 found_not_e = true;
+            } else if class == BidiClass::EN || class == BidiClass::AN {
+                // > Within this scope, bidirectional types EN and AN are treated as R.
+                if e == BidiClass::L {
+                    found_not_e = true;
+                } else {
+                    found_e = true;
+                }
             }
 
             // if we have found a character with the class of the embedding direction
@@ -216,12 +223,22 @@ pub fn resolve_neutral<D: BidiDataSource>(
             // checking backwards before the opening paired bracket
             // until the first strong type (L, R, or sos) is found.
             // (see note above about processing_classes and character boundaries)
-            let previous_strong = processing_classes[..pair.start]
+            let mut previous_strong = processing_classes[..pair.start]
                 .iter()
                 .copied()
                 .rev()
-                .find(|class| *class == BidiClass::L || *class == BidiClass::R)
+                .find(|class| {
+                    *class == BidiClass::L
+                        || *class == BidiClass::R
+                        || *class == BidiClass::EN
+                        || *class == BidiClass::AN
+                })
                 .unwrap_or(sequence.sos);
+
+            // > Within this scope, bidirectional types EN and AN are treated as R.
+            if previous_strong == BidiClass::EN || previous_strong == BidiClass::AN {
+                previous_strong = BidiClass::R;
+            }
 
             // > If the preceding strong type is also opposite the embedding direction,
             // > context is established,
