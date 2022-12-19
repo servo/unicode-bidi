@@ -42,14 +42,14 @@ pub fn bidi_class(c: char) -> BidiClass {
     bsearch_range_value_table(c, bidi_class_table)
 }
 
-/// If this character is an opening bracket according to BidiBrackets.txt,
-/// return its corresponding closing bracket.
-pub(crate) fn bidi_matched_bracket(c: char) -> Option<(char, bool)> {
+/// If this character is a bracket according to BidiBrackets.txt,
+/// return the corresponding *normalized* *opening bracket* of the pair,
+/// and whether or not it itself is an opening bracket.
+pub(crate) fn bidi_matched_opening_bracket(c: char) -> Option<(char, bool)> {
     for pair in self::tables::bidi_pairs_table {
-        if pair.0 == c {
-            return Some((pair.1, true));
-        } else if pair.1 == c {
-            return Some((pair.0, false));
+        if pair.0 == c || pair.1 == c {
+            let skeleton = pair.2.unwrap_or(pair.0);
+            return Some((skeleton, pair.0 == c));
         }
     }
     None

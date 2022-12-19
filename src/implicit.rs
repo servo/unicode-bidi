@@ -371,7 +371,7 @@ fn identify_bracket_pairs<D: BidiDataSource>(
             continue;
         }
 
-        if let Some((matched, is_open)) = data_source.bidi_matched_bracket(ch) {
+        if let Some((opening, is_open)) = data_source.bidi_matched_opening_bracket(ch) {
             if is_open {
                 // If an opening paired bracket is found ...
 
@@ -381,7 +381,7 @@ fn identify_bracket_pairs<D: BidiDataSource>(
                     break;
                 }
                 // ... push its Bidi_Paired_Bracket property value and its text position onto the stack
-                stack.push((matched, i))
+                stack.push((opening, i))
             } else {
                 // If a closing paired bracket is found, do the following
 
@@ -392,7 +392,7 @@ fn identify_bracket_pairs<D: BidiDataSource>(
                 for (stack_index, element) in stack.iter().enumerate().rev() {
                     // Compare the closing paired bracket being inspected or its canonical
                     // equivalent to the bracket in the current stack element.
-                    if element.0 == ch {
+                    if element.0 == opening {
                         // If the values match, meaning the two characters form a bracket pair, then
 
                         // Append the text position in the current stack element together with the

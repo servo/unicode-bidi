@@ -14,15 +14,18 @@ use crate::BidiClass;
 pub trait BidiDataSource {
     fn bidi_class(&self, c: char) -> BidiClass;
     /// If this character is a bracket according to BidiBrackets.txt,
-    /// return its corresponding matched bracket, and whether or not it is an
-    /// opening bracket
+    /// return the corresponding *normalized* *opening bracket* of the pair,
+    /// and whether or not it itself is an opening bracket.
+    ///
+    /// This effectively buckets brackets into equivalence classes keyed on the
+    /// normalized opening bracket.
     ///
     /// The default implementation will pull in a small amount of hardcoded data,
     /// regardless of the `hardcoded-data` feature. This is in part for convenience
     /// (since this data is small and changes less often), and in part so that this method can be
     /// added without needing a breaking version bump.
     /// Override this method in your custom data source to prevent the use of hardcoded data.
-    fn bidi_matched_bracket(&self, c: char) -> Option<(char, bool)> {
-        crate::char_data::bidi_matched_bracket(c)
+    fn bidi_matched_opening_bracket(&self, c: char) -> Option<(char, bool)> {
+        crate::char_data::bidi_matched_opening_bracket(c)
     }
 }

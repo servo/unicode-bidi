@@ -56,7 +56,7 @@ def open_data(name):
 def is_surrogate(n):
     return surrogate_codepoints[0] <= n <= surrogate_codepoints[1]
 
-def load_bidi_pairs():
+def load_bidi_pairs(on_decomps):
     fetch_data(BIDI_BRACKETS_NAME)
     arr = []
     for line in fileinput.input(os.path.join(DATA_DIR, BIDI_BRACKETS_NAME)):
@@ -69,12 +69,21 @@ def load_bidi_pairs():
             continue
         cp1 = int(data[0], 16);
         cp2 = int(data[1], 16);
-        arr += [(cp1, cp2)]
+        decomp = None
+        if cp1 in on_decomps:
+            decomp = int(on_decomps[cp1], 16)
+        arr += [(cp1, cp2, decomp)]
     return arr
 
+# Returns (group_categories, on_decomps),
+# where on_decomps is a map containing canonical equivalents for
+# ON characters only, and group_categories is the result of group_categories()
+# on bidi properties
 def load_unicode_data():
     fetch_data(UNICODE_DATA_NAME)
     udict = {};
+    # Decompositions of all ON characters that have them
+    on_decomps = {}
 
     range_start = -1;
     for line in fileinput.input(os.path.join(DATA_DIR, UNICODE_DATA_NAME)):
@@ -103,6 +112,8 @@ def load_unicode_data():
 
         if bidi not in bidi_class:
             bidi_class[bidi] = []
+        if len(decomp) != 0 and " " not in decomp:
+            on_decomps[code] = decomp
         bidi_class[bidi].append(code)
 
     # Default Bidi_Class for unassigned codepoints.
@@ -124,7 +135,7 @@ def load_unicode_data():
             if not code in udict:
                 bidi_class[default].append(code)
 
-    return group_categories(bidi_class)
+    return (group_categories(bidi_class), on_decomps)
 
 def group_categories(cats):
     cats_out = []
@@ -223,8 +234,8 @@ use self::BidiClass::*;
         file_,
         "bidi_pairs_table",
         bidi_pairs_table,
-        "&'static [(char, char)]",
-        pfun=lambda x: "(%s,%s)" % (escape_char(x[0]), escape_char(x[1])),
+        "&'static [(char, char, Option<char>)]",
+        pfun=lambda x: "(%s,%s,%s)" % (escape_char(x[0]), escape_char(x[1]), "Some(%s)" % escape_char(x[2]) if x[2] else "None"),
     )
 
 def get_unicode_version():
@@ -249,8 +260,8 @@ if __name__ == "__main__":
 pub const UNICODE_VERSION: (u64, u64, u64) = (%s, %s, %s);
 """ % unicode_version)
 
-        (bidi_categories, bidi_class_table) = load_unicode_data()
-        bidi_pairs_table = load_bidi_pairs()
+        ((bidi_categories, bidi_class_table), on_decomps) = load_unicode_data()
+        bidi_pairs_table = load_bidi_pairs(on_decomps)
         emit_bidi_module(file_, bidi_class_table, bidi_categories, bidi_pairs_table)
 
     # Fetch test data files
