@@ -177,12 +177,11 @@ pub fn resolve_neutral<D: BidiDataSource>(
         let mut found_e = false;
         let mut found_not_e = false;
         let mut class_to_set = None;
+
+        let start_len_utf8 = text[pair.start..].chars().next().unwrap().len_utf8();
+        // get the range of characters enclosed
+        let enclosed = (pair.start + start_len_utf8)..pair.end;
         // > Inspect the bidirectional types of the characters enclosed within the bracket pair.
-        //
-        // Note: the algorithm wants us to inspect the types of the *enclosed* characters,
-        // not the brackets themselves, however since the brackets will never be L or R, we can
-        // just scan them as well and not worry about trying to skip them in the array (they may take
-        // up multiple indices in processing_classes if they're multibyte!).
         //
         // `pair` is [start, end) so we will end up processing the opening character but not the closing one.
         //
@@ -194,7 +193,7 @@ pub fn resolve_neutral<D: BidiDataSource>(
         // on the text (or checking `text.get(idx).is_some()`), which would be a way to avoid hitting these
         // processing_classes of bytes not on character boundaries. This is both cleaner and likely to be faster
         // (this is worth benchmarking, though!) so we'll stick with the current approach of iterating over processing_classes.
-        for &class in &processing_classes[pair.clone()] {
+        for &class in &processing_classes[enclosed] {
             if class == e {
                 found_e = true;
             } else if class == not_e {
@@ -239,7 +238,6 @@ pub fn resolve_neutral<D: BidiDataSource>(
         if let Some(class_to_set) = class_to_set {
             // update all processing classes corresponding to the start and end elements, as requested.
             // We should include all bytes of the character, not the first one.
-            let start_len_utf8 = text[pair.start..].chars().next().unwrap().len_utf8();
             let end_len_utf8 = text[pair.start..].chars().next().unwrap().len_utf8();
             for class in &mut processing_classes[pair.start..pair.start + start_len_utf8] {
                 *class = class_to_set;
