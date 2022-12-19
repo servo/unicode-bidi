@@ -37,7 +37,7 @@ surrogate_codepoints = (0xD800, 0xDFFF)
 
 def fetch(name, dst):
     if not os.path.exists(dst):
-        os.system("curl -o '%s' 'http://www.unicode.org/Public/%s/%s'" % (dst, unidata, name))
+        os.system("curl -o '%s' 'http://www.unicode.org/Public/%s/%s'" % (dst, UNIDATA_SOURCE, name))
     if not os.path.exists(dst):
         sys.stderr.write("cannot fetch %s" % name)
         exit(1)
