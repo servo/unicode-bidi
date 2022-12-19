@@ -20,7 +20,7 @@ pub trait BidiDataSource {
     /// The default implementation will pull in a small amount of hardcoded data,
     /// regardless of the `hardcoded-data` feature. This is in part for convenience
     /// (since this data is small and changes less often), and in part so that this method can be
-    /// added without needing a breaking version bump
+    /// added without needing a breaking version bump.
     /// Override this method in your custom data source to prevent the use of hardcoded data.
     fn bidi_matched_bracket(&self, c: char) -> Option<(char, bool)> {
         crate::char_data::bidi_matched_bracket(c)

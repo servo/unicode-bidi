@@ -156,10 +156,11 @@ pub fn resolve_neutral<D: BidiDataSource>(
     };
     // N0. Process bracket pairs.
 
-    // Identify the bracket pairs in the current isolating run sequence according to BD16.
+    // > Identify the bracket pairs in the current isolating run sequence according to BD16.
     let bracket_pairs = identify_bracket_pairs(text, data_source, sequence, original_classes);
 
-    // For each bracket-pair element in the list of pairs of text positions
+    // > For each bracket-pair element in the list of pairs of text positions
+    //
     // Note: Rust ranges are interpreted as [start..end), be careful using `pair` directly
     // for indexing as it will include the opening bracket pair but not the closing one
     for pair in bracket_pairs {
@@ -176,7 +177,8 @@ pub fn resolve_neutral<D: BidiDataSource>(
         let mut found_e = false;
         let mut found_not_e = false;
         let mut class_to_set = None;
-        // Inspect the bidirectional types of the characters enclosed within the bracket pair.
+        // > Inspect the bidirectional types of the characters enclosed within the bracket pair.
+        //
         // Note: the algorithm wants us to inspect the types of the *enclosed* characters,
         // not the brackets themselves, however since the brackets will never be L or R, we can
         // just scan them as well and not worry about trying to skip them in the array (they may take
@@ -205,11 +207,11 @@ pub fn resolve_neutral<D: BidiDataSource>(
                 break;
             }
         }
-        // If any strong type (either L or R) matching the embedding direction is found
+        // > If any strong type (either L or R) matching the embedding direction is found
         if found_e {
-            // set the type for both brackets in the pair to match the embedding direction
+            // > .. set the type for both brackets in the pair to match the embedding direction
             class_to_set = Some(e);
-        // Otherwise, if there is a strong type it must be opposite the embedding direction
+        // > Otherwise, if there is a strong type it must be opposite the embedding direction
         } else if found_not_e {
             // Therefore, test for an established context with a preceding strong type by
             // checking backwards before the opening paired bracket
@@ -222,12 +224,13 @@ pub fn resolve_neutral<D: BidiDataSource>(
                 .find(|class| *class == BidiClass::L || *class == BidiClass::R)
                 .unwrap_or(sequence.sos);
 
-            // If the preceding strong type is also opposite the embedding direction,
-            // context is established,
-            // so set the type for both brackets in the pair to that direction.
+            // > If the preceding strong type is also opposite the embedding direction,
+            // > context is established,
+            // > so set the type for both brackets in the pair to that direction.
             // AND
-            // Otherwise set the type for both brackets in the pair to the embedding direction.
-            // Either way it gets set to previous_strong
+            // > Otherwise set the type for both brackets in the pair to the embedding direction.
+            // > Either way it gets set to previous_strong
+            //
             // XXXManishearth perhaps the reason the spec writes these as two separate lines is
             // because sos is supposed to be handled differently?
             class_to_set = Some(previous_strong);
@@ -244,8 +247,8 @@ pub fn resolve_neutral<D: BidiDataSource>(
             for class in &mut processing_classes[pair.end..pair.end + end_len_utf8] {
                 *class = class_to_set;
             }
-            // Any number of characters that had original bidirectional character type NSM prior to the application of
-            // W1 that immediately follow a paired bracket which changed to L or R under N0 should change to match the type of their preceding bracket.
+            // > Any number of characters that had original bidirectional character type NSM prior to the application of
+            // > W1 that immediately follow a paired bracket which changed to L or R under N0 should change to match the type of their preceding bracket.
 
             // This rule deals with sequences of NSMs, so we can just update them all at once, we don't need to worry
             // about character boundaries. We do need to be careful to skip the full set of bytes for the parentheses characters.
@@ -266,8 +269,8 @@ pub fn resolve_neutral<D: BidiDataSource>(
                 }
             }
         }
-        // Otherwise, there are no strong types within the bracket pair
-        // Therefore, do not set the type for that bracket pair
+        // > Otherwise, there are no strong types within the bracket pair
+        // > Therefore, do not set the type for that bracket pair
     }
 
     // N1 and N2
