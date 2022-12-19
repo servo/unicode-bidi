@@ -149,7 +149,11 @@ pub fn resolve_neutral<D: BidiDataSource>(
 ) {
     // e = embedding direction
     let e: BidiClass = levels[sequence.runs[0].start].bidi_class();
-    let e_is_l = e == BidiClass::L;
+    let not_e = if e == BidiClass::L {
+        BidiClass::R
+    } else {
+        BidiClass::L
+    };
     // N0. Process bracket pairs.
 
     // Identify the bracket pairs in the current isolating run sequence according to BD16.
@@ -169,8 +173,8 @@ pub fn resolve_neutral<D: BidiDataSource>(
             pair.end < processing_classes.len(),
             "identify_bracket_pairs returned a range that is out of bounds!"
         );
-        let mut found_l = false;
-        let mut found_r = false;
+        let mut found_e = false;
+        let mut found_not_e = false;
         let mut class_to_set = None;
         // Inspect the bidirectional types of the characters enclosed within the bracket pair.
         // Note: the algorithm wants us to inspect the types of the *enclosed* characters,
@@ -189,24 +193,24 @@ pub fn resolve_neutral<D: BidiDataSource>(
         // processing_classes of bytes not on character boundaries. This is both cleaner and likely to be faster
         // (this is worth benchmarking, though!) so we'll stick with the current approach of iterating over processing_classes.
         for &class in &processing_classes[pair.clone()] {
-            if class == BidiClass::R {
-                found_r = true;
-            } else if class == BidiClass::L {
-                found_l = true;
+            if class == e {
+                found_e = true;
+            } else if class == not_e {
+                found_not_e = true;
             }
 
             // if we have found a character with the class of the embedding direction
             // we can bail early
-            if (found_l && e_is_l) || (found_r && !e_is_l) {
+            if found_e {
                 break;
             }
         }
         // If any strong type (either L or R) matching the embedding direction is found
-        if (found_l && e_is_l) || (found_r && !e_is_l) {
+        if found_e {
             // set the type for both brackets in the pair to match the embedding direction
             class_to_set = Some(e);
         // Otherwise, if there is a strong type it must be opposite the embedding direction
-        } else if found_l || found_r {
+        } else if found_not_e {
             // Therefore, test for an established context with a preceding strong type by
             // checking backwards before the opening paired bracket
             // until the first strong type (L, R, or sos) is found.
