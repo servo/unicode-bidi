@@ -197,12 +197,12 @@ pub fn resolve_neutral<D: BidiDataSource>(
 
             // if we have found a character with the class of the embedding direction
             // we can bail early
-            if found_l && e_is_l || found_r {
+            if (found_l && e_is_l) || (found_r && !e_is_l) {
                 break;
             }
         }
         // If any strong type (either L or R) matching the embedding direction is found
-        if found_l && e_is_l || found_r {
+        if (found_l && e_is_l) || (found_r && !e_is_l) {
             // set the type for both brackets in the pair to match the embedding direction
             class_to_set = Some(e);
         // Otherwise, if there is a strong type it must be opposite the embedding direction
