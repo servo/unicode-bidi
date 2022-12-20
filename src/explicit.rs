@@ -47,13 +47,17 @@ pub fn compute(
             RLE | LRE | RLO | LRO | RLI | LRI | FSI => {
                 let last_level = stack.last().level;
 
+                // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
+                levels[i] = last_level;
+
                 // X5a-X5c: Isolate initiators get the level of the last entry on the stack.
                 let is_isolate = match original_classes[i] {
                     RLI | LRI | FSI => true,
                     _ => false,
                 };
                 if is_isolate {
-                    levels[i] = last_level;
+                    // Redundant due to "Retaining explicit formatting characters" step
+                    // levels[i] = last_level;
                     match stack.last().status {
                         OverrideStatus::RTL => processing_classes[i] = R,
                         OverrideStatus::LTR => processing_classes[i] = L,
@@ -90,9 +94,16 @@ pub fn compute(
                 } else if overflow_isolate_count == 0 {
                     overflow_embedding_count += 1;
                 }
+
+                if !is_isolate {
+                    // X9 +
+                    // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
+                    processing_classes[i] = BN;
+                }
             }
 
             // <http://www.unicode.org/reports/tr9/#X6a>
+            // The BN is from <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
             PDI => {
                 if overflow_isolate_count > 0 {
                     overflow_isolate_count -= 1;
@@ -132,13 +143,14 @@ pub fn compute(
                 if stack.last().status != OverrideStatus::Isolate && stack.vec.len() >= 2 {
                     stack.vec.pop();
                 }
-                // The spec doesn't explicitly mention this step, but it is necessary.
-                // See the reference implementations for comparison.
+                // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
                 levels[i] = stack.last().level;
+                processing_classes[i] = BN;
             }
 
             // Nothing
-            B | BN => {}
+            // BN case moved down to X6, see <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
+            B => {}
 
             // <http://www.unicode.org/reports/tr9/#X6>
             _ => {
