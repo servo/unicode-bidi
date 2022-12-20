@@ -25,7 +25,7 @@ struct Fail {
 }
 
 #[test]
-#[should_panic(expected = "314 test cases failed! (256433 passed)")]
+#[should_panic(expected = "198 test cases failed! (256549 passed)")]
 fn test_basic_conformance() {
     let test_data = include_str!("data/BidiTest.txt");
 
@@ -138,7 +138,7 @@ fn gen_base_levels_for_base_tests(bitset: u8) -> Vec<Option<Level>> {
 }
 
 #[test]
-#[should_panic(expected = "34 test cases failed! (91673 passed)")]
+#[should_panic(expected = "29 test cases failed! (91678 passed)")]
 fn test_character_conformance() {
     let test_data = include_str!("data/BidiCharacterTest.txt");
 

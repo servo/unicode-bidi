@@ -46,6 +46,10 @@ pub fn resolve_weak(sequence: &IsolatingRunSequence, processing_classes: &mut [B
         .flat_map(id as fn(LevelRun) -> LevelRun);
 
     while let Some(i) = indices.next() {
+        // Store the processing class of all rules before W2,
+        // used to keep track of the last strong character for W2. W3 is able to insert new strong
+        // characters, so we don't want to be misled by it
+        let mut w2_processing_class = processing_classes[i];
         match processing_classes[i] {
             // <http://www.unicode.org/reports/tr9/#W1>
             NSM => {
@@ -53,6 +57,8 @@ pub fn resolve_weak(sequence: &IsolatingRunSequence, processing_classes: &mut [B
                     RLI | LRI | FSI | PDI => ON,
                     _ => prev_class,
                 };
+                // W1 occurs before W2, update this
+                w2_processing_class = processing_classes[i];
             }
             EN => {
                 if last_strong_is_al {
@@ -71,11 +77,16 @@ pub fn resolve_weak(sequence: &IsolatingRunSequence, processing_classes: &mut [B
 
             // <http://www.unicode.org/reports/tr9/#W4>
             ES | CS => {
-                let next_class = indices
+                let mut next_class = indices
                     .clone()
                     .map(|j| processing_classes[j])
                     .find(not_removed_by_x9)
                     .unwrap_or(sequence.eos);
+                if next_class == EN && last_strong_is_al {
+                    // Apply W2 to next_class. We know that last_strong_is_al
+                    // has no chance of changing on this character so we can still presume its value
+                    next_class = AN;
+                }
                 processing_classes[i] = match (prev_class, processing_classes[i], next_class) {
                     (EN, ES, EN) | (EN, CS, EN) => EN,
                     (AN, CS, AN) => AN,
@@ -97,7 +108,7 @@ pub fn resolve_weak(sequence: &IsolatingRunSequence, processing_classes: &mut [B
         }
 
         prev_class = processing_classes[i];
-        match prev_class {
+        match w2_processing_class {
             L | R => {
                 last_strong_is_al = false;
             }
@@ -438,7 +449,6 @@ fn identify_bracket_pairs<D: BidiDataSource>(
 #[cfg_attr(feature = "flame_it", flamer::flame)]
 pub fn resolve_levels(original_classes: &[BidiClass], levels: &mut [Level]) -> Level {
     let mut max_level = Level::ltr();
-
     assert_eq!(original_classes.len(), levels.len());
     for i in 0..levels.len() {
         match (levels[i].is_rtl(), original_classes[i]) {
