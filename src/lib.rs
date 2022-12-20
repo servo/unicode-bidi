@@ -355,7 +355,14 @@ impl<'text> BidiInfo<'text> {
             let sequences = prepare::isolating_run_sequences(para.level, original_classes, levels);
             for sequence in &sequences {
                 implicit::resolve_weak(sequence, processing_classes);
-                implicit::resolve_neutral(sequence, levels, processing_classes);
+                implicit::resolve_neutral(
+                    text,
+                    data_source,
+                    sequence,
+                    levels,
+                    original_classes,
+                    processing_classes,
+                );
             }
             implicit::resolve_levels(processing_classes, levels);
 
@@ -939,7 +946,7 @@ mod tests {
         assert_eq!(reorder_paras("א(ב)ג."), vec![".ג)ב(א"]);
 
         // With mirrorable characters on level boundry
-        assert_eq!(reorder_paras("אב(גד[&ef].)gh"), vec!["ef].)gh&[דג(בא"]);
+        assert_eq!(reorder_paras("אב(גד[&ef].)gh"), vec!["gh).]ef&[דג(בא"]);
     }
 
     fn reordered_levels_for_paras(text: &str) -> Vec<Vec<Level>> {
