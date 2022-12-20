@@ -219,7 +219,9 @@ pub fn resolve_neutral<D: BidiDataSource>(
     // N0. Process bracket pairs.
 
     // > Identify the bracket pairs in the current isolating run sequence according to BD16.
-    let bracket_pairs = identify_bracket_pairs(text, data_source, sequence, original_classes);
+    // We use processing_classes, not original_classes, due to a spec bug I am investigating
+    // https://github.com/unicode-org/properties/issues/68
+    let bracket_pairs = identify_bracket_pairs(text, data_source, sequence, processing_classes);
 
     // > For each bracket-pair element in the list of pairs of text positions
     //
