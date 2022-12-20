@@ -319,7 +319,7 @@ pub fn resolve_neutral<D: BidiDataSource>(
         if let Some(class_to_set) = class_to_set {
             // update all processing classes corresponding to the start and end elements, as requested.
             // We should include all bytes of the character, not the first one.
-            let end_len_utf8 = text[pair.start..].chars().next().unwrap().len_utf8();
+            let end_len_utf8 = text[pair.end..].chars().next().unwrap().len_utf8();
             for class in &mut processing_classes[pair.start..pair.start + start_len_utf8] {
                 *class = class_to_set;
             }
@@ -423,7 +423,8 @@ pub fn resolve_neutral<D: BidiDataSource>(
 
 /// 3.1.3 Identifying Bracket Pairs
 ///
-/// Returns all paired brackets in the source
+/// Returns all paired brackets in the source, as indices into the
+/// text source.
 ///
 /// <https://www.unicode.org/reports/tr9/#BD16>
 fn identify_bracket_pairs<D: BidiDataSource>(
@@ -453,11 +454,12 @@ fn identify_bracket_pairs<D: BidiDataSource>(
     // XXXManishearth perhaps try and coalesce this into one of the earlier
     // full-string iterator runs, perhaps explicit::compute()
     for (i, ch) in slice.char_indices() {
+        let actual_index = index_range.start + i;
         // all paren characters are ON
         // From BidiBrackets.txt:
         // > The Unicode property value stability policy guarantees that characters
         // > which have bpt=o or bpt=c also have bc=ON and Bidi_M=Y
-        if original_classes[i] != BidiClass::ON {
+        if original_classes[index_range.start + i] != BidiClass::ON {
             continue;
         }
 
@@ -471,7 +473,7 @@ fn identify_bracket_pairs<D: BidiDataSource>(
                     break;
                 }
                 // ... push its Bidi_Paired_Bracket property value and its text position onto the stack
-                stack.push((matched.opening, i))
+                stack.push((matched.opening, actual_index))
             } else {
                 // If a closing paired bracket is found, do the following
 
@@ -487,7 +489,7 @@ fn identify_bracket_pairs<D: BidiDataSource>(
 
                         // Append the text position in the current stack element together with the
                         // text position of the closing paired bracket to the list.
-                        ret.push(element.1..i);
+                        ret.push(element.1..actual_index);
 
                         // Pop the stack through the current stack element inclusively.
                         stack.truncate(stack_index);
