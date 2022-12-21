@@ -11,11 +11,10 @@
 
 use alloc::vec::Vec;
 use core::cmp::max;
-use core::ops::Range;
 
 use super::char_data::BidiClass::{self, *};
 use super::level::Level;
-use super::prepare::{not_removed_by_x9, removed_by_x9, IsolatingRunSequence, LevelRun};
+use super::prepare::{not_removed_by_x9, removed_by_x9, IsolatingRunSequence};
 use super::BidiDataSource;
 
 /// 3.3.4 Resolving Weak Types
@@ -40,138 +39,132 @@ pub fn resolve_weak(
     let mut et_run_indices = Vec::new(); // for W5
     let mut bn_run_indices = Vec::new(); // for W5 +  <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
 
-    // Like sequence.runs.iter().flat_map(Clone::clone), but make indices itself clonable.
-    fn id(x: LevelRun) -> LevelRun {
-        x
-    }
-    let mut indices = sequence
-        .runs
-        .iter()
-        .cloned()
-        .flat_map(id as fn(LevelRun) -> LevelRun);
-
-    while let Some(i) = indices.next() {
-        // Store the processing class of all rules before W2,
-        // used to keep track of the last strong character for W2. W3 is able to insert new strong
-        // characters, so we don't want to be misled by it
-        let mut w2_processing_class = processing_classes[i];
-        match processing_classes[i] {
-            // <http://www.unicode.org/reports/tr9/#W1>
-            NSM => {
-                processing_classes[i] = match prev_class {
-                    RLI | LRI | FSI | PDI => ON,
-                    _ => prev_class,
-                };
-                // W1 occurs before W2, update this
-                w2_processing_class = processing_classes[i];
-            }
-            EN => {
-                if last_strong_is_al {
-                    // W2. If previous strong char was AL, change EN to AN.
-                    processing_classes[i] = AN;
-                } else {
-                    // W5. If a run of ETs is adjacent to an EN, change the ETs to EN.
-                    for j in &et_run_indices {
-                        processing_classes[*j] = EN;
-                    }
-                    et_run_indices.clear();
-                }
-            }
-            // <http://www.unicode.org/reports/tr9/#W3>
-            AL => processing_classes[i] = R,
-
-            // <http://www.unicode.org/reports/tr9/#W4>
-            ES | CS => {
-                // see https://github.com/servo/unicode-bidi/issues/86
-                // We want to make sure we check the correct next character by skipping past the rest
-                // of this one
-                if let Some(ch) = text.get(i..).and_then(|s| s.chars().next()) {
-                    let mut next_class = indices
-                        .clone()
-                        .skip(ch.len_utf8() - 1)
-                        .map(|j| processing_classes[j])
-                        // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
-                        .find(not_removed_by_x9)
-                        .unwrap_or(sequence.eos);
-                    if next_class == EN && last_strong_is_al {
-                        // Apply W2 to next_class. We know that last_strong_is_al
-                        // has no chance of changing on this character so we can still presume its value
-                        next_class = AN;
-                    }
-                    processing_classes[i] = match (prev_class, processing_classes[i], next_class) {
-                        (EN, ES, EN) | (EN, CS, EN) => EN,
-                        (AN, CS, AN) => AN,
-                        (_, _, _) => ON,
+    for (run_index, level_run) in sequence.runs.iter().enumerate() {
+        for i in &mut level_run.clone() {
+            // Store the processing class of all rules before W2,
+            // used to keep track of the last strong character for W2. W3 is able to insert new strong
+            // characters, so we don't want to be misled by it
+            let mut w2_processing_class = processing_classes[i];
+            match processing_classes[i] {
+                // <http://www.unicode.org/reports/tr9/#W1>
+                NSM => {
+                    processing_classes[i] = match prev_class {
+                        RLI | LRI | FSI | PDI => ON,
+                        _ => prev_class,
                     };
-
-                    // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
-                    // we have to do this before W5 gets its grubby hands on these characters and thinks
-                    // they're part of an ET run
-                    if processing_classes[i] == ON {
-                        for class in processing_classes[..i]
-                            .iter_mut()
-                            .rev()
-                            .take_while(|c| **c == BN)
-                        {
-                            *class = ON;
-                        }
-                        for class in processing_classes[(i + ch.len_utf8() - 1)..]
-                            .iter_mut()
-                            .take_while(|c| **c == BN)
-                        {
-                            *class = ON;
-                        }
-                    }
-                } else {
-                    // we're in the middle of a character, copy over work done for previous bytes
-                    // since it's going to be the same answer
-                    processing_classes[i] = prev_class;
+                    // W1 occurs before W2, update this
+                    w2_processing_class = processing_classes[i];
                 }
-            }
-            // <http://www.unicode.org/reports/tr9/#W5>
-            ET => {
-                match prev_class {
-                    EN => processing_classes[i] = EN,
-                    _ => {
+                EN => {
+                    if last_strong_is_al {
+                        // W2. If previous strong char was AL, change EN to AN.
+                        processing_classes[i] = AN;
+                    } else {
+                        // W5. If a run of ETs is adjacent to an EN, change the ETs to EN.
+                        for j in &et_run_indices {
+                            processing_classes[*j] = EN;
+                        }
+                        et_run_indices.clear();
+                    }
+                }
+                // <http://www.unicode.org/reports/tr9/#W3>
+                AL => processing_classes[i] = R,
+
+                // <http://www.unicode.org/reports/tr9/#W4>
+                ES | CS => {
+                    // see https://github.com/servo/unicode-bidi/issues/86
+                    // We want to make sure we check the correct next character by skipping past the rest
+                    // of this one
+                    if let Some(ch) = text.get(i..).and_then(|s| s.chars().next()) {
+                        let mut next_class = sequence
+                            .iter_forwards_from(i + ch.len_utf8(), run_index)
+                            .map(|j| processing_classes[j])
+                            // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
+                            .find(not_removed_by_x9)
+                            .unwrap_or(sequence.eos);
+                        if next_class == EN && last_strong_is_al {
+                            // Apply W2 to next_class. We know that last_strong_is_al
+                            // has no chance of changing on this character so we can still presume its value
+                            next_class = AN;
+                        }
+                        processing_classes[i] =
+                            match (prev_class, processing_classes[i], next_class) {
+                                (EN, ES, EN) | (EN, CS, EN) => EN,
+                                (AN, CS, AN) => AN,
+                                (_, _, _) => ON,
+                            };
+
                         // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
-                        // if there was a BN run before this, that's now a part of this ET run
-                        et_run_indices.extend(&bn_run_indices);
-
-                        // In case this is followed by an EN.
-                        et_run_indices.push(i);
+                        // we have to do this before W5 gets its grubby hands on these characters and thinks
+                        // they're part of an ET run
+                        if processing_classes[i] == ON {
+                            for idx in sequence.iter_backwards_from(i, run_index) {
+                                let class = &mut processing_classes[idx];
+                                if *class != BN {
+                                    break;
+                                }
+                                *class = ON;
+                            }
+                            for idx in sequence.iter_forwards_from(i + ch.len_utf8(), run_index)
+                            {
+                                let class = &mut processing_classes[idx];
+                                if *class != BN {
+                                    break;
+                                }
+                                *class = ON;
+                            }
+                        }
+                    } else {
+                        // we're in the middle of a character, copy over work done for previous bytes
+                        // since it's going to be the same answer
+                        processing_classes[i] = prev_class;
                     }
                 }
-            }
-            BN => {
-                // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
-                // keeps track of bn runs for W5 in case we see an ET
-                bn_run_indices.push(i);
-                // skips over BNs for W1
-                continue;
-            }
-            _ => {}
-        }
+                // <http://www.unicode.org/reports/tr9/#W5>
+                ET => {
+                    match prev_class {
+                        EN => processing_classes[i] = EN,
+                        _ => {
+                            // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
+                            // if there was a BN run before this, that's now a part of this ET run
+                            et_run_indices.extend(&bn_run_indices);
 
-        // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
-        // BN runs would not exit the above loop
-        bn_run_indices.clear();
+                            // In case this is followed by an EN.
+                            et_run_indices.push(i);
+                        }
+                    }
+                }
+                BN => {
+                    // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
+                    // keeps track of bn runs for W5 in case we see an ET
+                    bn_run_indices.push(i);
+                    // skips over BNs for W1
+                    continue;
+                }
+                _ => {}
+            }
 
-        prev_class = processing_classes[i];
-        match w2_processing_class {
-            L | R => {
-                last_strong_is_al = false;
+            // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
+            // BN runs would not exit the above loop
+            bn_run_indices.clear();
+
+            prev_class = processing_classes[i];
+            match w2_processing_class {
+                L | R => {
+                    last_strong_is_al = false;
+                }
+                AL => {
+                    last_strong_is_al = true;
+                }
+                _ => {}
             }
-            AL => {
-                last_strong_is_al = true;
+            if prev_class != ET {
+                // W6. If we didn't find an adjacent EN, turn any ETs into ON instead.
+                for j in &et_run_indices {
+                    processing_classes[*j] = ON;
+                }
+                et_run_indices.clear();
             }
-            _ => {}
-        }
-        if prev_class != ET {
-            // W6. If we didn't find an adjacent EN, turn any ETs into ON instead.
-            for j in &et_run_indices {
-                processing_classes[*j] = ON;
-            }
-            et_run_indices.clear();
         }
     }
 
@@ -286,10 +279,9 @@ pub fn resolve_neutral<D: BidiDataSource>(
             // checking backwards before the opening paired bracket
             // until the first strong type (L, R, or sos) is found.
             // (see note above about processing_classes and character boundaries)
-            let mut previous_strong = processing_classes[..pair.start]
-                .iter()
-                .copied()
-                .rev()
+            let mut previous_strong = sequence
+                .iter_backwards_from(pair.start, pair.start_run)
+                .map(|i| processing_classes[i])
                 .find(|class| {
                     *class == BidiClass::L
                         || *class == BidiClass::R
@@ -326,11 +318,11 @@ pub fn resolve_neutral<D: BidiDataSource>(
                 *class = class_to_set;
             }
             // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
-            for class in processing_classes[..pair.start]
-                .iter_mut()
-                .rev()
-                .take_while(|c| **c == BN)
-            {
+            for idx in sequence.iter_backwards_from(pair.start, pair.start_run) {
+                let class = &mut processing_classes[idx];
+                if *class != BN {
+                    break;
+                }
                 *class = class_to_set;
             }
             // > Any number of characters that had original bidirectional character type NSM prior to the application of
@@ -339,17 +331,19 @@ pub fn resolve_neutral<D: BidiDataSource>(
             // This rule deals with sequences of NSMs, so we can just update them all at once, we don't need to worry
             // about character boundaries. We do need to be careful to skip the full set of bytes for the parentheses characters.
             let nsm_start = pair.start + start_len_utf8;
-            for (idx, class) in original_classes[nsm_start..].iter().enumerate() {
-                if *class == BidiClass::NSM || processing_classes[nsm_start + idx] == BN {
-                    processing_classes[nsm_start + idx] = class_to_set;
+            for idx in sequence.iter_forwards_from(nsm_start, pair.start_run) {
+                let class = original_classes[idx];
+                if class == BidiClass::NSM || processing_classes[idx] == BN {
+                    processing_classes[idx] = class_to_set;
                 } else {
                     break;
                 }
             }
             let nsm_end = pair.end + end_len_utf8;
-            for (idx, class) in original_classes[nsm_end..].iter().enumerate() {
-                if *class == BidiClass::NSM || processing_classes[nsm_end + idx] == BN {
-                    processing_classes[nsm_end + idx] = class_to_set;
+            for idx in sequence.iter_forwards_from(nsm_end, pair.end_run) {
+                let class = original_classes[idx];
+                if class == BidiClass::NSM || processing_classes[idx] == BN {
+                    processing_classes[idx] = class_to_set;
                 } else {
                     break;
                 }
