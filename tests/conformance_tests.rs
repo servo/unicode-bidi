@@ -138,7 +138,6 @@ fn gen_base_levels_for_base_tests(bitset: u8) -> Vec<Option<Level>> {
 }
 
 #[test]
-#[should_panic(expected = "2 test cases failed! (91705 passed)")]
 fn test_character_conformance() {
     let test_data = include_str!("data/BidiCharacterTest.txt");
 

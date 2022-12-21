@@ -243,21 +243,20 @@ pub fn resolve_neutral<D: BidiDataSource>(
         let mut class_to_set = None;
 
         let start_len_utf8 = text[pair.start..].chars().next().unwrap().len_utf8();
-        // get the range of characters enclosed
-        let enclosed = (pair.start + start_len_utf8)..pair.end;
         // > Inspect the bidirectional types of the characters enclosed within the bracket pair.
         //
         // `pair` is [start, end) so we will end up processing the opening character but not the closing one.
         //
-        // Note: Given that processing_classes has been modified in the previous runs, and resolve_weak
-        // modifies processing_classes inconsistently at non-character-boundaries,
-        // this and the later iteration will end up iterating over some obsolete classes.
-        // This is fine since all we care about is looking for strong
-        // classes, and strong_classes do not change in resolve_weak. The alternative is calling `.char_indices()`
-        // on the text (or checking `text.get(idx).is_some()`), which would be a way to avoid hitting these
-        // processing_classes of bytes not on character boundaries. This is both cleaner and likely to be faster
-        // (this is worth benchmarking, though!) so we'll stick with the current approach of iterating over processing_classes.
-        for &class in &processing_classes[enclosed] {
+        for enclosed_i in sequence.iter_forwards_from(pair.start + start_len_utf8, pair.start_run) {
+            if enclosed_i >= pair.end {
+                #[cfg(feature = "std")]
+                debug_assert!(
+                    enclosed_i == pair.end,
+                    "If we skipped past this, the iterator is broken"
+                );
+                break;
+            }
+            let class = processing_classes[enclosed_i];
             if class == e {
                 found_e = true;
             } else if class == not_e {
@@ -421,6 +420,16 @@ pub fn resolve_neutral<D: BidiDataSource>(
     }
 }
 
+struct BracketPair {
+    /// The text-relative index of the opening bracket
+    start: usize,
+    /// The text-relative index of the closing bracket
+    end: usize,
+    /// The index of the run (in the run sequence) that the opening bracket is in
+    start_run: usize,
+    /// The index of the run (in the run sequence) that the closing bracket is in
+    end_run: usize,
+}
 /// 3.1.3 Identifying Bracket Pairs
 ///
 /// Returns all paired brackets in the source, as indices into the
@@ -432,11 +441,11 @@ fn identify_bracket_pairs<D: BidiDataSource>(
     data_source: &D,
     run_sequence: &IsolatingRunSequence,
     original_classes: &[BidiClass],
-) -> Vec<Range<usize>> {
+) -> Vec<BracketPair> {
     let mut ret = vec![];
     let mut stack = vec![];
 
-    for level_run in &run_sequence.runs {
+    for (run_index, level_run) in run_sequence.runs.iter().enumerate() {
         let slice = if let Some(slice) = text.get(level_run.clone()) {
             slice
         } else {
@@ -473,7 +482,7 @@ fn identify_bracket_pairs<D: BidiDataSource>(
                         break;
                     }
                     // ... push its Bidi_Paired_Bracket property value and its text position onto the stack
-                    stack.push((matched.opening, actual_index))
+                    stack.push((matched.opening, actual_index, run_index))
                 } else {
                     // If a closing paired bracket is found, do the following
 
@@ -489,7 +498,13 @@ fn identify_bracket_pairs<D: BidiDataSource>(
 
                             // Append the text position in the current stack element together with the
                             // text position of the closing paired bracket to the list.
-                            ret.push(element.1..actual_index);
+                            let pair = BracketPair {
+                                start: element.1,
+                                end: actual_index,
+                                start_run: element.2,
+                                end_run: run_index,
+                            };
+                            ret.push(pair);
 
                             // Pop the stack through the current stack element inclusively.
                             stack.truncate(stack_index);
