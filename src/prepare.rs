@@ -142,6 +142,45 @@ impl IsolatingRunSequence {
             return 0..0;
         }
     }
+
+    /// Given a text-relative position `pos` and an index of the level run it is in,
+    /// produce an iterator of all characters after and pos (`pos..`) that are in this
+    /// run sequence
+    pub(crate) fn iter_forwards_from(
+        &self,
+        pos: usize,
+        level_run_index: usize,
+    ) -> impl Iterator<Item = usize> + '_ {
+        let runs = &self.runs[level_run_index..];
+
+        // Check that it is in range
+        // (we can't use contains() since we want an inclusive range)
+        #[cfg(feature = "std")]
+        debug_assert!(runs[0].start <= pos && pos <= runs[0].end);
+
+        (pos..runs[0].end).chain(runs[1..].iter().flat_map(Clone::clone))
+    }
+
+    /// Given a text-relative position `pos` and an index of the level run it is in,
+    /// produce an iterator of all characters before and excludingpos (`..pos`) that are in this
+    /// run sequence
+    pub(crate) fn iter_backwards_from(
+        &self,
+        pos: usize,
+        level_run_index: usize,
+    ) -> impl Iterator<Item = usize> + '_ {
+        let prev_runs = &self.runs[..level_run_index];
+        let current = &self.runs[level_run_index];
+
+        // Check that it is in range
+        // (we can't use contains() since we want an inclusive range)
+        #[cfg(feature = "std")]
+        debug_assert!(current.start <= pos && pos <= current.end);
+
+        (current.start..pos)
+            .rev()
+            .chain(prev_runs.iter().rev().flat_map(Clone::clone))
+    }
 }
 
 /// Finds the level runs in a paragraph.
