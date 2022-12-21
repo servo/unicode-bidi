@@ -436,64 +436,65 @@ fn identify_bracket_pairs<D: BidiDataSource>(
     let mut ret = vec![];
     let mut stack = vec![];
 
-    let index_range = run_sequence.text_range();
-    let slice = if let Some(slice) = text.get(index_range.clone()) {
-        slice
-    } else {
-        #[cfg(feature = "std")]
-        std::debug_assert!(
-            false,
-            "Found broken indices in isolating run sequence: found indices {}..{} for string {:?}",
-            index_range.start,
-            index_range.end,
-            text
-        );
-        return ret;
-    };
+    for level_run in &run_sequence.runs {
+        let slice = if let Some(slice) = text.get(level_run.clone()) {
+            slice
+        } else {
+            #[cfg(feature = "std")]
+            std::debug_assert!(
+                false,
+                "Found broken indices in level run: found indices {}..{} for string of length {}",
+                level_run.start,
+                level_run.end,
+                text.len()
+            );
+            return ret;
+        };
 
-    // XXXManishearth perhaps try and coalesce this into one of the earlier
-    // full-string iterator runs, perhaps explicit::compute()
-    for (i, ch) in slice.char_indices() {
-        let actual_index = index_range.start + i;
-        // all paren characters are ON
-        // From BidiBrackets.txt:
-        // > The Unicode property value stability policy guarantees that characters
-        // > which have bpt=o or bpt=c also have bc=ON and Bidi_M=Y
-        if original_classes[index_range.start + i] != BidiClass::ON {
-            continue;
-        }
+        // XXXManishearth perhaps try and coalesce this into one of the earlier
+        // full-string iterator runs, perhaps explicit::compute()
+        for (i, ch) in slice.char_indices() {
+            let actual_index = level_run.start + i;
+            // all paren characters are ON
+            // From BidiBrackets.txt:
+            // > The Unicode property value stability policy guarantees that characters
+            // > which have bpt=o or bpt=c also have bc=ON and Bidi_M=Y
+            if original_classes[level_run.start + i] != BidiClass::ON {
+                continue;
+            }
 
-        if let Some(matched) = data_source.bidi_matched_opening_bracket(ch) {
-            if matched.is_open {
-                // If an opening paired bracket is found ...
+            if let Some(matched) = data_source.bidi_matched_opening_bracket(ch) {
+                if matched.is_open {
+                    // If an opening paired bracket is found ...
 
-                // ... and there is no room in the stack,
-                // stop processing BD16 for the remainder of the isolating run sequence.
-                if stack.len() >= 63 {
-                    break;
-                }
-                // ... push its Bidi_Paired_Bracket property value and its text position onto the stack
-                stack.push((matched.opening, actual_index))
-            } else {
-                // If a closing paired bracket is found, do the following
-
-                // Declare a variable that holds a reference to the current stack element
-                // and initialize it with the top element of the stack.
-                // AND
-                // Else, if the current stack element is not at the bottom of the stack
-                for (stack_index, element) in stack.iter().enumerate().rev() {
-                    // Compare the closing paired bracket being inspected or its canonical
-                    // equivalent to the bracket in the current stack element.
-                    if element.0 == matched.opening {
-                        // If the values match, meaning the two characters form a bracket pair, then
-
-                        // Append the text position in the current stack element together with the
-                        // text position of the closing paired bracket to the list.
-                        ret.push(element.1..actual_index);
-
-                        // Pop the stack through the current stack element inclusively.
-                        stack.truncate(stack_index);
+                    // ... and there is no room in the stack,
+                    // stop processing BD16 for the remainder of the isolating run sequence.
+                    if stack.len() >= 63 {
                         break;
+                    }
+                    // ... push its Bidi_Paired_Bracket property value and its text position onto the stack
+                    stack.push((matched.opening, actual_index))
+                } else {
+                    // If a closing paired bracket is found, do the following
+
+                    // Declare a variable that holds a reference to the current stack element
+                    // and initialize it with the top element of the stack.
+                    // AND
+                    // Else, if the current stack element is not at the bottom of the stack
+                    for (stack_index, element) in stack.iter().enumerate().rev() {
+                        // Compare the closing paired bracket being inspected or its canonical
+                        // equivalent to the bracket in the current stack element.
+                        if element.0 == matched.opening {
+                            // If the values match, meaning the two characters form a bracket pair, then
+
+                            // Append the text position in the current stack element together with the
+                            // text position of the closing paired bracket to the list.
+                            ret.push(element.1..actual_index);
+
+                            // Pop the stack through the current stack element inclusively.
+                            stack.truncate(stack_index);
+                            break;
+                        }
                     }
                 }
             }
