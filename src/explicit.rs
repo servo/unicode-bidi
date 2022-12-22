@@ -156,10 +156,14 @@ pub fn compute(
             _ => {
                 let last = stack.last();
                 levels[i] = last.level;
-                match last.status {
-                    OverrideStatus::RTL => processing_classes[i] = R,
-                    OverrideStatus::LTR => processing_classes[i] = L,
-                    _ => {}
+                // This condition is not in the spec, but I am pretty sure that is a spec bug
+                // https://github.com/unicode-org/properties/issues/71
+                if original_classes[i] != BN {
+                    match last.status {
+                        OverrideStatus::RTL => processing_classes[i] = R,
+                        OverrideStatus::LTR => processing_classes[i] = L,
+                        _ => {}
+                    }
                 }
             }
         }

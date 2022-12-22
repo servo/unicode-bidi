@@ -105,8 +105,7 @@ pub fn resolve_weak(
                                 }
                                 *class = ON;
                             }
-                            for idx in sequence.iter_forwards_from(i + ch.len_utf8(), run_index)
-                            {
+                            for idx in sequence.iter_forwards_from(i + ch.len_utf8(), run_index) {
                                 let class = &mut processing_classes[idx];
                                 if *class != BN {
                                     break;
@@ -387,7 +386,6 @@ pub fn resolve_neutral<D: BidiDataSource>(
                     }
                 };
             }
-
             // N1-N2.
             //
             // <http://www.unicode.org/reports/tr9/#N1>
