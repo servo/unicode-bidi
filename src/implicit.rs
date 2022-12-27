@@ -54,6 +54,11 @@ pub fn resolve_weak(
                     };
                     // W1 occurs before W2, update this
                     w2_processing_class = processing_classes[i];
+
+                    // W1 occurs before W5/W6, track changed class
+                    if processing_classes[i] == ET {
+                        et_run_indices.push(i);
+                    }
                 }
                 EN => {
                     if last_strong_is_al {
