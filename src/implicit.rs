@@ -166,6 +166,13 @@ pub fn resolve_weak(
             }
         }
     }
+    // Rerun this check in case we ended with a sequence of BNs (i.e., we'd never
+    // hit the end of the for loop above)
+    // W6. If we didn't find an adjacent EN, turn any ETs into ON instead.
+    for j in &et_run_indices {
+        processing_classes[*j] = ON;
+    }
+    et_run_indices.clear();
 
     // W7. If the previous strong char was L, change EN to L.
     let mut last_strong_is_l = sequence.sos == L;
@@ -370,11 +377,9 @@ pub fn resolve_neutral<D: BidiDataSource>(
                 match indices.next() {
                     Some(j) => {
                         i = j;
-                        if removed_by_x9(processing_classes[i]) {
-                            continue;
-                        }
                         next_class = processing_classes[j];
-                        if is_NI(next_class) {
+                        // The BN is for <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
+                        if is_NI(next_class) || next_class == BN {
                             ni_run.push(i);
                         } else {
                             break;
