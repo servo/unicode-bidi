@@ -35,31 +35,38 @@ pub fn resolve_weak(
     // conformance tests, like BidiTest:69635 (AL ET EN)
 
     let mut prev_class = sequence.sos;
+    // The previous class for the purposes of rule W1, not tracking changes from any other rules
+    let mut prev_w1_class = sequence.sos;
     let mut last_strong_is_al = false;
     let mut et_run_indices = Vec::new(); // for W5
     let mut bn_run_indices = Vec::new(); // for W5 +  <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
 
     for (run_index, level_run) in sequence.runs.iter().enumerate() {
         for i in &mut level_run.clone() {
-            // Store the processing class of all rules before W2,
+            // Store the processing class of all rules before W2/W1
             // used to keep track of the last strong character for W2. W3 is able to insert new strong
-            // characters, so we don't want to be misled by it
+            // characters, so we don't want to be misled by it.
             let mut w2_processing_class = processing_classes[i];
-            match processing_classes[i] {
-                // <http://www.unicode.org/reports/tr9/#W1>
-                NSM => {
-                    processing_classes[i] = match prev_class {
-                        RLI | LRI | FSI | PDI => ON,
-                        _ => prev_class,
-                    };
-                    // W1 occurs before W2, update this
-                    w2_processing_class = processing_classes[i];
 
-                    // W1 occurs before W5/W6, track changed class
-                    if processing_classes[i] == ET {
-                        et_run_indices.push(i);
-                    }
-                }
+            // <http://www.unicode.org/reports/tr9/#W1>
+            if processing_classes[i] == NSM {
+                processing_classes[i] = match prev_w1_class {
+                    RLI | LRI | FSI | PDI => ON,
+                    _ => prev_w1_class,
+                };
+                // W1 occurs before W2, update this
+                w2_processing_class = processing_classes[i];
+            }
+
+            // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
+            // Skip over BNs for W1
+            if processing_classes[i] != BN {
+                prev_w1_class = processing_classes[i];
+            }
+
+            match processing_classes[i] {
+                // W1, handled above
+                NSM => (),
                 EN => {
                     if last_strong_is_al {
                         // W2. If previous strong char was AL, change EN to AN.
@@ -142,7 +149,7 @@ pub fn resolve_weak(
                     // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
                     // keeps track of bn runs for W5 in case we see an ET
                     bn_run_indices.push(i);
-                    // skips over BNs for W1
+                    // BNs aren't real, skip over them
                     continue;
                 }
                 _ => {}
