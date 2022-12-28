@@ -26,15 +26,16 @@ pub fn resolve_weak(
     sequence: &IsolatingRunSequence,
     processing_classes: &mut [BidiClass],
 ) {
-    // FIXME (#8): This function applies steps W1-W6 in a single pass.  This can produce
-    // incorrect results in cases where a "later" rule changes the value of `prev_class` seen
-    // by an "earlier" rule.  We should either split this into separate passes, or preserve
-    // extra state so each rule can see the correct previous class.
+    // Note: The spec treats these steps as individual passes that are applied one after the other
+    // on the entire IsolatingRunSequence at once. We instead collapse it into a single iteration,
+    // which is straightforward for rules that are based on the state of the current character, but not
+    // for rules that care about surrounding characters. To deal with them, we retain additional state
+    // about previous character classes that may have since been changed by later rules.
 
-    // FIXME: Also, this could be the cause of increased failure for using longer-UTF-8 chars in
-    // conformance tests, like BidiTest:69635 (AL ET EN)
-
-    let mut prev_class = sequence.sos;
+    // The previous class for the purposes of rule W4/W6, not tracking changes made after or during W4
+    let mut prev_w46_class = sequence.sos;
+    // The previous class for the purposes of rule W5
+    let mut prev_w5_class = sequence.sos;
     // The previous class for the purposes of rule W1, not tracking changes from any other rules
     let mut prev_w1_class = sequence.sos;
     let mut last_strong_is_al = false;
@@ -43,12 +44,22 @@ pub fn resolve_weak(
 
     for (run_index, level_run) in sequence.runs.iter().enumerate() {
         for i in &mut level_run.clone() {
+            if processing_classes[i] == BN {
+                // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
+                // keeps track of bn runs for W5 in case we see an ET
+                bn_run_indices.push(i);
+                // BNs aren't real, skip over them
+                continue;
+            }
+
             // Store the processing class of all rules before W2/W1
             // used to keep track of the last strong character for W2. W3 is able to insert new strong
             // characters, so we don't want to be misled by it.
             let mut w2_processing_class = processing_classes[i];
 
             // <http://www.unicode.org/reports/tr9/#W1>
+            //
+
             if processing_classes[i] == NSM {
                 processing_classes[i] = match prev_w1_class {
                     RLI | LRI | FSI | PDI => ON,
@@ -58,31 +69,53 @@ pub fn resolve_weak(
                 w2_processing_class = processing_classes[i];
             }
 
-            // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
-            // Skip over BNs for W1
-            if processing_classes[i] != BN {
-                prev_w1_class = processing_classes[i];
-            }
+            prev_w1_class = processing_classes[i];
 
+            // <http://www.unicode.org/reports/tr9/#W2>
+            // <http://www.unicode.org/reports/tr9/#W3>
+            //
             match processing_classes[i] {
-                // W1, handled above
-                NSM => (),
                 EN => {
                     if last_strong_is_al {
                         // W2. If previous strong char was AL, change EN to AN.
                         processing_classes[i] = AN;
-                    } else {
-                        // W5. If a run of ETs is adjacent to an EN, change the ETs to EN.
-                        for j in &et_run_indices {
-                            processing_classes[*j] = EN;
-                        }
-                        et_run_indices.clear();
                     }
                 }
-                // <http://www.unicode.org/reports/tr9/#W3>
+                // W3
                 AL => processing_classes[i] = R,
+                _ => {}
+            }
+
+            // update last_strong_is_al
+            match w2_processing_class {
+                L | R => {
+                    last_strong_is_al = false;
+                }
+                AL => {
+                    last_strong_is_al = true;
+                }
+                _ => {}
+            }
+
+            let class_before_w456 = processing_classes[i];
+
+            // <http://www.unicode.org/reports/tr9/#W4>
+            // <http://www.unicode.org/reports/tr9/#W5>
+            // <http://www.unicode.org/reports/tr9/#W6> (separators only)
+            // (see below for W6 terminator code)
+            //
+            match processing_classes[i] {
+                // <http://www.unicode.org/reports/tr9/#W6>
+                EN => {
+                    // W5. If a run of ETs is adjacent to an EN, change the ETs to EN.
+                    for j in &et_run_indices {
+                        processing_classes[*j] = EN;
+                    }
+                    et_run_indices.clear();
+                }
 
                 // <http://www.unicode.org/reports/tr9/#W4>
+                // <http://www.unicode.org/reports/tr9/#W6>
                 ES | CS => {
                     // see https://github.com/servo/unicode-bidi/issues/86
                     // We want to make sure we check the correct next character by skipping past the rest
@@ -100,12 +133,16 @@ pub fn resolve_weak(
                             next_class = AN;
                         }
                         processing_classes[i] =
-                            match (prev_class, processing_classes[i], next_class) {
+                            match (prev_w46_class, processing_classes[i], next_class) {
+                                // W4
                                 (EN, ES, EN) | (EN, CS, EN) => EN,
+                                // W4
                                 (AN, CS, AN) => AN,
+                                // W6 (separators only)
                                 (_, _, _) => ON,
                             };
 
+                        // W6 +
                         // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
                         // we have to do this before W5 gets its grubby hands on these characters and thinks
                         // they're part of an ET run
@@ -128,12 +165,12 @@ pub fn resolve_weak(
                     } else {
                         // we're in the middle of a character, copy over work done for previous bytes
                         // since it's going to be the same answer
-                        processing_classes[i] = prev_class;
+                        processing_classes[i] = processing_classes[i - 1];
                     }
                 }
                 // <http://www.unicode.org/reports/tr9/#W5>
                 ET => {
-                    match prev_class {
+                    match prev_w5_class {
                         EN => processing_classes[i] = EN,
                         _ => {
                             // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
@@ -145,37 +182,34 @@ pub fn resolve_weak(
                         }
                     }
                 }
-                BN => {
-                    // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
-                    // keeps track of bn runs for W5 in case we see an ET
-                    bn_run_indices.push(i);
-                    // BNs aren't real, skip over them
-                    continue;
-                }
                 _ => {}
             }
+
+            // Common loop iteration code
+            //
 
             // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
-            // BN runs would not exit the above loop
+            // BN runs would have already continued the loop, clear them before we get to the next one
             bn_run_indices.clear();
 
-            prev_class = processing_classes[i];
-            match w2_processing_class {
-                L | R => {
-                    last_strong_is_al = false;
-                }
-                AL => {
-                    last_strong_is_al = true;
-                }
-                _ => {}
-            }
-            if prev_class != ET {
+            // W6 above only deals with separators, so it doesn't change anything W5 cares about,
+            // so we still can update this after running that part of W6.
+            prev_w5_class = processing_classes[i];
+
+            // <http://www.unicode.org/reports/tr9/#W6> (terminators only)
+            // (see above for W6 separator code)
+            //
+            if prev_w5_class != ET {
                 // W6. If we didn't find an adjacent EN, turn any ETs into ON instead.
                 for j in &et_run_indices {
                     processing_classes[*j] = ON;
                 }
                 et_run_indices.clear();
             }
+
+            // We stashed this before W4/5/6 could get their grubby hands on it, and it's not
+            // used in the W6 terminator code below so we can update it now
+            prev_w46_class = class_before_w456;
         }
     }
     // Rerun this check in case we ended with a sequence of BNs (i.e., we'd never
