@@ -158,7 +158,7 @@ pub fn compute(
                 let last = stack.last();
                 levels[i] = last.level;
                 // This condition is not in the spec, but I am pretty sure that is a spec bug
-                // https://github.com/unicode-org/properties/issues/71
+                // https://www.unicode.org/L2/L2023/23014-amd-to-uax9.pdf
                 if original_classes[i] != BN {
                     match last.status {
                         OverrideStatus::RTL => processing_classes[i] = R,
