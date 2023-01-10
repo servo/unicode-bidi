@@ -98,12 +98,12 @@ pub fn compute(
                 if !is_isolate {
                     // X9 +
                     // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
+                    // (PDF handled below)
                     processing_classes[i] = BN;
                 }
             }
 
             // <http://www.unicode.org/reports/tr9/#X6a>
-            // The BN is from <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
             PDI => {
                 if overflow_isolate_count > 0 {
                     overflow_isolate_count -= 1;
@@ -145,6 +145,7 @@ pub fn compute(
                 }
                 // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
                 levels[i] = stack.last().level;
+                // X9 part of retaining explicit formatting characters
                 processing_classes[i] = BN;
             }
 
