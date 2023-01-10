@@ -134,13 +134,10 @@ pub fn compute(
             // <http://www.unicode.org/reports/tr9/#X7>
             PDF => {
                 if overflow_isolate_count > 0 {
-                    continue;
-                }
-                if overflow_embedding_count > 0 {
+                    // do nothing
+                } else if overflow_embedding_count > 0 {
                     overflow_embedding_count -= 1;
-                    continue;
-                }
-                if stack.last().status != OverrideStatus::Isolate && stack.vec.len() >= 2 {
+                } else if stack.last().status != OverrideStatus::Isolate && stack.vec.len() >= 2 {
                     stack.vec.pop();
                 }
                 // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
