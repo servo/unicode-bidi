@@ -56,7 +56,7 @@ pub fn compute(
                     _ => false,
                 };
                 if is_isolate {
-                    // Redundant due to "Retaining explicit formatting characters" step
+                    // Redundant due to "Retaining explicit formatting characters" step.
                     // levels[i] = last_level;
                     match stack.last().status {
                         OverrideStatus::RTL => processing_classes[i] = R,
@@ -142,11 +142,11 @@ pub fn compute(
                 }
                 // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
                 levels[i] = stack.last().level;
-                // X9 part of retaining explicit formatting characters
+                // X9 part of retaining explicit formatting characters.
                 processing_classes[i] = BN;
             }
 
-            // Nothing
+            // Nothing.
             // BN case moved down to X6, see <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
             B => {}
 
@@ -154,7 +154,7 @@ pub fn compute(
             _ => {
                 let last = stack.last();
                 levels[i] = last.level;
-                // This condition is not in the spec, but I am pretty sure that is a spec bug
+                // This condition is not in the spec, but I am pretty sure that is a spec bug.
                 // https://www.unicode.org/L2/L2023/23014-amd-to-uax9.pdf
                 if original_classes[i] != BN {
                     match last.status {

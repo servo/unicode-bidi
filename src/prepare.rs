@@ -134,10 +134,10 @@ pub fn isolating_run_sequences(
                 None => para_level,
             };
 
-            // Get the last non-removed character to check if it is an isolate initiator
+            // Get the last non-removed character to check if it is an isolate initiator.
             // The spec calls for an unmatched one, but matched isolate initiators
             // will never be at the end of a level run (otherwise there would be more to the run).
-            // We unwrap_or(BN) because BN marks removed classes and it won't matter for the check
+            // We unwrap_or(BN) because BN marks removed classes and it won't matter for the check.
             let last_non_removed = original_classes[..end_of_seq]
                 .iter()
                 .copied()

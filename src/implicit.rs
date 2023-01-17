@@ -32,11 +32,11 @@ pub fn resolve_weak(
     // for rules that care about surrounding characters. To deal with them, we retain additional state
     // about previous character classes that may have since been changed by later rules.
 
-    // The previous class for the purposes of rule W4/W6, not tracking changes made after or during W4
+    // The previous class for the purposes of rule W4/W6, not tracking changes made after or during W4.
     let mut prev_w46_class = sequence.sos;
-    // The previous class for the purposes of rule W5
+    // The previous class for the purposes of rule W5.
     let mut prev_w5_class = sequence.sos;
-    // The previous class for the purposes of rule W1, not tracking changes from any other rules
+    // The previous class for the purposes of rule W1, not tracking changes from any other rules.
     let mut prev_w1_class = sequence.sos;
     let mut last_strong_is_al = false;
     let mut et_run_indices = Vec::new(); // for W5
@@ -46,14 +46,14 @@ pub fn resolve_weak(
         for i in &mut level_run.clone() {
             if processing_classes[i] == BN {
                 // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
-                // keeps track of bn runs for W5 in case we see an ET
+                // Keeps track of bn runs for W5 in case we see an ET.
                 bn_run_indices.push(i);
-                // BNs aren't real, skip over them
+                // BNs aren't real, skip over them.
                 continue;
             }
 
-            // Store the processing class of all rules before W2/W1
-            // used to keep track of the last strong character for W2. W3 is able to insert new strong
+            // Store the processing class of all rules before W2/W1.
+            // Used to keep track of the last strong character for W2. W3 is able to insert new strong
             // characters, so we don't want to be misled by it.
             let mut w2_processing_class = processing_classes[i];
 
@@ -65,7 +65,7 @@ pub fn resolve_weak(
                     RLI | LRI | FSI | PDI => ON,
                     _ => prev_w1_class,
                 };
-                // W1 occurs before W2, update this
+                // W1 occurs before W2, update this.
                 w2_processing_class = processing_classes[i];
             }
 
@@ -81,12 +81,12 @@ pub fn resolve_weak(
                         processing_classes[i] = AN;
                     }
                 }
-                // W3
+                // W3.
                 AL => processing_classes[i] = R,
                 _ => {}
             }
 
-            // update last_strong_is_al
+            // update last_strong_is_al.
             match w2_processing_class {
                 L | R => {
                     last_strong_is_al = false;
@@ -117,9 +117,9 @@ pub fn resolve_weak(
                 // <http://www.unicode.org/reports/tr9/#W4>
                 // <http://www.unicode.org/reports/tr9/#W6>
                 ES | CS => {
-                    // see https://github.com/servo/unicode-bidi/issues/86
+                    // See https://github.com/servo/unicode-bidi/issues/86
                     // We want to make sure we check the correct next character by skipping past the rest
-                    // of this one
+                    // of this one.
                     if let Some(ch) = text.get(i..).and_then(|s| s.chars().next()) {
                         let mut next_class = sequence
                             .iter_forwards_from(i + ch.len_utf8(), run_index)
@@ -128,8 +128,8 @@ pub fn resolve_weak(
                             .find(not_removed_by_x9)
                             .unwrap_or(sequence.eos);
                         if next_class == EN && last_strong_is_al {
-                            // Apply W2 to next_class. We know that last_strong_is_al
-                            // has no chance of changing on this character so we can still presume its value
+                            // Apply W2 to next_class. We know that last_strong_is_al.
+                            // Has no chance of changing on this character so we can still presume its value.
                             next_class = AN;
                         }
                         processing_classes[i] =
@@ -144,8 +144,8 @@ pub fn resolve_weak(
 
                         // W6 +
                         // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
-                        // we have to do this before W5 gets its grubby hands on these characters and thinks
-                        // they're part of an ET run
+                        // We have to do this before W5 gets its grubby hands on these characters and thinks
+                        // they're part of an ET run.
                         if processing_classes[i] == ON {
                             for idx in sequence.iter_backwards_from(i, run_index) {
                                 let class = &mut processing_classes[idx];
@@ -163,8 +163,8 @@ pub fn resolve_weak(
                             }
                         }
                     } else {
-                        // we're in the middle of a character, copy over work done for previous bytes
-                        // since it's going to be the same answer
+                        // We're in the middle of a character, copy over work done for previous bytes
+                        // since it's going to be the same answer/
                         processing_classes[i] = processing_classes[i - 1];
                     }
                 }
@@ -174,7 +174,7 @@ pub fn resolve_weak(
                         EN => processing_classes[i] = EN,
                         _ => {
                             // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
-                            // if there was a BN run before this, that's now a part of this ET run
+                            // If there was a BN run before this, that's now a part of this ET run.
                             et_run_indices.extend(&bn_run_indices);
 
                             // In case this is followed by an EN.
@@ -189,7 +189,7 @@ pub fn resolve_weak(
             //
 
             // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
-            // BN runs would have already continued the loop, clear them before we get to the next one
+            // BN runs would have already continued the loop, clear them before we get to the next one.
             bn_run_indices.clear();
 
             // W6 above only deals with separators, so it doesn't change anything W5 cares about,
@@ -208,12 +208,12 @@ pub fn resolve_weak(
             }
 
             // We stashed this before W4/5/6 could get their grubby hands on it, and it's not
-            // used in the W6 terminator code below so we can update it now
+            // used in the W6 terminator code below so we can update it now.
             prev_w46_class = class_before_w456;
         }
     }
     // Rerun this check in case we ended with a sequence of BNs (i.e., we'd never
-    // hit the end of the for loop above)
+    // hit the end of the for loop above).
     // W6. If we didn't find an adjacent EN, turn any ETs into ON instead.
     for j in &et_run_indices {
         processing_classes[*j] = ON;
@@ -235,7 +235,7 @@ pub fn resolve_weak(
                     last_strong_is_l = false;
                 }
                 // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
-                // already scanning past BN here
+                // Already scanning past BN here.
                 _ => {}
             }
         }
@@ -264,14 +264,13 @@ pub fn resolve_neutral<D: BidiDataSource>(
     // N0. Process bracket pairs.
 
     // > Identify the bracket pairs in the current isolating run sequence according to BD16.
-    // We use processing_classes, not original_classes, due to a spec bug I am investigating
-    // https://github.com/unicode-org/properties/issues/68
+    // We use processing_classes, not original_classes, due to BD14/BD15
     let bracket_pairs = identify_bracket_pairs(text, data_source, sequence, processing_classes);
 
     // > For each bracket-pair element in the list of pairs of text positions
     //
     // Note: Rust ranges are interpreted as [start..end), be careful using `pair` directly
-    // for indexing as it will include the opening bracket pair but not the closing one
+    // for indexing as it will include the opening bracket pair but not the closing one.
     for pair in bracket_pairs {
         #[cfg(feature = "std")]
         debug_assert!(
@@ -315,8 +314,8 @@ pub fn resolve_neutral<D: BidiDataSource>(
                 }
             }
 
-            // if we have found a character with the class of the embedding direction
-            // we can bail early
+            // If we have found a character with the class of the embedding direction
+            // we can bail early.
             if found_e {
                 break;
             }
@@ -327,9 +326,9 @@ pub fn resolve_neutral<D: BidiDataSource>(
             class_to_set = Some(e);
         // > Otherwise, if there is a strong type it must be opposite the embedding direction
         } else if found_not_e {
-            // Therefore, test for an established context with a preceding strong type by
-            // checking backwards before the opening paired bracket
-            // until the first strong type (L, R, or sos) is found.
+            // > Therefore, test for an established context with a preceding strong type by
+            // > checking backwards before the opening paired bracket
+            // > until the first strong type (L, R, or sos) is found.
             // (see note above about processing_classes and character boundaries)
             let mut previous_strong = sequence
                 .iter_backwards_from(pair.start, pair.start_run)
@@ -354,13 +353,12 @@ pub fn resolve_neutral<D: BidiDataSource>(
             // > Otherwise set the type for both brackets in the pair to the embedding direction.
             // > Either way it gets set to previous_strong
             //
-            // XXXManishearth perhaps the reason the spec writes these as two separate lines is
-            // because sos is supposed to be handled differently?
+            // Both branches amount to setting the type to the strong type.
             class_to_set = Some(previous_strong);
         }
 
         if let Some(class_to_set) = class_to_set {
-            // update all processing classes corresponding to the start and end elements, as requested.
+            // Update all processing classes corresponding to the start and end elements, as requested.
             // We should include all bytes of the character, not the first one.
             let end_len_utf8 = text[pair.end..].chars().next().unwrap().len_utf8();
             for class in &mut processing_classes[pair.start..pair.start + start_len_utf8] {
@@ -405,10 +403,8 @@ pub fn resolve_neutral<D: BidiDataSource>(
         // > Therefore, do not set the type for that bracket pair
     }
 
-    // N1 and N2
-    // indices of every byte in this isolating run sequence
-    // XXXManishearth Note for later: is it okay to iterate over every index here, since
-    // that includes char boundaries?
+    // N1 and N2.
+    // Indices of every byte in this isolating run sequence
     let mut indices = sequence.runs.iter().flat_map(Clone::clone);
     let mut prev_class = sequence.sos;
     while let Some(mut i) = indices.next() {
@@ -464,13 +460,13 @@ pub fn resolve_neutral<D: BidiDataSource>(
 }
 
 struct BracketPair {
-    /// The text-relative index of the opening bracket
+    /// The text-relative index of the opening bracket.
     start: usize,
-    /// The text-relative index of the closing bracket
+    /// The text-relative index of the closing bracket.
     end: usize,
-    /// The index of the run (in the run sequence) that the opening bracket is in
+    /// The index of the run (in the run sequence) that the opening bracket is in.
     start_run: usize,
-    /// The index of the run (in the run sequence) that the closing bracket is in
+    /// The index of the run (in the run sequence) that the closing bracket is in.
     end_run: usize,
 }
 /// 3.1.3 Identifying Bracket Pairs
@@ -503,11 +499,9 @@ fn identify_bracket_pairs<D: BidiDataSource>(
             return ret;
         };
 
-        // XXXManishearth perhaps try and coalesce this into one of the earlier
-        // full-string iterator runs, perhaps explicit::compute()
         for (i, ch) in slice.char_indices() {
             let actual_index = level_run.start + i;
-            // all paren characters are ON
+            // All paren characters are ON.
             // From BidiBrackets.txt:
             // > The Unicode property value stability policy guarantees that characters
             // > which have bpt=o or bpt=c also have bc=ON and Bidi_M=Y
@@ -517,30 +511,30 @@ fn identify_bracket_pairs<D: BidiDataSource>(
 
             if let Some(matched) = data_source.bidi_matched_opening_bracket(ch) {
                 if matched.is_open {
-                    // If an opening paired bracket is found ...
+                    // > If an opening paired bracket is found ...
 
-                    // ... and there is no room in the stack,
-                    // stop processing BD16 for the remainder of the isolating run sequence.
+                    // > ... and there is no room in the stack,
+                    // > stop processing BD16 for the remainder of the isolating run sequence.
                     if stack.len() >= 63 {
                         break;
                     }
-                    // ... push its Bidi_Paired_Bracket property value and its text position onto the stack
+                    // > ... push its Bidi_Paired_Bracket property value and its text position onto the stack
                     stack.push((matched.opening, actual_index, run_index))
                 } else {
-                    // If a closing paired bracket is found, do the following
+                    // > If a closing paired bracket is found, do the following
 
-                    // Declare a variable that holds a reference to the current stack element
-                    // and initialize it with the top element of the stack.
+                    // > Declare a variable that holds a reference to the current stack element
+                    // > and initialize it with the top element of the stack.
                     // AND
-                    // Else, if the current stack element is not at the bottom of the stack
+                    // > Else, if the current stack element is not at the bottom of the stack
                     for (stack_index, element) in stack.iter().enumerate().rev() {
-                        // Compare the closing paired bracket being inspected or its canonical
-                        // equivalent to the bracket in the current stack element.
+                        // > Compare the closing paired bracket being inspected or its canonical
+                        // > equivalent to the bracket in the current stack element.
                         if element.0 == matched.opening {
-                            // If the values match, meaning the two characters form a bracket pair, then
+                            // > If the values match, meaning the two characters form a bracket pair, then
 
-                            // Append the text position in the current stack element together with the
-                            // text position of the closing paired bracket to the list.
+                            // > Append the text position in the current stack element together with the
+                            // > text position of the closing paired bracket to the list.
                             let pair = BracketPair {
                                 start: element.1,
                                 end: actual_index,
@@ -549,7 +543,7 @@ fn identify_bracket_pairs<D: BidiDataSource>(
                             };
                             ret.push(pair);
 
-                            // Pop the stack through the current stack element inclusively.
+                            // > Pop the stack through the current stack element inclusively.
                             stack.truncate(stack_index);
                             break;
                         }
@@ -558,8 +552,8 @@ fn identify_bracket_pairs<D: BidiDataSource>(
             }
         }
     }
-    // Sort the list of pairs of text positions in ascending order based on
-    // the text position of the opening paired bracket.
+    // > Sort the list of pairs of text positions in ascending order based on
+    // > the text position of the opening paired bracket.
     ret.sort_by_key(|r| r.start);
     ret
 }
