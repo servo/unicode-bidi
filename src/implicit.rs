@@ -142,8 +142,7 @@ pub fn resolve_weak(
                                 (_, _, _) => ON,
                             };
 
-                        // W6 +
-                        // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
+                        // W6 + <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
                         // We have to do this before W5 gets its grubby hands on these characters and thinks
                         // they're part of an ET run.
                         if processing_classes[i] == ON {
