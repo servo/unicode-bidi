@@ -117,7 +117,7 @@ pub fn resolve_weak(
                 // <http://www.unicode.org/reports/tr9/#W4>
                 // <http://www.unicode.org/reports/tr9/#W6>
                 ES | CS => {
-                    // See https://github.com/servo/unicode-bidi/issues/86
+                    // See https://github.com/servo/unicode-bidi/issues/86 for improving this.
                     // We want to make sure we check the correct next character by skipping past the rest
                     // of this one.
                     if let Some(ch) = text.get(i..).and_then(|s| s.chars().next()) {
@@ -145,6 +145,8 @@ pub fn resolve_weak(
                         // W6 + <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
                         // We have to do this before W5 gets its grubby hands on these characters and thinks
                         // they're part of an ET run.
+                        // We check for ON to ensure that we had hit the W6 branch above, since this `ES | CS` match
+                        // arm handles both W4 and W6.
                         if processing_classes[i] == ON {
                             for idx in sequence.iter_backwards_from(i, run_index) {
                                 let class = &mut processing_classes[idx];
