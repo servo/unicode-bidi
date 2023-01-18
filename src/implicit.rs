@@ -33,11 +33,11 @@ pub fn resolve_weak(
     // about previous character classes that may have since been changed by later rules.
 
     // The previous class for the purposes of rule W4/W6, not tracking changes made after or during W4.
-    let mut prev_w46_class = sequence.sos;
+    let mut prev_class_before_w4 = sequence.sos;
     // The previous class for the purposes of rule W5.
-    let mut prev_w5_class = sequence.sos;
+    let mut prev_class_before_w5 = sequence.sos;
     // The previous class for the purposes of rule W1, not tracking changes from any other rules.
-    let mut prev_w1_class = sequence.sos;
+    let mut prev_class_before_w1 = sequence.sos;
     let mut last_strong_is_al = false;
     let mut et_run_indices = Vec::new(); // for W5
     let mut bn_run_indices = Vec::new(); // for W5 +  <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
@@ -61,15 +61,15 @@ pub fn resolve_weak(
             //
 
             if processing_classes[i] == NSM {
-                processing_classes[i] = match prev_w1_class {
+                processing_classes[i] = match prev_class_before_w1 {
                     RLI | LRI | FSI | PDI => ON,
-                    _ => prev_w1_class,
+                    _ => prev_class_before_w1,
                 };
                 // W1 occurs before W2, update this.
                 w2_processing_class = processing_classes[i];
             }
 
-            prev_w1_class = processing_classes[i];
+            prev_class_before_w1 = processing_classes[i];
 
             // <http://www.unicode.org/reports/tr9/#W2>
             // <http://www.unicode.org/reports/tr9/#W3>
@@ -134,7 +134,7 @@ pub fn resolve_weak(
                             next_class = AN;
                         }
                         processing_classes[i] =
-                            match (prev_w46_class, processing_classes[i], next_class) {
+                            match (prev_class_before_w4, processing_classes[i], next_class) {
                                 // W4
                                 (EN, ES, EN) | (EN, CS, EN) => EN,
                                 // W4
@@ -172,7 +172,7 @@ pub fn resolve_weak(
                 }
                 // <http://www.unicode.org/reports/tr9/#W5>
                 ET => {
-                    match prev_w5_class {
+                    match prev_class_before_w5 {
                         EN => processing_classes[i] = EN,
                         _ => {
                             // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
@@ -196,12 +196,12 @@ pub fn resolve_weak(
 
             // W6 above only deals with separators, so it doesn't change anything W5 cares about,
             // so we still can update this after running that part of W6.
-            prev_w5_class = processing_classes[i];
+            prev_class_before_w5 = processing_classes[i];
 
             // <http://www.unicode.org/reports/tr9/#W6> (terminators only)
             // (see above for W6 separator code)
             //
-            if prev_w5_class != ET {
+            if prev_class_before_w5 != ET {
                 // W6. If we didn't find an adjacent EN, turn any ETs into ON instead.
                 for j in &et_run_indices {
                     processing_classes[*j] = ON;
@@ -211,7 +211,7 @@ pub fn resolve_weak(
 
             // We stashed this before W4/5/6 could get their grubby hands on it, and it's not
             // used in the W6 terminator code below so we can update it now.
-            prev_w46_class = class_before_w456;
+            prev_class_before_w4 = class_before_w456;
         }
     }
     // Rerun this check in case we ended with a sequence of BNs (i.e., we'd never
