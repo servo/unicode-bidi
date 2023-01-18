@@ -128,8 +128,9 @@ pub fn resolve_weak(
                             .find(not_removed_by_x9)
                             .unwrap_or(sequence.eos);
                         if next_class == EN && last_strong_is_al {
-                            // Apply W2 to next_class. We know that last_strong_is_al.
-                            // Has no chance of changing on this character so we can still presume its value.
+                            // Apply W2 to next_class. We know that last_strong_is_al
+                            // has no chance of changing on this character so we can still assume its value
+                            // will be the same by the time we get to it.
                             next_class = AN;
                         }
                         processing_classes[i] =
@@ -165,7 +166,7 @@ pub fn resolve_weak(
                         }
                     } else {
                         // We're in the middle of a character, copy over work done for previous bytes
-                        // since it's going to be the same answer/
+                        // since it's going to be the same answer.
                         processing_classes[i] = processing_classes[i - 1];
                     }
                 }
