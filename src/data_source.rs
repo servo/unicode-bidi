@@ -13,6 +13,7 @@ use crate::BidiClass;
 ///
 /// It represents the matching *normalized* opening bracket for a given bracket in a bracket pair,
 /// and whether or not that bracket is opening.
+#[derive(Debug, Copy, Clone)]
 pub struct BidiMatchedOpeningBracket {
     /// The corresponding opening bracket in this bracket pair, normalized
     ///

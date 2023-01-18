@@ -506,10 +506,9 @@ impl<'text> BidiInfo<'text> {
         let line_str: &str = &self.text[line.clone()];
         let mut reset_from: Option<usize> = Some(0);
         let mut reset_to: Option<usize> = None;
+        let mut prev_level = para.level;
         for (i, c) in line_str.char_indices() {
             match line_classes[i] {
-                // Ignored by X9
-                RLE | LRE | RLO | LRO | PDF | BN => {}
                 // Segment separator, Paragraph separator
                 B | S => {
                     assert_eq!(reset_to, None);
@@ -524,6 +523,15 @@ impl<'text> BidiInfo<'text> {
                         reset_from = Some(i);
                     }
                 }
+                // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
+                // same as above + set the level
+                RLE | LRE | RLO | LRO | PDF | BN => {
+                    if reset_from == None {
+                        reset_from = Some(i);
+                    }
+                    // also set the level to previous
+                    line_levels[i] = prev_level;
+                }
                 _ => {
                     reset_from = None;
                 }
@@ -535,6 +543,7 @@ impl<'text> BidiInfo<'text> {
                 reset_from = None;
                 reset_to = None;
             }
+            prev_level = line_levels[i];
         }
         if let Some(from) = reset_from {
             for level in &mut line_levels[from..] {
