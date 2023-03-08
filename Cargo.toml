@@ -33,10 +33,10 @@ name = "unicode_bidi"
 [dependencies]
 flame = { version = "0.2", optional = true }
 flamer = { version = "0.4", optional = true }
-serde = { version = ">=0.8, <2.0", default-features = false, optional = true, features = ["derive"] }
+serde = { version = "1.0", default-features = false, optional = true, features = ["derive"] }
 
 [dev-dependencies]
-serde_test = ">=0.8, <2.0"
+serde_test = "1.0"
 
 [features]
 # Note: We don't actually use the `std` feature for anything other than making
