@@ -459,7 +459,7 @@ impl<'text> BidiInfo<'text> {
             if levels.is_empty() || start_index >= levels.len() {
                 return start_index..start_index;
             }
-            while let Some(l) = levels.get(start_index) {
+            while let Some(l) = levels.get(start_index + 1) {
                 if *l >= max {
                     break;
                 }
