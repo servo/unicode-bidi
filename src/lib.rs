@@ -466,6 +466,12 @@ impl<'text> BidiInfo<'text> {
                 start_index += 1;
             }
 
+            if levels.get(start_index).is_none() {
+                // If at the end of the array, adding one will
+                // produce an out-of-range end element
+                return start_index..start_index;
+            }
+
             let mut end_index = start_index + 1;
             while let Some(l) = levels.get(end_index) {
                 if *l < max {
