@@ -380,7 +380,62 @@ impl<'text> BidiInfo<'text> {
     /// per *byte*.
     #[cfg_attr(feature = "flame_it", flamer::flame)]
     pub fn reordered_levels(&self, para: &ParagraphInfo, line: Range<usize>) -> Vec<Level> {
-        let (levels, _) = self.visual_runs(para, line);
+        assert!(line.start <= self.levels.len());
+        assert!(line.end <= self.levels.len());
+
+        let mut levels = self.levels.clone();
+        let line_classes = &self.original_classes[line.clone()];
+        let line_levels = &mut levels[line.clone()];
+
+        // Reset some whitespace chars to paragraph level.
+        // <http://www.unicode.org/reports/tr9/#L1>
+        let line_str: &str = &self.text[line.clone()];
+        let mut reset_from: Option<usize> = Some(0);
+        let mut reset_to: Option<usize> = None;
+        let mut prev_level = para.level;
+        for (i, c) in line_str.char_indices() {
+            match line_classes[i] {
+                // Segment separator, Paragraph separator
+                B | S => {
+                    assert_eq!(reset_to, None);
+                    reset_to = Some(i + c.len_utf8());
+                    if reset_from == None {
+                        reset_from = Some(i);
+                    }
+                }
+                // Whitespace, isolate formatting
+                WS | FSI | LRI | RLI | PDI => {
+                    if reset_from == None {
+                        reset_from = Some(i);
+                    }
+                }
+                // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
+                // same as above + set the level
+                RLE | LRE | RLO | LRO | PDF | BN => {
+                    if reset_from == None {
+                        reset_from = Some(i);
+                    }
+                    // also set the level to previous
+                    line_levels[i] = prev_level;
+                }
+                _ => {
+                    reset_from = None;
+                }
+            }
+            if let (Some(from), Some(to)) = (reset_from, reset_to) {
+                for level in &mut line_levels[from..to] {
+                    *level = para.level;
+                }
+                reset_from = None;
+                reset_to = None;
+            }
+            prev_level = line_levels[i];
+        }
+        if let Some(from) = reset_from {
+            for level in &mut line_levels[from..] {
+                *level = para.level;
+            }
+        }
         levels
     }
 
@@ -543,62 +598,7 @@ impl<'text> BidiInfo<'text> {
         para: &ParagraphInfo,
         line: Range<usize>,
     ) -> (Vec<Level>, Vec<LevelRun>) {
-        assert!(line.start <= self.levels.len());
-        assert!(line.end <= self.levels.len());
-
-        let mut levels = self.levels.clone();
-        let line_classes = &self.original_classes[line.clone()];
-        let line_levels = &mut levels[line.clone()];
-
-        // Reset some whitespace chars to paragraph level.
-        // <http://www.unicode.org/reports/tr9/#L1>
-        let line_str: &str = &self.text[line.clone()];
-        let mut reset_from: Option<usize> = Some(0);
-        let mut reset_to: Option<usize> = None;
-        let mut prev_level = para.level;
-        for (i, c) in line_str.char_indices() {
-            match line_classes[i] {
-                // Segment separator, Paragraph separator
-                B | S => {
-                    assert_eq!(reset_to, None);
-                    reset_to = Some(i + c.len_utf8());
-                    if reset_from == None {
-                        reset_from = Some(i);
-                    }
-                }
-                // Whitespace, isolate formatting
-                WS | FSI | LRI | RLI | PDI => {
-                    if reset_from == None {
-                        reset_from = Some(i);
-                    }
-                }
-                // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
-                // same as above + set the level
-                RLE | LRE | RLO | LRO | PDF | BN => {
-                    if reset_from == None {
-                        reset_from = Some(i);
-                    }
-                    // also set the level to previous
-                    line_levels[i] = prev_level;
-                }
-                _ => {
-                    reset_from = None;
-                }
-            }
-            if let (Some(from), Some(to)) = (reset_from, reset_to) {
-                for level in &mut line_levels[from..to] {
-                    *level = para.level;
-                }
-                reset_from = None;
-                reset_to = None;
-            }
-            prev_level = line_levels[i];
-        }
-        if let Some(from) = reset_from {
-            for level in &mut line_levels[from..] {
-                *level = para.level;
-            }
-        }
+        let levels = self.reordered_levels(para, line.clone());
 
         // Find consecutive level runs.
         let mut runs = Vec::new();
