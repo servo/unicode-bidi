@@ -472,7 +472,6 @@ impl<'text> BidiInfo<'text> {
                 return start_index..start_index;
             }
 
-
             let mut end_index = start_index + 1;
             while let Some(l) = levels.get(end_index) {
                 if *l < max {
