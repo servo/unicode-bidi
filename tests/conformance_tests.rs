@@ -21,7 +21,11 @@ struct Fail {
     pub exp_ordering: Vec<String>,
     pub actual_base_level: Option<Level>,
     pub actual_levels: Vec<Level>,
-    // TODO pub actual_ordering: Vec<String>,
+    /// A list of reordered indices, with X9 characters removed
+    pub actual_ordering: Vec<String>,
+    /// The full reordered index map (map[visual] = logical)
+    /// without X9 characters removed
+    pub actual_unfiltered_ordering: Vec<usize>,
 }
 
 #[test]
@@ -82,7 +86,15 @@ fn test_basic_conformance() {
                 let exp_levels: Vec<String> = exp_levels.iter().map(|x| x.to_owned()).collect();
                 let para = &bidi_info.paragraphs[0];
                 let levels = bidi_info.reordered_levels_per_char(para, para.range.clone());
-                if levels != exp_levels {
+
+                let reorder_map = BidiInfo::reorder_visual(&levels);
+                let actual_ordering: Vec<String> = reorder_map
+                    .iter()
+                    .filter(|logical_idx| exp_levels[**logical_idx] != "x")
+                    .map(|logical_idx| logical_idx.to_string())
+                    .collect();
+
+                if levels != exp_levels || actual_ordering != exp_ordering {
                     fails.push(Fail {
                         line_num: line_idx + 1,
                         input_base_level,
@@ -91,6 +103,8 @@ fn test_basic_conformance() {
                         exp_base_level: None,
                         exp_levels: exp_levels.to_owned(),
                         exp_ordering: exp_ordering.to_owned(),
+                        actual_ordering,
+                        actual_unfiltered_ordering: reorder_map,
                         actual_base_level: None,
                         actual_levels: levels.to_owned(),
                     });
@@ -175,7 +189,14 @@ fn test_character_conformance() {
             // Check levels
             let para = &bidi_info.paragraphs[0];
             let levels = bidi_info.reordered_levels_per_char(para, para.range.clone());
-            if levels != exp_levels {
+
+            let reorder_map = BidiInfo::reorder_visual(&levels);
+            let actual_ordering: Vec<String> = reorder_map
+                .iter()
+                .filter(|logical_idx| exp_levels[**logical_idx] != "x")
+                .map(|logical_idx| logical_idx.to_string())
+                .collect();
+            if levels != exp_levels || exp_ordering != actual_ordering {
                 fails.push(Fail {
                     line_num: line_idx + 1,
                     input_base_level,
@@ -183,7 +204,9 @@ fn test_character_conformance() {
                     input_string: input_string.to_owned(),
                     exp_base_level: Some(exp_base_level),
                     exp_levels: exp_levels.to_owned(),
-                    exp_ordering: exp_ordering.to_owned(),
+                    exp_ordering: exp_ordering,
+                    actual_ordering: actual_ordering,
+                    actual_unfiltered_ordering: reorder_map,
                     actual_base_level: None,
                     actual_levels: levels.to_owned(),
                 });
