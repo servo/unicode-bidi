@@ -459,12 +459,19 @@ impl<'text> BidiInfo<'text> {
             if levels.is_empty() || start_index >= levels.len() {
                 return start_index..start_index;
             }
-            while let Some(l) = levels.get(start_index + 1) {
+            while let Some(l) = levels.get(start_index) {
                 if *l >= max {
                     break;
                 }
                 start_index += 1;
             }
+
+            if levels.get(start_index).is_none() {
+                // If at the end of the array, adding one will
+                // produce an out-of-range end element
+                return start_index..start_index;
+            }
+
 
             let mut end_index = start_index + 1;
             while let Some(l) = levels.get(end_index) {
