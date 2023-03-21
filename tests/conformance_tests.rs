@@ -12,6 +12,7 @@ use unicode_bidi::bidi_class;
 use unicode_bidi::{format_chars, level, BidiInfo, Level};
 
 #[derive(Debug)]
+#[allow(dead_code)] // lint ignores the Debug impl but that's what we use this for
 struct Fail {
     pub line_num: usize,
     pub input_base_level: Option<Level>,
@@ -119,6 +120,14 @@ fn test_basic_conformance() {
                 let levels = bidi_info.reordered_levels_per_char(para, para.range.clone());
 
                 let reorder_map = BidiInfo::reorder_visual(&levels);
+                let visual_runs_levels = reorder_map_from_visual_runs(&bidi_info);
+
+                // The conformance tests only require this to be true for the non-ignored characters
+                // However, as an internal invariant of this crate we would like to ensure these stay
+                // the same to reduce confusion. This is an assert instead of appending to the `fails`
+                // list since it is testing an internal invariant between two APIs.
+                assert_eq!(reorder_map, visual_runs_levels, "Maps returned by reorder_visual() and visual_runs() must be the same, for line {line}");
+
                 let actual_ordering: Vec<String> = reorder_map
                     .iter()
                     .filter(|logical_idx| exp_levels[**logical_idx] != "x")
@@ -220,11 +229,16 @@ fn test_character_conformance() {
             // Check levels
             let para = &bidi_info.paragraphs[0];
             let levels = bidi_info.reordered_levels_per_char(para, para.range.clone());
-            let visual_runs_levels = reorder_map_from_visual_runs(&bidi_info);
 
             let reorder_map = BidiInfo::reorder_visual(&levels);
+            let visual_runs_levels = reorder_map_from_visual_runs(&bidi_info);
 
-            assert_eq!(reorder_map, visual_runs_levels, "{exp_levels:?}. {exp_ordering:?}");
+            // The conformance tests only require this to be true for the non-ignored characters
+            // However, as an internal invariant of this crate we would like to ensure these stay
+            // the same to reduce confusion. This is an assert instead of appending to the `fails`
+            // list since it is testing an internal invariant between two APIs.
+            assert_eq!(reorder_map, visual_runs_levels, "Maps returned by reorder_visual() and visual_runs() must be the same, for line {line}");
+
             let actual_ordering: Vec<String> = reorder_map
                 .iter()
                 .filter(|logical_idx| exp_levels[**logical_idx] != "x")
