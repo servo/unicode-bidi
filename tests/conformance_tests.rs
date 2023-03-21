@@ -7,10 +7,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use std::collections::BTreeMap;
 use unicode_bidi::bidi_class;
 use unicode_bidi::{format_chars, level, BidiInfo, Level};
 
 #[derive(Debug)]
+#[allow(dead_code)] // lint ignores the Debug impl but that's what we use this for
 struct Fail {
     pub line_num: usize,
     pub input_base_level: Option<Level>,
@@ -21,7 +23,41 @@ struct Fail {
     pub exp_ordering: Vec<String>,
     pub actual_base_level: Option<Level>,
     pub actual_levels: Vec<Level>,
-    // TODO pub actual_ordering: Vec<String>,
+    /// A list of reordered indices, with X9 characters removed
+    pub actual_ordering: Vec<String>,
+    /// The full reordered index map (map[visual] = logical)
+    /// without X9 characters removed
+    pub actual_unfiltered_ordering: Vec<usize>,
+}
+
+/// Turns the output of BidiInfo::visual_runs() to a per-*character* visual-to-logical map,
+/// compatible with that returned by `reorder_visual()`
+fn reorder_map_from_visual_runs(info: &BidiInfo) -> Vec<usize> {
+    let para = &info.paragraphs[0];
+    let (levels, runs) = info.visual_runs(para, para.range.clone());
+    let char_index_map: BTreeMap<usize, usize> = info
+        .text
+        .char_indices()
+        .enumerate()
+        .map(|(logical, (byte, _ch))| (byte, logical))
+        .collect();
+    let mut map = Vec::new();
+    for run in runs {
+        if levels[run.start].is_rtl() {
+            for byte_idx in run.rev() {
+                if let Some(logical) = char_index_map.get(&byte_idx) {
+                    map.push(*logical);
+                }
+            }
+        } else {
+            for byte_idx in run {
+                if let Some(logical) = char_index_map.get(&byte_idx) {
+                    map.push(*logical);
+                }
+            }
+        }
+    }
+    map
 }
 
 #[test]
@@ -82,7 +118,23 @@ fn test_basic_conformance() {
                 let exp_levels: Vec<String> = exp_levels.iter().map(|x| x.to_owned()).collect();
                 let para = &bidi_info.paragraphs[0];
                 let levels = bidi_info.reordered_levels_per_char(para, para.range.clone());
-                if levels != exp_levels {
+
+                let reorder_map = BidiInfo::reorder_visual(&levels);
+                let visual_runs_levels = reorder_map_from_visual_runs(&bidi_info);
+
+                // The conformance tests only require this to be true for the non-ignored characters
+                // However, as an internal invariant of this crate we would like to ensure these stay
+                // the same to reduce confusion. This is an assert instead of appending to the `fails`
+                // list since it is testing an internal invariant between two APIs.
+                assert_eq!(reorder_map, visual_runs_levels, "Maps returned by reorder_visual() and visual_runs() must be the same, for line {line}");
+
+                let actual_ordering: Vec<String> = reorder_map
+                    .iter()
+                    .filter(|logical_idx| exp_levels[**logical_idx] != "x")
+                    .map(|logical_idx| logical_idx.to_string())
+                    .collect();
+
+                if levels != exp_levels || actual_ordering != exp_ordering {
                     fails.push(Fail {
                         line_num: line_idx + 1,
                         input_base_level,
@@ -91,6 +143,8 @@ fn test_basic_conformance() {
                         exp_base_level: None,
                         exp_levels: exp_levels.to_owned(),
                         exp_ordering: exp_ordering.to_owned(),
+                        actual_ordering,
+                        actual_unfiltered_ordering: reorder_map,
                         actual_base_level: None,
                         actual_levels: levels.to_owned(),
                     });
@@ -175,7 +229,22 @@ fn test_character_conformance() {
             // Check levels
             let para = &bidi_info.paragraphs[0];
             let levels = bidi_info.reordered_levels_per_char(para, para.range.clone());
-            if levels != exp_levels {
+
+            let reorder_map = BidiInfo::reorder_visual(&levels);
+            let visual_runs_levels = reorder_map_from_visual_runs(&bidi_info);
+
+            // The conformance tests only require this to be true for the non-ignored characters
+            // However, as an internal invariant of this crate we would like to ensure these stay
+            // the same to reduce confusion. This is an assert instead of appending to the `fails`
+            // list since it is testing an internal invariant between two APIs.
+            assert_eq!(reorder_map, visual_runs_levels, "Maps returned by reorder_visual() and visual_runs() must be the same, for line {line}");
+
+            let actual_ordering: Vec<String> = reorder_map
+                .iter()
+                .filter(|logical_idx| exp_levels[**logical_idx] != "x")
+                .map(|logical_idx| logical_idx.to_string())
+                .collect();
+            if levels != exp_levels || exp_ordering != actual_ordering {
                 fails.push(Fail {
                     line_num: line_idx + 1,
                     input_base_level,
@@ -183,7 +252,9 @@ fn test_character_conformance() {
                     input_string: input_string.to_owned(),
                     exp_base_level: Some(exp_base_level),
                     exp_levels: exp_levels.to_owned(),
-                    exp_ordering: exp_ordering.to_owned(),
+                    exp_ordering: exp_ordering,
+                    actual_ordering: actual_ordering,
+                    actual_unfiltered_ordering: reorder_map,
                     actual_base_level: None,
                     actual_levels: levels.to_owned(),
                 });
