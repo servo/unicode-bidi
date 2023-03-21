@@ -682,7 +682,7 @@ impl<'text> BidiInfo<'text> {
             // Look for the start of a sequence of consecutive runs of max_level or higher.
             let mut seq_start = 0;
             while seq_start < run_count {
-                if self.levels[runs[seq_start].start] < max_level {
+                if levels[runs[seq_start].start] < max_level {
                     seq_start += 1;
                     continue;
                 }
@@ -690,7 +690,7 @@ impl<'text> BidiInfo<'text> {
                 // Found the start of a sequence. Now find the end.
                 let mut seq_end = seq_start + 1;
                 while seq_end < run_count {
-                    if self.levels[runs[seq_end].start] < max_level {
+                    if levels[runs[seq_end].start] < max_level {
                         break;
                     }
                     seq_end += 1;
