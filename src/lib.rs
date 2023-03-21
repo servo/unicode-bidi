@@ -1027,7 +1027,7 @@ mod tests {
         // Testing for RLE Character
         assert_eq!(
             reorder_paras("\u{202B}abc אבג\u{202C}"),
-            vec!["\u{202B}\u{202C}גבא abc"]
+            vec!["\u{202b}גבא abc\u{202c}"]
         );
 
         // Testing neutral characters
