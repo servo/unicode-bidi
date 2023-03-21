@@ -126,7 +126,7 @@ fn test_basic_conformance() {
                 // However, as an internal invariant of this crate we would like to ensure these stay
                 // the same to reduce confusion. This is an assert instead of appending to the `fails`
                 // list since it is testing an internal invariant between two APIs.
-                assert_eq!(reorder_map, visual_runs_levels, "Maps returned by reorder_visual() and visual_runs() must be the same, for line {line}");
+                assert_eq!(reorder_map, visual_runs_levels, "Maps returned by reorder_visual() and visual_runs() must be the same, for line {}", line);
 
                 let actual_ordering: Vec<String> = reorder_map
                     .iter()
