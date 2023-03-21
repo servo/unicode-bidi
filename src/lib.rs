@@ -674,10 +674,6 @@ impl<'text> BidiInfo<'text> {
         min_level = min_level.new_lowest_ge_rtl().expect("Level error");
         // This loop goes through contiguous chunks of level runs that have a level
         // ≥ max_level and reverses their contents, reducing max_level by 1 each time.
-        //
-        // It can do this check with the original levels instead of checking reorderings because all
-        // prior reorderings will have been for contiguous chunks of levels >> max, which will
-        // be a subset of these chunks anyway.
         while max_level >= min_level {
             // Look for the start of a sequence of consecutive runs of max_level or higher.
             let mut seq_start = 0;
