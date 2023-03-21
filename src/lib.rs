@@ -376,8 +376,19 @@ impl<'text> BidiInfo<'text> {
         }
     }
 
-    /// Re-order a line based on resolved levels and return only the embedding levels, one `Level`
-    /// per *byte*.
+    /// Produce the levels for this paragraph as needed for reordering, one level per *byte*
+    /// in the paragraph. The returned vector includes bytes that are not included
+    /// in the `line`, but will not adjust them.
+    ///
+    /// This runs [Rule L1], you can run
+    /// [Rule L2] by calling [`Self::reorder_visual()`].
+    /// If doing so, you may prefer to use [`Self::reordered_levels_per_char()`] instead
+    /// to avoid non-byte indices.
+    ///
+    /// For an all-in-one reordering solution, consider using [`Self::reorder_visual()`].
+    ///
+    /// [Rule L1]: https://www.unicode.org/reports/tr9/#L1
+    /// [Rule L2]: https://www.unicode.org/reports/tr9/#L2
     #[cfg_attr(feature = "flame_it", flamer::flame)]
     pub fn reordered_levels(&self, para: &ParagraphInfo, line: Range<usize>) -> Vec<Level> {
         assert!(line.start <= self.levels.len());
@@ -439,8 +450,19 @@ impl<'text> BidiInfo<'text> {
         levels
     }
 
-    /// Re-order a line based on resolved levels and return only the embedding levels, one `Level`
-    /// per *character*.
+    /// Produce the levels for this paragraph as needed for reordering, one level per *character*
+    /// in the paragraph. The returned vector includes characters that are not included
+    /// in the `line`, but will not adjust them.
+    ///
+    /// This runs [Rule L1], you can run
+    /// [Rule L2] by calling [`Self::reorder_visual()`].
+    /// If doing so, you may prefer to use [`Self::reordered_levels_per_char()`] instead
+    /// to avoid non-byte indices.
+    ///
+    /// For an all-in-one reordering solution, consider using [`Self::reorder_visual()`].
+    ///
+    /// [Rule L1]: https://www.unicode.org/reports/tr9/#L1
+    /// [Rule L2]: https://www.unicode.org/reports/tr9/#L2
     #[cfg_attr(feature = "flame_it", flamer::flame)]
     pub fn reordered_levels_per_char(
         &self,
@@ -452,6 +474,11 @@ impl<'text> BidiInfo<'text> {
     }
 
     /// Re-order a line based on resolved levels and return the line in display order.
+    ///
+    /// This does not apply [Rule L3] or [Rule L4] around combining characters or mirroring.
+    ///
+    /// [Rule L3]: https://www.unicode.org/reports/tr9/#L3
+    /// [Rule L4]: https://www.unicode.org/reports/tr9/#L4
     #[cfg_attr(feature = "flame_it", flamer::flame)]
     pub fn reorder_line(&self, para: &ParagraphInfo, line: Range<usize>) -> Cow<'text, str> {
         let (levels, runs) = self.visual_runs(para, line.clone());
@@ -591,7 +618,26 @@ impl<'text> BidiInfo<'text> {
     ///
     /// `line` is a range of bytes indices within `levels`.
     ///
+    /// The first return value is a vector of levels used by the reordering algorithm,
+    /// i.e. the result of [Rule L1]. The second return value is a vector of level runs,
+    /// the result of [Rule L2], showing the visual order that each level run (a run of text with the
+    /// same level) should be displayed. Within each run, the display order can be checked
+    /// against the Level vector.
+    ///
+    /// This does not handle [Rule L3] (combining characters) or [Rule L4] (mirroring),
+    /// as that should be handled by the engine using this API.
+    ///
+    /// Conceptually, this is the same as running [`Self::reordered_levels()`] followed by
+    /// [`Self::reorder_visual()`], however it returns the result as a list of level runs instead
+    /// of producing a level map, since one may wish to deal with the fact that this is operating on
+    /// byte rather than character indices.
+    ///
     /// <http://www.unicode.org/reports/tr9/#Reordering_Resolved_Levels>
+    ///
+    /// [Rule L1]: https://www.unicode.org/reports/tr9/#L1
+    /// [Rule L2]: https://www.unicode.org/reports/tr9/#L2
+    /// [Rule L3]: https://www.unicode.org/reports/tr9/#L3
+    /// [Rule L4]: https://www.unicode.org/reports/tr9/#L4
     #[cfg_attr(feature = "flame_it", flamer::flame)]
     pub fn visual_runs(
         &self,
@@ -626,7 +672,6 @@ impl<'text> BidiInfo<'text> {
 
         // Stop at the lowest *odd* level.
         min_level = min_level.new_lowest_ge_rtl().expect("Level error");
-
         // This loop goes through contiguous chunks of level runs that have a level
         // ≥ max_level and reverses their contents, reducing max_level by 1 each time.
         //
@@ -650,7 +695,6 @@ impl<'text> BidiInfo<'text> {
                     }
                     seq_end += 1;
                 }
-
                 // Reverse the runs within this sequence.
                 runs[seq_start..seq_end].reverse();
 
@@ -660,7 +704,6 @@ impl<'text> BidiInfo<'text> {
                 .lower(1)
                 .expect("Lowering embedding level below zero");
         }
-
         (levels, runs)
     }
 
