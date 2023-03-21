@@ -7,6 +7,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use std::collections::BTreeMap;
 use unicode_bidi::bidi_class;
 use unicode_bidi::{format_chars, level, BidiInfo, Level};
 
@@ -26,6 +27,36 @@ struct Fail {
     /// The full reordered index map (map[visual] = logical)
     /// without X9 characters removed
     pub actual_unfiltered_ordering: Vec<usize>,
+}
+
+/// Turns the output of BidiInfo::visual_runs() to a per-*character* visual-to-logical map,
+/// compatible with that returned by `reorder_visual()`
+fn reorder_map_from_visual_runs(info: &BidiInfo) -> Vec<usize> {
+    let para = &info.paragraphs[0];
+    let (levels, runs) = info.visual_runs(para, para.range.clone());
+    let char_index_map: BTreeMap<usize, usize> = info
+        .text
+        .char_indices()
+        .enumerate()
+        .map(|(logical, (byte, _ch))| (byte, logical))
+        .collect();
+    let mut map = Vec::new();
+    for run in runs {
+        if levels[run.start].is_rtl() {
+            for byte_idx in run.rev() {
+                if let Some(logical) = char_index_map.get(&byte_idx) {
+                    map.push(*logical);
+                }
+            }
+        } else {
+            for byte_idx in run {
+                if let Some(logical) = char_index_map.get(&byte_idx) {
+                    map.push(*logical);
+                }
+            }
+        }
+    }
+    map
 }
 
 #[test]
@@ -189,8 +220,11 @@ fn test_character_conformance() {
             // Check levels
             let para = &bidi_info.paragraphs[0];
             let levels = bidi_info.reordered_levels_per_char(para, para.range.clone());
+            let visual_runs_levels = reorder_map_from_visual_runs(&bidi_info);
 
             let reorder_map = BidiInfo::reorder_visual(&levels);
+
+            assert_eq!(reorder_map, visual_runs_levels, "{exp_levels:?}. {exp_ordering:?}");
             let actual_ordering: Vec<String> = reorder_map
                 .iter()
                 .filter(|logical_idx| exp_levels[**logical_idx] != "x")
