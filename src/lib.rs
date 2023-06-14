@@ -175,17 +175,55 @@ impl<'text> InitialInfo<'text> {
         text: &'a str,
         default_para_level: Option<Level>,
     ) -> InitialInfo<'a> {
+        let ext_info = InitialInfoExt::new_with_data_source(data_source, text, default_para_level);
+        ext_info.base
+    }
+}
+
+/// Extended version of InitialInfo (not public API).
+#[derive(PartialEq, Debug)]
+struct InitialInfoExt<'text> {
+    /// The base InitialInfo for the text, recording its paragraphs and bidi classes.
+    base: InitialInfo<'text>,
+
+    /// Parallel to base.paragraphs, records whether each paragraph is "pure LTR" that
+    /// requires no further bidi processing (i.e. there are no RTL characters or bidi
+    /// control codes present).
+    pure_ltr: Vec<bool>,
+}
+
+impl<'text> InitialInfoExt<'text> {
+    /// Find the paragraphs and BidiClasses in a string of text, with a custom [`BidiDataSource`]
+    /// for Bidi data. If you just wish to use the hardcoded Bidi data, please use [`InitialInfo::new()`]
+    /// instead (enabled with tbe default `hardcoded-data` Cargo feature)
+    ///
+    /// <http://www.unicode.org/reports/tr9/#The_Paragraph_Level>
+    ///
+    /// Also sets the class for each First Strong Isolate initiator (FSI) to LRI or RLI if a strong
+    /// character is found before the matching PDI.  If no strong character is found, the class will
+    /// remain FSI, and it's up to later stages to treat these as LRI when needed.
+    #[cfg_attr(feature = "flame_it", flamer::flame)]
+    pub fn new_with_data_source<'a, D: BidiDataSource>(
+        data_source: &D,
+        text: &'a str,
+        default_para_level: Option<Level>,
+    ) -> InitialInfoExt<'a> {
         let mut original_classes = Vec::with_capacity(text.len());
 
         // The stack contains the starting byte index for each nested isolate we're inside.
         let mut isolate_stack = Vec::new();
         let mut paragraphs = Vec::new();
+        let mut pure_ltr = Vec::new();
 
         let mut para_start = 0;
         let mut para_level = default_para_level;
 
+        // Per-paragraph flag: can subsequent processing be skipped? Set to false if any
+        // RTL characters or bidi control characters are encountered in the paragraph.
+        let mut is_pure_ltr = true;
+
         #[cfg(feature = "flame_it")]
-        flame::start("InitialInfo::new(): iter text.char_indices()");
+        flame::start("InitialInfoExt::new(): iter text.char_indices()");
 
         for (i, c) in text.char_indices() {
             let class = data_source.bidi_class(c);
@@ -208,16 +246,21 @@ impl<'text> InitialInfo<'text> {
                         // P3. If no character is found in p2, set the paragraph level to zero.
                         level: para_level.unwrap_or(LTR_LEVEL),
                     });
+                    pure_ltr.push(is_pure_ltr);
                     // Reset state for the start of the next paragraph.
                     para_start = para_end;
                     // TODO: Support defaulting to direction of previous paragraph
                     //
                     // <http://www.unicode.org/reports/tr9/#HL1>
                     para_level = default_para_level;
+                    is_pure_ltr = true;
                     isolate_stack.clear();
                 }
 
                 L | R | AL => {
+                    if class != L {
+                        is_pure_ltr = false;
+                    }
                     match isolate_stack.last() {
                         Some(&start) => {
                             if original_classes[start] == FSI {
@@ -241,7 +284,12 @@ impl<'text> InitialInfo<'text> {
                     }
                 }
 
+                AN | LRE | RLE | LRO | RLO => {
+                    is_pure_ltr = false;
+                }
+
                 RLI | LRI | FSI => {
+                    is_pure_ltr = false;
                     isolate_stack.push(i);
                 }
 
@@ -257,16 +305,21 @@ impl<'text> InitialInfo<'text> {
                 range: para_start..text.len(),
                 level: para_level.unwrap_or(LTR_LEVEL),
             });
+            pure_ltr.push(is_pure_ltr);
         }
         assert_eq!(original_classes.len(), text.len());
+        assert_eq!(paragraphs.len(), pure_ltr.len());
 
         #[cfg(feature = "flame_it")]
-        flame::end("InitialInfo::new(): iter text.char_indices()");
+        flame::end("InitialInfoExt::new(): iter text.char_indices()");
 
-        InitialInfo {
-            text,
-            original_classes,
-            paragraphs,
+        InitialInfoExt {
+            base: InitialInfo {
+                text,
+                original_classes,
+                paragraphs,
+            },
+            pure_ltr,
         }
     }
 }
@@ -325,22 +378,26 @@ impl<'text> BidiInfo<'text> {
         text: &'a str,
         default_para_level: Option<Level>,
     ) -> BidiInfo<'a> {
-        let InitialInfo {
-            original_classes,
-            paragraphs,
+        let InitialInfoExt {
+            base,
+            pure_ltr,
             ..
-        } = InitialInfo::new_with_data_source(data_source, text, default_para_level);
+        } = InitialInfoExt::new_with_data_source(data_source, text, default_para_level);
 
         let mut levels = Vec::<Level>::with_capacity(text.len());
-        let mut processing_classes = original_classes.clone();
+        let mut processing_classes = base.original_classes.clone();
 
-        for para in &paragraphs {
+        for (para, is_pure_ltr) in base.paragraphs.iter().zip(pure_ltr.iter()) {
             let text = &text[para.range.clone()];
-            let original_classes = &original_classes[para.range.clone()];
+            let original_classes = &base.original_classes[para.range.clone()];
             let processing_classes = &mut processing_classes[para.range.clone()];
 
             let new_len = levels.len() + para.range.len();
             levels.resize(new_len, para.level);
+            if para.level == LTR_LEVEL && *is_pure_ltr {
+                continue;
+            }
+
             let levels = &mut levels[para.range.clone()];
 
             explicit::compute(
@@ -370,8 +427,8 @@ impl<'text> BidiInfo<'text> {
 
         BidiInfo {
             text,
-            original_classes,
-            paragraphs,
+            original_classes: base.original_classes,
+            paragraphs: base.paragraphs,
             levels,
         }
     }
@@ -481,6 +538,10 @@ impl<'text> BidiInfo<'text> {
     /// [Rule L4]: https://www.unicode.org/reports/tr9/#L4
     #[cfg_attr(feature = "flame_it", flamer::flame)]
     pub fn reorder_line(&self, para: &ParagraphInfo, line: Range<usize>) -> Cow<'text, str> {
+        if !level::has_rtl(&self.levels[line.clone()]) {
+            return self.text[line].into();
+        }
+
         let (levels, runs) = self.visual_runs(para, line.clone());
 
         // If all isolating run sequences are LTR, no reordering is needed
