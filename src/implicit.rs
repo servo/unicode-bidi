@@ -14,7 +14,7 @@ use core::cmp::max;
 
 use super::char_data::BidiClass::{self, *};
 use super::level::Level;
-use super::prepare::{not_removed_by_x9, removed_by_x9, IsolatingRunSequence};
+use super::prepare::{not_removed_by_x9, IsolatingRunSequence};
 use super::BidiDataSource;
 
 /// 3.3.4 Resolving Weak Types

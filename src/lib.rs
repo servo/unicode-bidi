@@ -378,11 +378,8 @@ impl<'text> BidiInfo<'text> {
         text: &'a str,
         default_para_level: Option<Level>,
     ) -> BidiInfo<'a> {
-        let InitialInfoExt {
-            base,
-            pure_ltr,
-            ..
-        } = InitialInfoExt::new_with_data_source(data_source, text, default_para_level);
+        let InitialInfoExt { base, pure_ltr, .. } =
+            InitialInfoExt::new_with_data_source(data_source, text, default_para_level);
 
         let mut levels = Vec::<Level>::with_capacity(text.len());
         let mut processing_classes = base.original_classes.clone();
