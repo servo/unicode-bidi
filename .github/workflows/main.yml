@@ -19,9 +19,9 @@ jobs:
           toolchain: ${{ matrix.rust }}
           override: true
           profile: minimal
-      - name: Potentially pin serde dep for MSRV check
-        if: matrix.rust == '1.36.0'
-        run: cargo update -p serde --precise 1.0.156
+      - name: Unpin dependencies except on MSRV
+        if: matrix.rust != '1.36.0'
+        run: cargo update
       - uses: actions-rs/cargo@v1
         with:
           command: build
