@@ -1147,10 +1147,9 @@ mod tests {
         assert_eq!(
             bidi_info.reordered_levels(&bidi_info.paragraphs[0], 3..7),
             Level::vec(&[0, 0, 0, 1, 1, 1, 1]),
-        )
+        );
 
-        /* TODO
-        /// BidiTest:69635 (AL ET EN)
+        // BidiTest:69635 (AL ET EN)
         let text = "\u{060B}\u{20CF}\u{06F9}";
         assert_eq!(
             reordered_levels_for_paras(text),
@@ -1160,15 +1159,12 @@ mod tests {
             reordered_levels_per_char_for_paras(text),
             vec![Level::vec(&[1, 1, 2])]
         );
-         */
 
-        /* TODO
         // BidiTest:291284 (AN RLI PDF R)
         assert_eq!(
             reordered_levels_per_char_for_paras("\u{0605}\u{2067}\u{202C}\u{0590}"),
             vec![&["2", "0", "x", "1"]]
         );
-         */
     }
 
     #[test]
