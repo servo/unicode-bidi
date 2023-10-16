@@ -7,17 +7,22 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use super::__seal_text_source;
 use super::TextSource;
+use super::__seal_text_source;
 
 use alloc::borrow::Cow;
 use alloc::vec::Vec;
 use core::ops::Range;
 use sealed::sealed;
 
-use crate::{BidiClass, BidiDataSource, HardcodedBidiData, Level, LevelRun, ParagraphInfo};
-use crate::compute_initial_info;
-use crate::{compute_bidi_info_for_para, level, reorder_levels, reorder_visual, visual_runs_for_line};
+use crate::{
+    compute_bidi_info_for_para, compute_initial_info, level, para_direction, reorder_levels,
+    reorder_visual, visual_runs_for_line,
+};
+use crate::{BidiClass, BidiDataSource, Direction, Level, LevelRun, ParagraphInfo};
+
+#[cfg(feature = "hardcoded-data")]
+use crate::HardcodedBidiData;
 
 /// Initial bidi information of the text (UTF-16 version).
 ///
@@ -362,6 +367,35 @@ impl<'text> BidiInfo<'text> {
     #[inline]
     pub fn has_rtl(&self) -> bool {
         level::has_rtl(&self.levels)
+    }
+}
+
+/// Contains a reference of `BidiInfo` and one of its `paragraphs`.
+/// And it supports all operation in the `Paragraph` that needs also its
+/// `BidiInfo` such as `direction`.
+#[derive(Debug)]
+pub struct Paragraph<'a, 'text> {
+    pub info: &'a BidiInfo<'text>,
+    pub para: &'a ParagraphInfo,
+}
+
+impl<'a, 'text> Paragraph<'a, 'text> {
+    #[inline]
+    pub fn new(info: &'a BidiInfo<'text>, para: &'a ParagraphInfo) -> Paragraph<'a, 'text> {
+        Paragraph { info, para }
+    }
+
+    /// Returns if the paragraph is Left direction, right direction or mixed.
+    #[inline]
+    pub fn direction(&self) -> Direction {
+        para_direction(&self.para, &self.info.levels)
+    }
+
+    /// Returns the `Level` of a certain character in the paragraph.
+    #[inline]
+    pub fn level_at(&self, pos: usize) -> Level {
+        let actual_position = self.para.range.start + pos;
+        self.info.levels[actual_position]
     }
 }
 
