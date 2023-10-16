@@ -81,6 +81,7 @@ mod char_data;
 mod explicit;
 mod implicit;
 mod prepare;
+mod utf16;
 
 pub use crate::char_data::{BidiClass, UNICODE_VERSION};
 pub use crate::data_source::BidiDataSource;
@@ -96,9 +97,52 @@ use alloc::vec::Vec;
 use core::cmp;
 use core::iter::repeat;
 use core::ops::Range;
+use core::str::CharIndices;
+use sealed::sealed;
 
 use crate::format_chars as chars;
 use crate::BidiClass::*;
+
+/// Trait that abstracts over a text source for use by the bidi algorithms.
+/// We implement this for str (UTF-8) and for [u16] (UTF-16, native-endian).
+/// (Internal unicode-bidi use; unstable for implementation or direct use.)
+#[sealed]
+pub trait TextSource<'text> {
+    type CharIter;
+    type CharIndexIter;
+    type IndexLenIter;
+
+    /// Return the length of the text in code units.
+    #[doc(hidden)]
+    fn len(&self) -> usize;
+
+    /// Get the character at a given code unit index, along with its length in code units.
+    /// Returns None if index is out of range, or points inside a multi-code-unit character.
+    /// Returns REPLACEMENT_CHARACTER for any unpaired surrogates in UTF-16.
+    #[doc(hidden)]
+    fn char_at(&self, index: usize) -> Option<(char, usize)>;
+
+    /// An iterator over the text returning Unicode characters,
+    /// REPLACEMENT_CHAR for invalid code units.
+    #[doc(hidden)]
+    fn chars(&'text self) -> Self::CharIter;
+
+    /// An iterator over the text returning (index, char) tuples,
+    /// where index is the starting code-unit index of the character,
+    /// and char is its Unicode value (or REPLACEMENT_CHAR if invalid).
+    #[doc(hidden)]
+    fn char_indices(&'text self) -> Self::CharIndexIter;
+
+    /// An iterator over the text returning (index, length) tuples,
+    /// where index is the starting code-unit index of the character,
+    /// and length is its length in code units.
+    #[doc(hidden)]
+    fn indices_lengths(&'text self) -> Self::IndexLenIter;
+
+    /// Number of code units the given character uses.
+    #[doc(hidden)]
+    fn char_len(ch: char) -> usize;
+}
 
 #[derive(PartialEq, Debug)]
 pub enum Direction {
@@ -829,10 +873,109 @@ fn assign_levels_to_removed_chars(para_level: Level, classes: &[BidiClass], leve
     }
 }
 
+/// Implementation of TextSource for UTF-8 text (a string slice).
+#[sealed]
+impl<'text> TextSource<'text> for str {
+    type CharIter = core::str::Chars<'text>;
+    type CharIndexIter = core::str::CharIndices<'text>;
+    type IndexLenIter = Utf8IndexLenIter<'text>;
+
+    #[inline]
+    fn len(&self) -> usize {
+        (self as &str).len()
+    }
+    #[inline]
+    fn char_at(&self, index: usize) -> Option<(char, usize)> {
+        if let Some(slice) = self.get(index..) {
+            if let Some(ch) = slice.chars().next() {
+                return Some((ch, ch.len_utf8()));
+            }
+        }
+        None
+    }
+    #[inline]
+    fn chars(&'text self) -> Self::CharIter {
+        (self as &str).chars()
+    }
+    #[inline]
+    fn char_indices(&'text self) -> Self::CharIndexIter {
+        (self as &str).char_indices()
+    }
+    #[inline]
+    fn indices_lengths(&'text self) -> Self::IndexLenIter {
+        Utf8IndexLenIter::new(&self)
+    }
+    #[inline]
+    fn char_len(ch: char) -> usize {
+        ch.len_utf8()
+    }
+}
+
+/// Iterator over (UTF-8) string slices returning (index, char_len) tuple.
+#[derive(Debug)]
+pub struct Utf8IndexLenIter<'text> {
+    iter: CharIndices<'text>,
+}
+
+impl<'text> Utf8IndexLenIter<'text> {
+    #[inline]
+    pub fn new(text: &'text str) -> Self {
+        Utf8IndexLenIter {
+            iter: text.char_indices(),
+        }
+    }
+}
+
+impl Iterator for Utf8IndexLenIter<'_> {
+    type Item = (usize, usize);
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some((pos, ch)) = self.iter.next() {
+            return Some((pos, ch.len_utf8()));
+        }
+        None
+    }
+}
+
 #[cfg(test)]
 #[cfg(feature = "hardcoded-data")]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_utf16_text_source() {
+        let text: &[u16] = &[0x41, 0xD801, 0xDC01, 0x20, 0xD800, 0x20, 0xDFFF, 0x20, 0xDC00, 0xD800];
+        assert_eq!(text.char_at(0), Some(('A', 1)));
+        assert_eq!(text.char_at(1), Some(('\u{10401}', 2)));
+        assert_eq!(text.char_at(2), None);
+        assert_eq!(text.char_at(3), Some((' ', 1)));
+        assert_eq!(text.char_at(4), Some((char::REPLACEMENT_CHARACTER, 1)));
+        assert_eq!(text.char_at(5), Some((' ', 1)));
+        assert_eq!(text.char_at(6), Some((char::REPLACEMENT_CHARACTER, 1)));
+        assert_eq!(text.char_at(7), Some((' ', 1)));
+        assert_eq!(text.char_at(8), Some((char::REPLACEMENT_CHARACTER, 1)));
+        assert_eq!(text.char_at(9), Some((char::REPLACEMENT_CHARACTER, 1)));
+        assert_eq!(text.char_at(10), None);
+    }
+
+    #[test]
+    fn test_utf16_char_iter() {
+        let text: &[u16] = &[0x41, 0xD801, 0xDC01, 0x20, 0xD800, 0x20, 0xDFFF, 0x20, 0xDC00, 0xD800];
+        assert_eq!(text.len(), 10);
+        assert_eq!(text.chars().count(), 9);
+        let mut chars = text.chars();
+        assert_eq!(chars.next(), Some('A'));
+        assert_eq!(chars.next(), Some('\u{10401}'));
+        assert_eq!(chars.next(), Some(' '));
+        assert_eq!(chars.next(), Some('\u{FFFD}'));
+        assert_eq!(chars.next(), Some(' '));
+        assert_eq!(chars.next(), Some('\u{FFFD}'));
+        assert_eq!(chars.next(), Some(' '));
+        assert_eq!(chars.next(), Some('\u{FFFD}'));
+        assert_eq!(chars.next(), Some('\u{FFFD}'));
+        assert_eq!(chars.next(), None);
+    }
 
     #[test]
     fn test_initial_text_info() {
