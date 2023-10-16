@@ -122,6 +122,11 @@ pub trait TextSource<'text> {
     #[doc(hidden)]
     fn char_at(&self, index: usize) -> Option<(char, usize)>;
 
+    /// Return a subrange of the text, indexed by code units.
+    /// (We don't implement all of the Index trait, just the minimum we use.)
+    #[doc(hidden)]
+    fn subrange(&self, range: Range<usize>) -> &Self;
+
     /// An iterator over the text returning Unicode characters,
     /// REPLACEMENT_CHAR for invalid code units.
     #[doc(hidden)]
@@ -892,6 +897,10 @@ impl<'text> TextSource<'text> for str {
             }
         }
         None
+    }
+    #[inline]
+    fn subrange(&self, range: Range<usize>) -> &Self {
+        &(self as &str)[range]
     }
     #[inline]
     fn chars(&'text self) -> Self::CharIter {

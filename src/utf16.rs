@@ -10,6 +10,7 @@
 use super::__seal_text_source;
 use super::TextSource;
 
+use core::ops::Range;
 use sealed::sealed;
 
 /// Implementation of TextSource for UTF-16 text in a [u16] array.
@@ -69,6 +70,10 @@ impl<'text> TextSource<'text> for [u16] {
         // Return REPLACEMENT_CHARACTER (not None), to continue processing the following text
         // and keep indexing correct.
         Some((char::REPLACEMENT_CHARACTER, 1))
+    }
+    #[inline]
+    fn subrange(&self, range: Range<usize>) -> &Self {
+        &(self as &[u16])[range]
     }
     #[inline]
     fn chars(&'text self) -> Self::CharIter {
