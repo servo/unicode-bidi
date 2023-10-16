@@ -939,40 +939,51 @@ pub struct Paragraph<'a, 'text> {
 }
 
 impl<'a, 'text> Paragraph<'a, 'text> {
+    #[inline]
     pub fn new(info: &'a BidiInfo<'text>, para: &'a ParagraphInfo) -> Paragraph<'a, 'text> {
         Paragraph { info, para }
     }
 
     /// Returns if the paragraph is Left direction, right direction or mixed.
+    #[inline]
     pub fn direction(&self) -> Direction {
-        let mut ltr = false;
-        let mut rtl = false;
-        for i in self.para.range.clone() {
-            if self.info.levels[i].is_ltr() {
-                ltr = true;
-            }
-
-            if self.info.levels[i].is_rtl() {
-                rtl = true;
-            }
-        }
-
-        if ltr && rtl {
-            return Direction::Mixed;
-        }
-
-        if ltr {
-            return Direction::Ltr;
-        }
-
-        Direction::Rtl
+        para_direction(&self.para, &self.info.levels)
     }
 
     /// Returns the `Level` of a certain character in the paragraph.
+    #[inline]
     pub fn level_at(&self, pos: usize) -> Level {
         let actual_position = self.para.range.start + pos;
         self.info.levels[actual_position]
     }
+}
+
+/// Return the directionality of the paragraph (Left, Right or Mixed) from its levels.
+#[cfg_attr(feature = "flame_it", flamer::flame)]
+fn para_direction(para: &ParagraphInfo, levels: &[Level]) -> Direction {
+    let mut ltr = false;
+    let mut rtl = false;
+    for level in &levels[para.range.clone()] {
+        if level.is_ltr() {
+            ltr = true;
+            if rtl {
+                return Direction::Mixed;
+            }
+        }
+
+        if level.is_rtl() {
+            rtl = true;
+            if ltr {
+                return Direction::Mixed;
+            }
+        }
+    }
+
+    if ltr {
+        return Direction::Ltr;
+    }
+
+    Direction::Rtl
 }
 
 /// Assign levels to characters removed by rule X9.
