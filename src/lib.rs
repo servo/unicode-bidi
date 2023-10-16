@@ -224,8 +224,7 @@ impl<'text> InitialInfo<'text> {
         text: &'a str,
         default_para_level: Option<Level>,
     ) -> InitialInfo<'a> {
-        let ext_info = InitialInfoExt::new_with_data_source(data_source, text, default_para_level);
-        ext_info.base
+        InitialInfoExt::new_with_data_source(data_source, text, default_para_level).base
     }
 }
 
@@ -257,110 +256,8 @@ impl<'text> InitialInfoExt<'text> {
         text: &'a str,
         default_para_level: Option<Level>,
     ) -> InitialInfoExt<'a> {
-        let mut original_classes = Vec::with_capacity(text.len());
-
-        // The stack contains the starting byte index for each nested isolate we're inside.
-        let mut isolate_stack = Vec::new();
-        let mut paragraphs = Vec::new();
-        let mut pure_ltr = Vec::new();
-
-        let mut para_start = 0;
-        let mut para_level = default_para_level;
-
-        // Per-paragraph flag: can subsequent processing be skipped? Set to false if any
-        // RTL characters or bidi control characters are encountered in the paragraph.
-        let mut is_pure_ltr = true;
-
-        #[cfg(feature = "flame_it")]
-        flame::start("InitialInfoExt::new(): iter text.char_indices()");
-
-        for (i, c) in text.char_indices() {
-            let class = data_source.bidi_class(c);
-
-            #[cfg(feature = "flame_it")]
-            flame::start("original_classes.extend()");
-
-            original_classes.extend(repeat(class).take(c.len_utf8()));
-
-            #[cfg(feature = "flame_it")]
-            flame::end("original_classes.extend()");
-
-            match class {
-                B => {
-                    // P1. Split the text into separate paragraphs. The paragraph separator is kept
-                    // with the previous paragraph.
-                    let para_end = i + c.len_utf8();
-                    paragraphs.push(ParagraphInfo {
-                        range: para_start..para_end,
-                        // P3. If no character is found in p2, set the paragraph level to zero.
-                        level: para_level.unwrap_or(LTR_LEVEL),
-                    });
-                    pure_ltr.push(is_pure_ltr);
-                    // Reset state for the start of the next paragraph.
-                    para_start = para_end;
-                    // TODO: Support defaulting to direction of previous paragraph
-                    //
-                    // <http://www.unicode.org/reports/tr9/#HL1>
-                    para_level = default_para_level;
-                    is_pure_ltr = true;
-                    isolate_stack.clear();
-                }
-
-                L | R | AL => {
-                    if class != L {
-                        is_pure_ltr = false;
-                    }
-                    match isolate_stack.last() {
-                        Some(&start) => {
-                            if original_classes[start] == FSI {
-                                // X5c. If the first strong character between FSI and its matching
-                                // PDI is R or AL, treat it as RLI. Otherwise, treat it as LRI.
-                                for j in 0..chars::FSI.len_utf8() {
-                                    original_classes[start + j] =
-                                        if class == L { LRI } else { RLI };
-                                }
-                            }
-                        }
-
-                        None => {
-                            if para_level.is_none() {
-                                // P2. Find the first character of type L, AL, or R, while skipping
-                                // any characters between an isolate initiator and its matching
-                                // PDI.
-                                para_level = Some(if class != L { RTL_LEVEL } else { LTR_LEVEL });
-                            }
-                        }
-                    }
-                }
-
-                AN | LRE | RLE | LRO | RLO => {
-                    is_pure_ltr = false;
-                }
-
-                RLI | LRI | FSI => {
-                    is_pure_ltr = false;
-                    isolate_stack.push(i);
-                }
-
-                PDI => {
-                    isolate_stack.pop();
-                }
-
-                _ => {}
-            }
-        }
-        if para_start < text.len() {
-            paragraphs.push(ParagraphInfo {
-                range: para_start..text.len(),
-                level: para_level.unwrap_or(LTR_LEVEL),
-            });
-            pure_ltr.push(is_pure_ltr);
-        }
-        assert_eq!(original_classes.len(), text.len());
-        assert_eq!(paragraphs.len(), pure_ltr.len());
-
-        #[cfg(feature = "flame_it")]
-        flame::end("InitialInfoExt::new(): iter text.char_indices()");
+        let (original_classes, paragraphs, pure_ltr) =
+            compute_initial_info(data_source, text, default_para_level);
 
         InitialInfoExt {
             base: InitialInfo {
@@ -371,6 +268,122 @@ impl<'text> InitialInfoExt<'text> {
             pure_ltr,
         }
     }
+}
+
+/// Implementation of initial-info computation.
+fn compute_initial_info<'a, D: BidiDataSource, T: TextSource<'a> + ?Sized>(
+    data_source: &D,
+    text: &'a T,
+    default_para_level: Option<Level>,
+) -> (Vec<BidiClass>, Vec<ParagraphInfo>, Vec<bool>)
+    where <T as TextSource<'a>>::CharIndexIter: Iterator::<Item = (usize, char)>
+{
+    let mut original_classes = Vec::with_capacity(text.len());
+
+    // The stack contains the starting code unit index for each nested isolate we're inside.
+    let mut isolate_stack = Vec::new();
+    let mut paragraphs = Vec::new();
+    let mut pure_ltr = Vec::new();
+
+    let mut para_start = 0;
+    let mut para_level = default_para_level;
+
+    // Per-paragraph flag: can subsequent processing be skipped? Set to false if any
+    // RTL characters or bidi control characters are encountered in the paragraph.
+    let mut is_pure_ltr = true;
+
+    #[cfg(feature = "flame_it")]
+    flame::start("compute_initial_info(): iter text.char_indices()");
+
+    for (i, c) in text.char_indices() {
+        let class = data_source.bidi_class(c);
+
+        #[cfg(feature = "flame_it")]
+        flame::start("original_classes.extend()");
+
+        let len = T::char_len(c);
+        original_classes.extend(repeat(class).take(len));
+
+        #[cfg(feature = "flame_it")]
+        flame::end("original_classes.extend()");
+
+        match class {
+            B => {
+                // P1. Split the text into separate paragraphs. The paragraph separator is kept
+                // with the previous paragraph.
+                let para_end = i + len;
+                paragraphs.push(ParagraphInfo {
+                    range: para_start..para_end,
+                    // P3. If no character is found in p2, set the paragraph level to zero.
+                    level: para_level.unwrap_or(LTR_LEVEL),
+                });
+                pure_ltr.push(is_pure_ltr);
+                // Reset state for the start of the next paragraph.
+                para_start = para_end;
+                // TODO: Support defaulting to direction of previous paragraph
+                //
+                // <http://www.unicode.org/reports/tr9/#HL1>
+                para_level = default_para_level;
+                is_pure_ltr = true;
+                isolate_stack.clear();
+            }
+
+            L | R | AL => {
+                if class != L {
+                    is_pure_ltr = false;
+                }
+                match isolate_stack.last() {
+                    Some(&start) => {
+                        if original_classes[start] == FSI {
+                            // X5c. If the first strong character between FSI and its matching
+                            // PDI is R or AL, treat it as RLI. Otherwise, treat it as LRI.
+                            for j in 0..T::char_len(chars::FSI) {
+                                original_classes[start + j] = if class == L { LRI } else { RLI };
+                            }
+                        }
+                    }
+
+                    None => {
+                        if para_level.is_none() {
+                            // P2. Find the first character of type L, AL, or R, while skipping
+                            // any characters between an isolate initiator and its matching
+                            // PDI.
+                            para_level = Some(if class != L { RTL_LEVEL } else { LTR_LEVEL });
+                        }
+                    }
+                }
+            }
+
+            AN | LRE | RLE | LRO | RLO => {
+                is_pure_ltr = false;
+            }
+
+            RLI | LRI | FSI => {
+                is_pure_ltr = false;
+                isolate_stack.push(i);
+            }
+
+            PDI => {
+                isolate_stack.pop();
+            }
+
+            _ => {}
+        }
+    }
+    if para_start < text.len() {
+        paragraphs.push(ParagraphInfo {
+            range: para_start..text.len(),
+            level: para_level.unwrap_or(LTR_LEVEL),
+        });
+        pure_ltr.push(is_pure_ltr);
+    }
+    assert_eq!(original_classes.len(), text.len());
+    assert_eq!(paragraphs.len(), pure_ltr.len());
+
+    #[cfg(feature = "flame_it")]
+    flame::end("compute_initial_info(): iter text.char_indices()");
+
+    (original_classes, paragraphs, pure_ltr)
 }
 
 /// Bidi information of the text.
