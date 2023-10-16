@@ -422,6 +422,7 @@ impl<'text> BidiInfo<'text> {
     /// TODO: Support auto-RTL base direction
     #[cfg_attr(feature = "flame_it", flamer::flame)]
     #[cfg(feature = "hardcoded-data")]
+    #[inline]
     pub fn new(text: &str, default_para_level: Option<Level>) -> BidiInfo<'_> {
         Self::new_with_data_source(&HardcodedBidiData, text, default_para_level)
     }
@@ -449,39 +450,16 @@ impl<'text> BidiInfo<'text> {
         for (para, is_pure_ltr) in base.paragraphs.iter().zip(pure_ltr.iter()) {
             let text = &text[para.range.clone()];
             let original_classes = &base.original_classes[para.range.clone()];
-            let processing_classes = &mut processing_classes[para.range.clone()];
 
-            let new_len = levels.len() + para.range.len();
-            levels.resize(new_len, para.level);
-            if para.level == LTR_LEVEL && *is_pure_ltr {
-                continue;
-            }
-
-            let levels = &mut levels[para.range.clone()];
-
-            explicit::compute(
+            compute_bidi_info_for_para(
+                data_source,
+                para,
+                *is_pure_ltr,
                 text,
-                para.level,
                 original_classes,
-                levels,
-                processing_classes,
+                &mut processing_classes,
+                &mut levels,
             );
-
-            let sequences = prepare::isolating_run_sequences(para.level, original_classes, levels);
-            for sequence in &sequences {
-                implicit::resolve_weak(text, sequence, processing_classes);
-                implicit::resolve_neutral(
-                    text,
-                    data_source,
-                    sequence,
-                    levels,
-                    original_classes,
-                    processing_classes,
-                );
-            }
-            implicit::resolve_levels(processing_classes, levels);
-
-            assign_levels_to_removed_chars(para.level, original_classes, levels);
         }
 
         BidiInfo {
@@ -514,55 +492,8 @@ impl<'text> BidiInfo<'text> {
         let line_classes = &self.original_classes[line.clone()];
         let line_levels = &mut levels[line.clone()];
 
-        // Reset some whitespace chars to paragraph level.
-        // <http://www.unicode.org/reports/tr9/#L1>
-        let line_str: &str = &self.text[line.clone()];
-        let mut reset_from: Option<usize> = Some(0);
-        let mut reset_to: Option<usize> = None;
-        let mut prev_level = para.level;
-        for (i, c) in line_str.char_indices() {
-            match line_classes[i] {
-                // Segment separator, Paragraph separator
-                B | S => {
-                    assert_eq!(reset_to, None);
-                    reset_to = Some(i + c.len_utf8());
-                    if reset_from == None {
-                        reset_from = Some(i);
-                    }
-                }
-                // Whitespace, isolate formatting
-                WS | FSI | LRI | RLI | PDI => {
-                    if reset_from == None {
-                        reset_from = Some(i);
-                    }
-                }
-                // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
-                // same as above + set the level
-                RLE | LRE | RLO | LRO | PDF | BN => {
-                    if reset_from == None {
-                        reset_from = Some(i);
-                    }
-                    // also set the level to previous
-                    line_levels[i] = prev_level;
-                }
-                _ => {
-                    reset_from = None;
-                }
-            }
-            if let (Some(from), Some(to)) = (reset_from, reset_to) {
-                for level in &mut line_levels[from..to] {
-                    *level = para.level;
-                }
-                reset_from = None;
-                reset_to = None;
-            }
-            prev_level = line_levels[i];
-        }
-        if let Some(from) = reset_from {
-            for level in &mut line_levels[from..] {
-                *level = para.level;
-            }
-        }
+        reorder_levels(line_classes, line_levels, self.text.subrange(line), para.level);
+
         levels
     }
 
@@ -654,84 +585,10 @@ impl<'text> BidiInfo<'text> {
     /// assert_eq!(levels.len(), index_map.len());
     /// assert_eq!(index_map, [0, 1, 2, 6, 7, 5, 4, 3]);
     /// ```
+    #[cfg_attr(feature = "flame_it", flamer::flame)]
+    #[inline]
     pub fn reorder_visual(levels: &[Level]) -> Vec<usize> {
-        // Gets the next range of characters after start_index with a level greater
-        // than or equal to `max`
-        fn next_range(levels: &[level::Level], mut start_index: usize, max: Level) -> Range<usize> {
-            if levels.is_empty() || start_index >= levels.len() {
-                return start_index..start_index;
-            }
-            while let Some(l) = levels.get(start_index) {
-                if *l >= max {
-                    break;
-                }
-                start_index += 1;
-            }
-
-            if levels.get(start_index).is_none() {
-                // If at the end of the array, adding one will
-                // produce an out-of-range end element
-                return start_index..start_index;
-            }
-
-            let mut end_index = start_index + 1;
-            while let Some(l) = levels.get(end_index) {
-                if *l < max {
-                    return start_index..end_index;
-                }
-                end_index += 1;
-            }
-
-            start_index..end_index
-        }
-
-        // This implementation is similar to the L2 implementation in `visual_runs()`
-        // but it cannot benefit from a precalculated LevelRun vector so needs to be different.
-
-        if levels.is_empty() {
-            return vec![];
-        }
-
-        // Get the min and max levels
-        let (mut min, mut max) = levels
-            .iter()
-            .fold((levels[0], levels[0]), |(min, max), &l| {
-                (cmp::min(min, l), cmp::max(max, l))
-            });
-
-        // Initialize an index map
-        let mut result: Vec<usize> = (0..levels.len()).collect();
-
-        if min == max && min.is_ltr() {
-            // Everything is LTR and at the same level, do nothing
-            return result;
-        }
-
-        // Stop at the lowest *odd* level, since everything below that
-        // is LTR and does not need further reordering
-        min = min.new_lowest_ge_rtl().expect("Level error");
-
-        // For each max level, take all contiguous chunks of
-        // levels ≥ max and reverse them
-        //
-        // We can do this check with the original levels instead of checking reorderings because all
-        // prior reorderings will have been for contiguous chunks of levels >> max, which will
-        // be a subset of these chunks anyway.
-        while min <= max {
-            let mut range = 0..0;
-            loop {
-                range = next_range(levels, range.end, max);
-                result[range.clone()].reverse();
-
-                if range.end >= levels.len() {
-                    break;
-                }
-            }
-
-            max.lower(1).expect("Level error");
-        }
-
-        result
+        reorder_visual(levels)
     }
 
     /// Find the level runs within a line and return them in visual order.
@@ -759,68 +616,14 @@ impl<'text> BidiInfo<'text> {
     /// [Rule L3]: https://www.unicode.org/reports/tr9/#L3
     /// [Rule L4]: https://www.unicode.org/reports/tr9/#L4
     #[cfg_attr(feature = "flame_it", flamer::flame)]
+    #[inline]
     pub fn visual_runs(
         &self,
         para: &ParagraphInfo,
         line: Range<usize>,
     ) -> (Vec<Level>, Vec<LevelRun>) {
         let levels = self.reordered_levels(para, line.clone());
-
-        // Find consecutive level runs.
-        let mut runs = Vec::new();
-        let mut start = line.start;
-        let mut run_level = levels[start];
-        let mut min_level = run_level;
-        let mut max_level = run_level;
-
-        for (i, &new_level) in levels.iter().enumerate().take(line.end).skip(start + 1) {
-            if new_level != run_level {
-                // End of the previous run, start of a new one.
-                runs.push(start..i);
-                start = i;
-                run_level = new_level;
-                min_level = cmp::min(run_level, min_level);
-                max_level = cmp::max(run_level, max_level);
-            }
-        }
-        runs.push(start..line.end);
-
-        let run_count = runs.len();
-
-        // Re-order the odd runs.
-        // <http://www.unicode.org/reports/tr9/#L2>
-
-        // Stop at the lowest *odd* level.
-        min_level = min_level.new_lowest_ge_rtl().expect("Level error");
-        // This loop goes through contiguous chunks of level runs that have a level
-        // ≥ max_level and reverses their contents, reducing max_level by 1 each time.
-        while max_level >= min_level {
-            // Look for the start of a sequence of consecutive runs of max_level or higher.
-            let mut seq_start = 0;
-            while seq_start < run_count {
-                if levels[runs[seq_start].start] < max_level {
-                    seq_start += 1;
-                    continue;
-                }
-
-                // Found the start of a sequence. Now find the end.
-                let mut seq_end = seq_start + 1;
-                while seq_end < run_count {
-                    if levels[runs[seq_end].start] < max_level {
-                        break;
-                    }
-                    seq_end += 1;
-                }
-                // Reverse the runs within this sequence.
-                runs[seq_start..seq_end].reverse();
-
-                seq_start = seq_end;
-            }
-            max_level
-                .lower(1)
-                .expect("Lowering embedding level below zero");
-        }
-        (levels, runs)
+        visual_runs_for_line(levels, &line)
     }
 
     /// If processed text has any computed RTL levels
@@ -829,6 +632,300 @@ impl<'text> BidiInfo<'text> {
     #[inline]
     pub fn has_rtl(&self) -> bool {
         level::has_rtl(&self.levels)
+    }
+}
+
+/// Find the level runs within a line and return them in visual order.
+///
+/// `line` is a range of code-unit indices within `levels`.
+///
+/// The first return value is a vector of levels used by the reordering algorithm,
+/// i.e. the result of [Rule L1]. The second return value is a vector of level runs,
+/// the result of [Rule L2], showing the visual order that each level run (a run of text with the
+/// same level) should be displayed. Within each run, the display order can be checked
+/// against the Level vector.
+///
+/// This does not handle [Rule L3] (combining characters) or [Rule L4] (mirroring),
+/// as that should be handled by the engine using this API.
+///
+/// Conceptually, this is the same as running [`reordered_levels()`] followed by
+/// [`reorder_visual()`], however it returns the result as a list of level runs instead
+/// of producing a level map, since one may wish to deal with the fact that this is operating on
+/// byte rather than character indices.
+///
+/// <http://www.unicode.org/reports/tr9/#Reordering_Resolved_Levels>
+///
+/// [Rule L1]: https://www.unicode.org/reports/tr9/#L1
+/// [Rule L2]: https://www.unicode.org/reports/tr9/#L2
+/// [Rule L3]: https://www.unicode.org/reports/tr9/#L3
+/// [Rule L4]: https://www.unicode.org/reports/tr9/#L4
+fn visual_runs_for_line(levels: Vec<Level>, line: &Range<usize>) -> (Vec<Level>, Vec<LevelRun>) {
+    // Find consecutive level runs.
+    let mut runs = Vec::new();
+    let mut start = line.start;
+    let mut run_level = levels[start];
+    let mut min_level = run_level;
+    let mut max_level = run_level;
+
+    for (i, &new_level) in levels.iter().enumerate().take(line.end).skip(start + 1) {
+        if new_level != run_level {
+            // End of the previous run, start of a new one.
+            runs.push(start..i);
+            start = i;
+            run_level = new_level;
+            min_level = cmp::min(run_level, min_level);
+            max_level = cmp::max(run_level, max_level);
+        }
+    }
+    runs.push(start..line.end);
+
+    let run_count = runs.len();
+
+    // Re-order the odd runs.
+    // <http://www.unicode.org/reports/tr9/#L2>
+
+    // Stop at the lowest *odd* level.
+    min_level = min_level.new_lowest_ge_rtl().expect("Level error");
+    // This loop goes through contiguous chunks of level runs that have a level
+    // ≥ max_level and reverses their contents, reducing max_level by 1 each time.
+    while max_level >= min_level {
+        // Look for the start of a sequence of consecutive runs of max_level or higher.
+        let mut seq_start = 0;
+        while seq_start < run_count {
+            if levels[runs[seq_start].start] < max_level {
+                seq_start += 1;
+                continue;
+            }
+
+            // Found the start of a sequence. Now find the end.
+            let mut seq_end = seq_start + 1;
+            while seq_end < run_count {
+                if levels[runs[seq_end].start] < max_level {
+                    break;
+                }
+                seq_end += 1;
+            }
+            // Reverse the runs within this sequence.
+            runs[seq_start..seq_end].reverse();
+
+            seq_start = seq_end;
+        }
+        max_level
+            .lower(1)
+            .expect("Lowering embedding level below zero");
+    }
+    (levels, runs)
+}
+
+/// Reorders pre-calculated levels of a sequence of characters.
+///
+/// NOTE: This is a convenience method that does not use a `Paragraph`  object. It is
+/// intended to be used when an application has determined the levels of the objects (character sequences)
+/// and just needs to have them reordered.
+///
+/// the index map will result in `indexMap[visualIndex]==logicalIndex`.
+///
+/// This only runs [Rule L2](http://www.unicode.org/reports/tr9/#L2) as it does not have
+/// information about the actual text.
+///
+/// Furthermore, if `levels` is an array that is aligned with code units, bytes within a codepoint may be
+/// reversed. You may need to fix up the map to deal with this. Alternatively, only pass in arrays where each `Level`
+/// is for a single code point.
+fn reorder_visual(levels: &[Level]) -> Vec<usize> {
+    // Gets the next range of characters after start_index with a level greater
+    // than or equal to `max`
+    fn next_range(levels: &[level::Level], mut start_index: usize, max: Level) -> Range<usize> {
+        if levels.is_empty() || start_index >= levels.len() {
+            return start_index..start_index;
+        }
+        while let Some(l) = levels.get(start_index) {
+            if *l >= max {
+                break;
+            }
+            start_index += 1;
+        }
+
+        if levels.get(start_index).is_none() {
+            // If at the end of the array, adding one will
+            // produce an out-of-range end element
+            return start_index..start_index;
+        }
+
+        let mut end_index = start_index + 1;
+        while let Some(l) = levels.get(end_index) {
+            if *l < max {
+                return start_index..end_index;
+            }
+            end_index += 1;
+        }
+
+        start_index..end_index
+    }
+
+    // This implementation is similar to the L2 implementation in `visual_runs()`
+    // but it cannot benefit from a precalculated LevelRun vector so needs to be different.
+
+    if levels.is_empty() {
+        return vec![];
+    }
+
+    // Get the min and max levels
+    let (mut min, mut max) = levels
+        .iter()
+        .fold((levels[0], levels[0]), |(min, max), &l| {
+            (cmp::min(min, l), cmp::max(max, l))
+        });
+
+    // Initialize an index map
+    let mut result: Vec<usize> = (0..levels.len()).collect();
+
+    if min == max && min.is_ltr() {
+        // Everything is LTR and at the same level, do nothing
+        return result;
+    }
+
+    // Stop at the lowest *odd* level, since everything below that
+    // is LTR and does not need further reordering
+    min = min.new_lowest_ge_rtl().expect("Level error");
+
+    // For each max level, take all contiguous chunks of
+    // levels ≥ max and reverse them
+    //
+    // We can do this check with the original levels instead of checking reorderings because all
+    // prior reorderings will have been for contiguous chunks of levels >> max, which will
+    // be a subset of these chunks anyway.
+    while min <= max {
+        let mut range = 0..0;
+        loop {
+            range = next_range(levels, range.end, max);
+            result[range.clone()].reverse();
+
+            if range.end >= levels.len() {
+                break;
+            }
+        }
+
+        max.lower(1).expect("Level error");
+    }
+
+    result
+}
+
+/// The core of BidiInfo initialization, factored out into a function that both
+/// the utf-8 and utf-16 versions of BidiInfo can use.
+fn compute_bidi_info_for_para<'a, D: BidiDataSource, T: TextSource<'a> + ?Sized>(
+    data_source: &D,
+    para: &ParagraphInfo,
+    is_pure_ltr: bool,
+    text: &'a T,
+    original_classes: &[BidiClass],
+    processing_classes: &mut [BidiClass],
+    levels: &mut Vec<Level>,
+)
+where
+    <T as TextSource<'a>>::CharIter: Iterator::<Item = char>,
+    <T as TextSource<'a>>::IndexLenIter: Iterator::<Item = (usize, usize)>,
+{
+    let new_len = levels.len() + para.range.len();
+    levels.resize(new_len, para.level);
+    if para.level == LTR_LEVEL && is_pure_ltr {
+        return;
+    }
+
+    let processing_classes = &mut processing_classes[para.range.clone()];
+    let levels = &mut levels[para.range.clone()];
+
+    explicit::compute(
+        text,
+        para.level,
+        original_classes,
+        levels,
+        processing_classes,
+    );
+
+    let sequences = prepare::isolating_run_sequences(para.level, original_classes, levels);
+    for sequence in &sequences {
+        implicit::resolve_weak(text, sequence, processing_classes);
+        implicit::resolve_neutral(
+            text,
+            data_source,
+            sequence,
+            levels,
+            original_classes,
+            processing_classes,
+        );
+    }
+    implicit::resolve_levels(processing_classes, levels);
+
+    assign_levels_to_removed_chars(para.level, original_classes, levels);
+}
+
+/// Produce the levels for this paragraph as needed for reordering, one level per *code unit*
+/// in the paragraph. The returned vector includes code units that are not included
+/// in the `line`, but will not adjust them.
+///
+/// This runs [Rule L1], you can run
+/// [Rule L2] by calling [`reorder_visual()`].
+/// If doing so, you may prefer to use [`reordered_levels_per_char()`] instead
+/// to avoid non-character indices.
+///
+/// For an all-in-one reordering solution, consider using [`Self::reorder_visual()`].
+///
+/// [Rule L1]: https://www.unicode.org/reports/tr9/#L1
+/// [Rule L2]: https://www.unicode.org/reports/tr9/#L2
+fn reorder_levels<'a, T: TextSource<'a> + ?Sized>(
+    line_classes: &[BidiClass],
+    line_levels: &mut [Level],
+    line_text: &'a T,
+    para_level: Level,
+) where <T as TextSource<'a>>::CharIndexIter: Iterator::<Item = (usize, char)> {
+    // Reset some whitespace chars to paragraph level.
+    // <http://www.unicode.org/reports/tr9/#L1>
+    let mut reset_from: Option<usize> = Some(0);
+    let mut reset_to: Option<usize> = None;
+    let mut prev_level = para_level;
+    for (i, c) in line_text.char_indices() {
+        match line_classes[i] {
+            // Segment separator, Paragraph separator
+            B | S => {
+                assert_eq!(reset_to, None);
+                reset_to = Some(i + T::char_len(c));
+                if reset_from == None {
+                    reset_from = Some(i);
+                }
+            }
+            // Whitespace, isolate formatting
+            WS | FSI | LRI | RLI | PDI => {
+                if reset_from == None {
+                    reset_from = Some(i);
+                }
+            }
+            // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
+            // same as above + set the level
+            RLE | LRE | RLO | LRO | PDF | BN => {
+                if reset_from == None {
+                    reset_from = Some(i);
+                }
+                // also set the level to previous
+                line_levels[i] = prev_level;
+            }
+            _ => {
+                reset_from = None;
+            }
+        }
+        if let (Some(from), Some(to)) = (reset_from, reset_to) {
+            for level in &mut line_levels[from..to] {
+                *level = para_level;
+            }
+            reset_from = None;
+            reset_to = None;
+        }
+        prev_level = line_levels[i];
+    }
+    if let Some(from) = reset_from {
+        for level in &mut line_levels[from..] {
+            *level = para_level;
+        }
     }
 }
 
