@@ -10,12 +10,14 @@
 use super::__seal_text_source;
 use super::TextSource;
 
+use alloc::borrow::Cow;
 use alloc::vec::Vec;
 use core::ops::Range;
 use sealed::sealed;
 
-use crate::{BidiClass, BidiDataSource, HardcodedBidiData, Level, ParagraphInfo};
+use crate::{BidiClass, BidiDataSource, HardcodedBidiData, Level, LevelRun, ParagraphInfo};
 use crate::compute_initial_info;
+use crate::{compute_bidi_info_for_para, level, reorder_levels, reorder_visual, visual_runs_for_line};
 
 /// Initial bidi information of the text (UTF-16 version).
 ///
@@ -107,6 +109,259 @@ impl<'text> InitialInfoExt<'text> {
             },
             pure_ltr,
         }
+    }
+}
+
+/// Bidi information of the text (UTF-16 version).
+///
+/// The `original_classes` and `levels` vectors are indexed by code unit offsets into the text.  If a
+/// character is multiple code units wide, then its class and level will appear multiple times in these
+/// vectors.
+// TODO: Impl `struct StringProperty<T> { values: Vec<T> }` and use instead of Vec<T>
+#[derive(Debug, PartialEq)]
+pub struct BidiInfo<'text> {
+    /// The text
+    pub text: &'text [u16],
+
+    /// The BidiClass of the character at each byte in the text.
+    pub original_classes: Vec<BidiClass>,
+
+    /// The directional embedding level of each byte in the text.
+    pub levels: Vec<Level>,
+
+    /// The boundaries and paragraph embedding level of each paragraph within the text.
+    ///
+    /// TODO: Use SmallVec or similar to avoid overhead when there are only one or two paragraphs?
+    /// Or just don't include the first paragraph, which always starts at 0?
+    pub paragraphs: Vec<ParagraphInfo>,
+}
+
+impl<'text> BidiInfo<'text> {
+    /// Split the text into paragraphs and determine the bidi embedding levels for each paragraph.
+    ///
+    ///
+    /// The `hardcoded-data` Cargo feature (enabled by default) must be enabled to use this.
+    ///
+    /// TODO: In early steps, check for special cases that allow later steps to be skipped. like
+    /// text that is entirely LTR.  See the `nsBidi` class from Gecko for comparison.
+    ///
+    /// TODO: Support auto-RTL base direction
+    #[cfg_attr(feature = "flame_it", flamer::flame)]
+    #[cfg(feature = "hardcoded-data")]
+    #[inline]
+    pub fn new(text: &[u16], default_para_level: Option<Level>) -> BidiInfo<'_> {
+        Self::new_with_data_source(&HardcodedBidiData, text, default_para_level)
+    }
+
+    /// Split the text into paragraphs and determine the bidi embedding levels for each paragraph, with a custom [`BidiDataSource`]
+    /// for Bidi data. If you just wish to use the hardcoded Bidi data, please use [`BidiInfo::new()`]
+    /// instead (enabled with tbe default `hardcoded-data` Cargo feature).
+    ///
+    /// TODO: In early steps, check for special cases that allow later steps to be skipped. like
+    /// text that is entirely LTR.  See the `nsBidi` class from Gecko for comparison.
+    ///
+    /// TODO: Support auto-RTL base direction
+    #[cfg_attr(feature = "flame_it", flamer::flame)]
+    pub fn new_with_data_source<'a, D: BidiDataSource>(
+        data_source: &D,
+        text: &'a [u16],
+        default_para_level: Option<Level>,
+    ) -> BidiInfo<'a> {
+        let InitialInfoExt { base, pure_ltr, .. } =
+            InitialInfoExt::new_with_data_source(data_source, text, default_para_level);
+
+        let mut levels = Vec::<Level>::with_capacity(text.len());
+        let mut processing_classes = base.original_classes.clone();
+
+        for (para, is_pure_ltr) in base.paragraphs.iter().zip(pure_ltr.iter()) {
+            let text = &text[para.range.clone()];
+            let original_classes = &base.original_classes[para.range.clone()];
+
+            compute_bidi_info_for_para(
+                data_source,
+                para,
+                *is_pure_ltr,
+                text,
+                original_classes,
+                &mut processing_classes,
+                &mut levels,
+            );
+        }
+
+        BidiInfo {
+            text,
+            original_classes: base.original_classes,
+            paragraphs: base.paragraphs,
+            levels,
+        }
+    }
+
+    /// Produce the levels for this paragraph as needed for reordering, one level per *byte*
+    /// in the paragraph. The returned vector includes bytes that are not included
+    /// in the `line`, but will not adjust them.
+    ///
+    /// This runs [Rule L1], you can run
+    /// [Rule L2] by calling [`Self::reorder_visual()`].
+    /// If doing so, you may prefer to use [`Self::reordered_levels_per_char()`] instead
+    /// to avoid non-byte indices.
+    ///
+    /// For an all-in-one reordering solution, consider using [`Self::reorder_visual()`].
+    ///
+    /// [Rule L1]: https://www.unicode.org/reports/tr9/#L1
+    /// [Rule L2]: https://www.unicode.org/reports/tr9/#L2
+    #[cfg_attr(feature = "flame_it", flamer::flame)]
+    pub fn reordered_levels(&self, para: &ParagraphInfo, line: Range<usize>) -> Vec<Level> {
+        assert!(line.start <= self.levels.len());
+        assert!(line.end <= self.levels.len());
+
+        let mut levels = self.levels.clone();
+        let line_classes = &self.original_classes[line.clone()];
+        let line_levels = &mut levels[line.clone()];
+        let line_str: &[u16] = &self.text[line.clone()];
+
+        reorder_levels(line_classes, line_levels, line_str, para.level);
+
+        levels
+    }
+
+    /// Produce the levels for this paragraph as needed for reordering, one level per *character*
+    /// in the paragraph. The returned vector includes characters that are not included
+    /// in the `line`, but will not adjust them.
+    ///
+    /// This runs [Rule L1], you can run
+    /// [Rule L2] by calling [`Self::reorder_visual()`].
+    /// If doing so, you may prefer to use [`Self::reordered_levels_per_char()`] instead
+    /// to avoid non-byte indices.
+    ///
+    /// For an all-in-one reordering solution, consider using [`Self::reorder_visual()`].
+    ///
+    /// [Rule L1]: https://www.unicode.org/reports/tr9/#L1
+    /// [Rule L2]: https://www.unicode.org/reports/tr9/#L2
+    #[cfg_attr(feature = "flame_it", flamer::flame)]
+    pub fn reordered_levels_per_char(
+        &self,
+        para: &ParagraphInfo,
+        line: Range<usize>,
+    ) -> Vec<Level> {
+        let levels = self.reordered_levels(para, line);
+        self.text.char_indices().map(|(i, _)| levels[i]).collect()
+    }
+
+    /// Re-order a line based on resolved levels and return the line in display order.
+    ///
+    /// This does not apply [Rule L3] or [Rule L4] around combining characters or mirroring.
+    ///
+    /// [Rule L3]: https://www.unicode.org/reports/tr9/#L3
+    /// [Rule L4]: https://www.unicode.org/reports/tr9/#L4
+    #[cfg_attr(feature = "flame_it", flamer::flame)]
+    pub fn reorder_line(&self, para: &ParagraphInfo, line: Range<usize>) -> Cow<'text, [u16]> {
+        if !level::has_rtl(&self.levels[line.clone()]) {
+            return self.text[line].into();
+        }
+
+        let (levels, runs) = self.visual_runs(para, line.clone());
+
+        // If all isolating run sequences are LTR, no reordering is needed
+        if runs.iter().all(|run| levels[run.start].is_ltr()) {
+            return self.text[line].into();
+        }
+
+        let mut result = Vec::<u16>::with_capacity(line.len());
+        for run in runs {
+            if levels[run.start].is_rtl() {
+                let mut buf = [0; 2];
+                for c in self.text[run].chars().rev() {
+                    result.extend(c.encode_utf16(&mut buf).iter());
+                }
+            } else {
+                result.extend(self.text[run].iter());
+            }
+        }
+        result.into()
+    }
+
+    /// Reorders pre-calculated levels of a sequence of characters.
+    ///
+    /// NOTE: This is a convenience method that does not use a `Paragraph`  object. It is
+    /// intended to be used when an application has determined the levels of the objects (character sequences)
+    /// and just needs to have them reordered.
+    ///
+    /// the index map will result in `indexMap[visualIndex]==logicalIndex`.
+    ///
+    /// This only runs [Rule L2](http://www.unicode.org/reports/tr9/#L2) as it does not have
+    /// information about the actual text.
+    ///
+    /// Furthermore, if `levels` is an array that is aligned with code units, bytes within a codepoint may be
+    /// reversed. You may need to fix up the map to deal with this. Alternatively, only pass in arrays where each `Level`
+    /// is for a single code point.
+    ///
+    ///
+    ///   # # Example
+    /// ```
+    /// use unicode_bidi::BidiInfo;
+    /// use unicode_bidi::Level;
+    ///
+    /// let l0 = Level::from(0);
+    /// let l1 = Level::from(1);
+    /// let l2 = Level::from(2);
+    ///
+    /// let levels = vec![l0, l0, l0, l0];
+    /// let index_map = BidiInfo::reorder_visual(&levels);
+    /// assert_eq!(levels.len(), index_map.len());
+    /// assert_eq!(index_map, [0, 1, 2, 3]);
+    ///
+    /// let levels: Vec<Level> = vec![l0, l0, l0, l1, l1, l1, l2, l2];
+    /// let index_map = BidiInfo::reorder_visual(&levels);
+    /// assert_eq!(levels.len(), index_map.len());
+    /// assert_eq!(index_map, [0, 1, 2, 6, 7, 5, 4, 3]);
+    /// ```
+    #[cfg_attr(feature = "flame_it", flamer::flame)]
+    #[inline]
+    pub fn reorder_visual(levels: &[Level]) -> Vec<usize> {
+        reorder_visual(levels)
+    }
+
+    /// Find the level runs within a line and return them in visual order.
+    ///
+    /// `line` is a range of bytes indices within `levels`.
+    ///
+    /// The first return value is a vector of levels used by the reordering algorithm,
+    /// i.e. the result of [Rule L1]. The second return value is a vector of level runs,
+    /// the result of [Rule L2], showing the visual order that each level run (a run of text with the
+    /// same level) should be displayed. Within each run, the display order can be checked
+    /// against the Level vector.
+    ///
+    /// This does not handle [Rule L3] (combining characters) or [Rule L4] (mirroring),
+    /// as that should be handled by the engine using this API.
+    ///
+    /// Conceptually, this is the same as running [`Self::reordered_levels()`] followed by
+    /// [`Self::reorder_visual()`], however it returns the result as a list of level runs instead
+    /// of producing a level map, since one may wish to deal with the fact that this is operating on
+    /// byte rather than character indices.
+    ///
+    /// <http://www.unicode.org/reports/tr9/#Reordering_Resolved_Levels>
+    ///
+    /// [Rule L1]: https://www.unicode.org/reports/tr9/#L1
+    /// [Rule L2]: https://www.unicode.org/reports/tr9/#L2
+    /// [Rule L3]: https://www.unicode.org/reports/tr9/#L3
+    /// [Rule L4]: https://www.unicode.org/reports/tr9/#L4
+    #[cfg_attr(feature = "flame_it", flamer::flame)]
+    #[inline]
+    pub fn visual_runs(
+        &self,
+        para: &ParagraphInfo,
+        line: Range<usize>,
+    ) -> (Vec<Level>, Vec<LevelRun>) {
+        let levels = self.reordered_levels(para, line.clone());
+        visual_runs_for_line(levels, &line)
+    }
+
+    /// If processed text has any computed RTL levels
+    ///
+    /// This information is usually used to skip re-ordering of text when no RTL level is present
+    #[inline]
+    pub fn has_rtl(&self) -> bool {
+        level::has_rtl(&self.levels)
     }
 }
 
