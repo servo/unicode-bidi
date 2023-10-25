@@ -34,6 +34,7 @@ name = "unicode_bidi"
 flame = { version = "0.2", optional = true }
 flamer = { version = "0.4", optional = true }
 serde = { version = ">=0.8, <2.0", default-features = false, optional = true, features = ["derive"] }
+zerocopy = { version = "0.7.14", features = ["derive"] }
 
 [dev-dependencies]
 serde_test = ">=0.8, <2.0"

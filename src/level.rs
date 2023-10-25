@@ -16,7 +16,7 @@
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::convert::{From, Into};
-use core::slice;
+use zerocopy::{FromBytes, FromZeroes, Unaligned};
 
 use super::char_data::BidiClass;
 
@@ -30,7 +30,7 @@ use super::char_data::BidiClass;
 /// larger than 125 results in an `Error`.
 ///
 /// <http://www.unicode.org/reports/tr9/#BD2>
-#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Debug, Eq, Ord, PartialEq, PartialOrd, FromZeroes, FromBytes, Unaligned)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(transparent)]
 pub struct Level(u8);
@@ -203,11 +203,7 @@ impl Level {
     /// which is not a requirement for safety but is a requirement for correctness of the algorithm.
     pub fn from_slice_unchecked(v: &[u8]) -> &[Level] {
         debug_assert_eq!(core::mem::size_of::<u8>(), core::mem::size_of::<Level>());
-        unsafe {
-            // Safety: The two arrays are the same size and layout-compatible since
-            // Level is `repr(transparent)` over `u8`
-            slice::from_raw_parts(v as *const [u8] as *const u8 as *const Level, v.len())
-        }
+        zerocopy::Ref::new_slice_unaligned(v).unwrap().into_slice()
     }
 }
 
