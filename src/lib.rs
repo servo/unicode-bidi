@@ -101,16 +101,15 @@ use core::cmp;
 use core::iter::repeat;
 use core::ops::Range;
 use core::str::CharIndices;
-use sealed::sealed;
 
 use crate::format_chars as chars;
 use crate::BidiClass::*;
 
 /// Trait that abstracts over a text source for use by the bidi algorithms.
 /// We implement this for str (UTF-8) and for [u16] (UTF-16, native-endian).
-/// (Internal unicode-bidi use; unstable for implementation or direct use.)
-#[sealed]
-pub trait TextSource<'text> {
+/// (For internal unicode-bidi use; API may be unstable.)
+/// This trait is sealed and cannot be implemented for types outside this crate.
+pub trait TextSource<'text>: private::Sealed {
     type CharIter;
     type CharIndexIter;
     type IndexLenIter;
@@ -150,6 +149,14 @@ pub trait TextSource<'text> {
     /// Number of code units the given character uses.
     #[doc(hidden)]
     fn char_len(ch: char) -> usize;
+}
+
+mod private {
+    pub trait Sealed {}
+
+    // Implement for str and [u16] only.
+    impl Sealed for str {}
+    impl Sealed for [u16] {}
 }
 
 #[derive(PartialEq, Debug)]
@@ -1010,7 +1017,6 @@ fn assign_levels_to_removed_chars(para_level: Level, classes: &[BidiClass], leve
 }
 
 /// Implementation of TextSource for UTF-8 text (a string slice).
-#[sealed]
 impl<'text> TextSource<'text> for str {
     type CharIter = core::str::Chars<'text>;
     type CharIndexIter = core::str::CharIndices<'text>;

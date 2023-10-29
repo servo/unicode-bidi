@@ -8,12 +8,10 @@
 // except according to those terms.
 
 use super::TextSource;
-use super::__seal_text_source;
 
 use alloc::borrow::Cow;
 use alloc::vec::Vec;
 use core::ops::Range;
-use sealed::sealed;
 
 use crate::{
     compute_bidi_info_for_para, compute_initial_info, level, para_direction, reorder_levels,
@@ -412,7 +410,6 @@ fn is_low_surrogate(code: u16) -> bool {
     (code & 0xFC00) == 0xDC00
 }
 
-#[sealed]
 impl<'text> TextSource<'text> for [u16] {
     type CharIter = Utf16CharIter<'text>;
     type CharIndexIter = Utf16CharIndexIter<'text>;
