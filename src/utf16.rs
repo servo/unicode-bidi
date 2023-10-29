@@ -11,6 +11,7 @@ use super::TextSource;
 
 use alloc::borrow::Cow;
 use alloc::vec::Vec;
+use core::char;
 use core::ops::Range;
 
 use crate::{

@@ -97,6 +97,7 @@ pub use crate::char_data::{bidi_class, HardcodedBidiData};
 use alloc::borrow::Cow;
 use alloc::string::String;
 use alloc::vec::Vec;
+use core::char;
 use core::cmp;
 use core::iter::repeat;
 use core::ops::Range;
