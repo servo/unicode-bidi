@@ -878,15 +878,9 @@ fn compute_bidi_info_for_para<'a, D: BidiDataSource, T: TextSource<'a> + ?Sized>
 /// in the paragraph. The returned vector includes code units that are not included
 /// in the `line`, but will not adjust them.
 ///
-/// This runs [Rule L1], you can run
-/// [Rule L2] by calling [`reorder_visual()`].
-/// If doing so, you may prefer to use [`reordered_levels_per_char()`] instead
-/// to avoid non-character indices.
-///
-/// For an all-in-one reordering solution, consider using [`Self::reorder_visual()`].
+/// This runs [Rule L1]
 ///
 /// [Rule L1]: https://www.unicode.org/reports/tr9/#L1
-/// [Rule L2]: https://www.unicode.org/reports/tr9/#L2
 fn reorder_levels<'a, T: TextSource<'a> + ?Sized>(
     line_classes: &[BidiClass],
     line_levels: &mut [Level],
