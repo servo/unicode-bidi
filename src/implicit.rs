@@ -255,10 +255,7 @@ pub fn resolve_neutral<'a, D: BidiDataSource, T: TextSource<'a> + ?Sized>(
     levels: &[Level],
     original_classes: &[BidiClass],
     processing_classes: &mut [BidiClass],
-) where
-    <T as TextSource<'a>>::CharIndexIter: Iterator<Item = (usize, char)>,
-    <T as TextSource<'a>>::CharIter: Iterator<Item = char>,
-{
+) {
     // e = embedding direction
     let e: BidiClass = levels[sequence.runs[0].start].bidi_class();
     let not_e = if e == BidiClass::L {
@@ -487,10 +484,7 @@ fn identify_bracket_pairs<'a, T: TextSource<'a> + ?Sized, D: BidiDataSource>(
     data_source: &D,
     run_sequence: &IsolatingRunSequence,
     original_classes: &[BidiClass],
-) -> Vec<BracketPair>
-where
-    <T as TextSource<'a>>::CharIndexIter: Iterator<Item = (usize, char)>,
-{
+) -> Vec<BracketPair> {
     let mut ret = vec![];
     let mut stack = vec![];
 

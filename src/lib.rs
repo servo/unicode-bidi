@@ -108,9 +108,9 @@ use crate::BidiClass::*;
 /// (For internal unicode-bidi use; API may be unstable.)
 /// This trait is sealed and cannot be implemented for types outside this crate.
 pub trait TextSource<'text>: private::Sealed {
-    type CharIter;
-    type CharIndexIter;
-    type IndexLenIter;
+    type CharIter: Iterator<Item = char>;
+    type CharIndexIter: Iterator<Item = (usize, char)>;
+    type IndexLenIter: Iterator<Item = (usize, usize)>;
 
     /// Return the length of the text in code units.
     #[doc(hidden)]
@@ -283,10 +283,7 @@ fn compute_initial_info<'a, D: BidiDataSource, T: TextSource<'a> + ?Sized>(
     data_source: &D,
     text: &'a T,
     default_para_level: Option<Level>,
-) -> (Vec<BidiClass>, Vec<ParagraphInfo>, Vec<bool>)
-where
-    <T as TextSource<'a>>::CharIndexIter: Iterator<Item = (usize, char)>,
-{
+) -> (Vec<BidiClass>, Vec<ParagraphInfo>, Vec<bool>) {
     let mut original_classes = Vec::with_capacity(text.len());
 
     // The stack contains the starting code unit index for each nested isolate we're inside.
@@ -835,11 +832,7 @@ fn compute_bidi_info_for_para<'a, D: BidiDataSource, T: TextSource<'a> + ?Sized>
     original_classes: &[BidiClass],
     processing_classes: &mut [BidiClass],
     levels: &mut Vec<Level>,
-) where
-    <T as TextSource<'a>>::CharIndexIter: Iterator<Item = (usize, char)>,
-    <T as TextSource<'a>>::CharIter: Iterator<Item = char>,
-    <T as TextSource<'a>>::IndexLenIter: Iterator<Item = (usize, usize)>,
-{
+) {
     let new_len = levels.len() + para.range.len();
     levels.resize(new_len, para.level);
     if para.level == LTR_LEVEL && is_pure_ltr {
@@ -886,9 +879,7 @@ fn reorder_levels<'a, T: TextSource<'a> + ?Sized>(
     line_levels: &mut [Level],
     line_text: &'a T,
     para_level: Level,
-) where
-    <T as TextSource<'a>>::CharIndexIter: Iterator<Item = (usize, char)>,
-{
+) {
     // Reset some whitespace chars to paragraph level.
     // <http://www.unicode.org/reports/tr9/#L1>
     let mut reset_from: Option<usize> = Some(0);

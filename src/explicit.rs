@@ -31,9 +31,7 @@ pub fn compute<'a, T: TextSource<'a> + ?Sized>(
     original_classes: &[BidiClass],
     levels: &mut [Level],
     processing_classes: &mut [BidiClass],
-) where
-    <T as TextSource<'a>>::IndexLenIter: Iterator<Item = (usize, usize)>,
-{
+) {
     assert_eq!(text.len(), original_classes.len());
 
     // <http://www.unicode.org/reports/tr9/#X1>
