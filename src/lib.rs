@@ -1133,7 +1133,7 @@ mod tests {
 
     #[test]
     fn test_initial_text_info() {
-        let tests = [
+        let tests = vec![
             (
                 // text
                 "a1",
@@ -1206,7 +1206,7 @@ mod tests {
                 ],
             ),
             (
-                &format!("{}א{}a", chars::FSI, chars::PDI),
+                "\u{2068}א\u{2069}a", // U+2068 FSI, U+2069 PDI
                 vec![RLI, RLI, RLI, R, R, PDI, PDI, PDI, L],
                 vec![ParagraphInfo {
                     range: 0..9,
@@ -1244,7 +1244,7 @@ mod tests {
     #[test]
     #[cfg(feature = "hardcoded-data")]
     fn test_process_text() {
-        let tests = [
+        let tests = vec![
             (
                 // text
                 "abc123",
@@ -1422,7 +1422,7 @@ mod tests {
     #[test]
     #[cfg(feature = "hardcoded-data")]
     fn test_bidi_info_has_rtl() {
-        let tests = [
+        let tests = vec![
             // ASCII only
             ("123", None, false),
             ("123", Some(LTR_LEVEL), false),
@@ -1473,7 +1473,7 @@ mod tests {
     #[test]
     #[cfg(feature = "hardcoded-data")]
     fn test_reorder_line() {
-        let tests = [
+        let tests = vec![
             // Bidi_Class: L L L B L L L B L L L
             ("abc\ndef\nghi", vec!["abc\n", "def\n", "ghi"]),
             // Bidi_Class: L L EN B L L EN B L L EN
@@ -1565,7 +1565,7 @@ mod tests {
     #[test]
     #[cfg(feature = "hardcoded-data")]
     fn test_reordered_levels() {
-        let tests = [
+        let tests = vec![
             // BidiTest:946 (LRI PDI)
             (
                 "\u{2067}\u{2069}",
@@ -1590,7 +1590,7 @@ mod tests {
             assert_eq!(reordered_levels_per_char_for_paras_u16(text), t.2);
         }
 
-        let tests = [
+        let tests = vec![
             // BidiTest:291284 (AN RLI PDF R)
             (
                 "\u{0605}\u{2067}\u{202C}\u{0590}",
@@ -1691,7 +1691,7 @@ mod tests {
         let bidi_info = BidiInfoU16::new(empty, Option::from(RTL_LEVEL));
         assert_eq!(bidi_info.paragraphs.len(), 0);
 
-        let tests = [
+        let tests = vec![
             // The paragraph separator will take the value of the default direction
             // which is left to right.
             ("\n", None, Direction::Ltr),
