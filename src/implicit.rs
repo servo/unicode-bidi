@@ -256,6 +256,7 @@ pub fn resolve_neutral<'a, D: BidiDataSource, T: TextSource<'a> + ?Sized>(
     original_classes: &[BidiClass],
     processing_classes: &mut [BidiClass],
 ) where
+    <T as TextSource<'a>>::CharIndexIter: Iterator<Item = (usize, char)>,
     <T as TextSource<'a>>::CharIter: Iterator<Item = char>,
 {
     // e = embedding direction
@@ -488,23 +489,20 @@ fn identify_bracket_pairs<'a, T: TextSource<'a> + ?Sized, D: BidiDataSource>(
     original_classes: &[BidiClass],
 ) -> Vec<BracketPair>
 where
-    <T as TextSource<'a>>::CharIter: Iterator<Item = char>,
+    <T as TextSource<'a>>::CharIndexIter: Iterator<Item = (usize, char)>,
 {
     let mut ret = vec![];
     let mut stack = vec![];
 
     for (run_index, level_run) in run_sequence.runs.iter().enumerate() {
-        let mut actual_index = level_run.start;
-
-        for ch in text.subrange(level_run.clone()).chars() {
-            let char_len = T::char_len(ch);
+        for (i, ch) in text.subrange(level_run.clone()).char_indices() {
+            let actual_index = level_run.start + i;
 
             // All paren characters are ON.
             // From BidiBrackets.txt:
             // > The Unicode property value stability policy guarantees that characters
             // > which have bpt=o or bpt=c also have bc=ON and Bidi_M=Y
             if original_classes[actual_index] != BidiClass::ON {
-                actual_index += char_len;
                 continue;
             }
 
@@ -549,8 +547,6 @@ where
                     }
                 }
             }
-
-            actual_index += char_len;
         }
     }
     // > Sort the list of pairs of text positions in ascending order based on

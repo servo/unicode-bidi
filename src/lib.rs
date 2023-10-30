@@ -836,6 +836,7 @@ fn compute_bidi_info_for_para<'a, D: BidiDataSource, T: TextSource<'a> + ?Sized>
     processing_classes: &mut [BidiClass],
     levels: &mut Vec<Level>,
 ) where
+    <T as TextSource<'a>>::CharIndexIter: Iterator<Item = (usize, char)>,
     <T as TextSource<'a>>::CharIter: Iterator<Item = char>,
     <T as TextSource<'a>>::IndexLenIter: Iterator<Item = (usize, usize)>,
 {
