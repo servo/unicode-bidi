@@ -1088,7 +1088,7 @@ mod tests {
     use super::*;
 
     use utf16::{
-        BidiInfo as BidiInfoU16, InitialInfo as InitialInfoU16, Paragraph as ParagraphU16
+        BidiInfo as BidiInfoU16, InitialInfo as InitialInfoU16, Paragraph as ParagraphU16,
     };
 
     #[test]
