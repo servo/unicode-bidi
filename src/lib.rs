@@ -76,20 +76,17 @@ pub mod data_source;
 pub mod deprecated;
 pub mod format_chars;
 pub mod level;
+pub mod utf16;
 
 mod char_data;
 mod explicit;
 mod implicit;
 mod prepare;
-mod utf16;
 
 pub use crate::char_data::{BidiClass, UNICODE_VERSION};
 pub use crate::data_source::BidiDataSource;
 pub use crate::level::{Level, LTR_LEVEL, RTL_LEVEL};
 pub use crate::prepare::LevelRun;
-pub use crate::utf16::{
-    BidiInfo as BidiInfoU16, InitialInfo as InitialInfoU16, Paragraph as ParagraphU16,
-};
 
 #[cfg(feature = "hardcoded-data")]
 pub use crate::char_data::{bidi_class, HardcodedBidiData};
@@ -1094,6 +1091,10 @@ fn to_utf16(s: &str) -> Vec<u16> {
 #[cfg(feature = "hardcoded-data")]
 mod tests {
     use super::*;
+
+    use utf16::{
+        BidiInfo as BidiInfoU16, InitialInfo as InitialInfoU16, Paragraph as ParagraphU16
+    };
 
     #[test]
     fn test_utf16_text_source() {

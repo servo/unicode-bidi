@@ -9,7 +9,8 @@
 
 use std::collections::BTreeMap;
 use unicode_bidi::bidi_class;
-use unicode_bidi::{format_chars, level, BidiInfo, BidiInfoU16, Level};
+use unicode_bidi::utf16::BidiInfo as BidiInfoU16;
+use unicode_bidi::{format_chars, level, BidiInfo, Level};
 
 #[derive(Debug)]
 #[allow(dead_code)] // lint ignores the Debug impl but that's what we use this for

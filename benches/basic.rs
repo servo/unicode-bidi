@@ -15,7 +15,8 @@ extern crate unicode_bidi;
 
 use test::Bencher;
 
-use unicode_bidi::{BidiInfo, BidiInfoU16};
+use unicode_bidi::BidiInfo;
+use unicode_bidi::utf16::BidiInfo as BidiInfoU16;
 
 fn to_utf16(s: &str) -> Vec<u16> {
     s.encode_utf16().collect()
