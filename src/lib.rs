@@ -1660,7 +1660,7 @@ mod tests {
         // Passing text that includes a paragraph break to the ParagraphBidiInfo API:
         // this is a misuse of the API by the client, but our behavior is safe &
         // consistent. The embedded paragraph break acts like a separator (tab) would.
-        let tests = [
+        let tests = vec![
             (
                 "a א.\nג",
                 None,
