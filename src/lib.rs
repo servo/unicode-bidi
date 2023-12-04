@@ -841,7 +841,12 @@ impl<'text> ParagraphBidiInfo<'text> {
 }
 
 // Implementation of reorder_line for both BidiInfo and ParagraphBidiInfo.
-fn reorder_line<'text>(text: &'text str, line: Range<usize>, levels: Vec<Level>, runs: Vec<LevelRun>) -> Cow<'text, str> {
+fn reorder_line<'text>(
+    text: &'text str,
+    line: Range<usize>,
+    levels: Vec<Level>,
+    runs: Vec<LevelRun>,
+) -> Cow<'text, str> {
     // If all isolating run sequences are LTR, no reordering is needed
     if runs.iter().all(|run| levels[run.start].is_ltr()) {
         return text[line].into();
