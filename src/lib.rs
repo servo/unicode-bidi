@@ -288,13 +288,27 @@ fn compute_initial_info<'a, D: BidiDataSource, T: TextSource<'a> + ?Sized>(
     text: &'a T,
     default_para_level: Option<Level>,
     split_paragraphs: bool,
-) -> (Vec<BidiClass>, Option<Vec<ParagraphInfo>>, Option<Vec<bool>>, Level, bool) {
+) -> (
+    Vec<BidiClass>,
+    Option<Vec<ParagraphInfo>>,
+    Option<Vec<bool>>,
+    Level,
+    bool,
+) {
     let mut original_classes = Vec::with_capacity(text.len());
 
     // The stack contains the starting code unit index for each nested isolate we're inside.
     let mut isolate_stack = Vec::new();
-    let mut paragraphs = if split_paragraphs { Some(Vec::new()) } else { None };
-    let mut pure_ltr = if split_paragraphs { Some(Vec::new()) } else { None };
+    let mut paragraphs = if split_paragraphs {
+        Some(Vec::new())
+    } else {
+        None
+    };
+    let mut pure_ltr = if split_paragraphs {
+        Some(Vec::new())
+    } else {
+        None
+    };
 
     let mut para_start = 0;
     let mut para_level = default_para_level;
@@ -394,14 +408,23 @@ fn compute_initial_info<'a, D: BidiDataSource, T: TextSource<'a> + ?Sized>(
             });
             pure_ltr.as_mut().unwrap().push(is_pure_ltr);
         }
-        assert_eq!(paragraphs.as_ref().unwrap().len(), pure_ltr.as_ref().unwrap().len());
+        assert_eq!(
+            paragraphs.as_ref().unwrap().len(),
+            pure_ltr.as_ref().unwrap().len()
+        );
     }
     assert_eq!(original_classes.len(), text.len());
 
     #[cfg(feature = "flame_it")]
     flame::end("compute_initial_info(): iter text.char_indices()");
 
-    (original_classes, paragraphs, pure_ltr, para_level.unwrap_or(LTR_LEVEL), is_pure_ltr)
+    (
+        original_classes,
+        paragraphs,
+        pure_ltr,
+        para_level.unwrap_or(LTR_LEVEL),
+        is_pure_ltr,
+    )
 }
 
 /// Bidi information of the text.
@@ -719,7 +742,10 @@ impl<'text> ParagraphBidiInfo<'text> {
         let mut processing_classes = original_classes.clone();
 
         let para_info = ParagraphInfo {
-            range: Range{ start: 0, end: text.len() },
+            range: Range {
+                start: 0,
+                end: text.len(),
+            },
             level: paragraph_level,
         };
 
@@ -776,10 +802,7 @@ impl<'text> ParagraphBidiInfo<'text> {
     ///
     /// (This should be kept in sync with BidiInfo::reordered_levels_per_char.)
     #[cfg_attr(feature = "flame_it", flamer::flame)]
-    pub fn reordered_levels_per_char(
-        &self,
-        line: Range<usize>,
-    ) -> Vec<Level> {
+    pub fn reordered_levels_per_char(&self, line: Range<usize>) -> Vec<Level> {
         let levels = self.reordered_levels(line);
         self.text.char_indices().map(|(i, _)| levels[i]).collect()
     }
@@ -831,10 +854,7 @@ impl<'text> ParagraphBidiInfo<'text> {
     /// (This should be kept in sync with BidiInfo::visual_runs.)
     #[cfg_attr(feature = "flame_it", flamer::flame)]
     #[inline]
-    pub fn visual_runs(
-        &self,
-        line: Range<usize>,
-    ) -> (Vec<Level>, Vec<LevelRun>) {
+    pub fn visual_runs(&self, line: Range<usize>) -> (Vec<Level>, Vec<LevelRun>) {
         let levels = self.reordered_levels(line.clone());
         visual_runs_for_line(levels, &line)
     }
@@ -1281,9 +1301,7 @@ mod tests {
     use super::*;
 
     use utf16::{
-        BidiInfo as BidiInfoU16,
-        InitialInfo as InitialInfoU16,
-        Paragraph as ParagraphU16,
+        BidiInfo as BidiInfoU16, InitialInfo as InitialInfoU16, Paragraph as ParagraphU16,
         ParagraphBidiInfo as ParagraphBidiInfoU16,
     };
 
@@ -1600,16 +1618,16 @@ mod tests {
             );
             // If it was a single paragraph, also test ParagraphBidiInfo.
             if t.4.len() == 1 {
-              assert_eq!(
-                  ParagraphBidiInfo::new(t.0, t.1),
-                  ParagraphBidiInfo {
-                      text: t.0,
-                      original_classes: t.3,
-                      levels: t.2.clone(),
-                      paragraph_level: t.4[0].level,
-                      is_pure_ltr: !level::has_rtl(&t.2),
-                  }
-              )
+                assert_eq!(
+                    ParagraphBidiInfo::new(t.0, t.1),
+                    ParagraphBidiInfo {
+                        text: t.0,
+                        original_classes: t.3,
+                        levels: t.2.clone(),
+                        paragraph_level: t.4[0].level,
+                        is_pure_ltr: !level::has_rtl(&t.2),
+                    }
+                )
             }
             let text = &to_utf16(t.0);
             assert_eq!(
@@ -1622,16 +1640,16 @@ mod tests {
                 }
             );
             if t.7.len() == 1 {
-              assert_eq!(
-                  ParagraphBidiInfoU16::new(text, t.1),
-                  ParagraphBidiInfoU16 {
-                      text: text,
-                      original_classes: t.6.clone(),
-                      levels: t.5.clone(),
-                      paragraph_level: t.7[0].level,
-                      is_pure_ltr: !level::has_rtl(&t.5),
-                  }
-              )
+                assert_eq!(
+                    ParagraphBidiInfoU16::new(text, t.1),
+                    ParagraphBidiInfoU16 {
+                        text: text,
+                        original_classes: t.6.clone(),
+                        levels: t.5.clone(),
+                        paragraph_level: t.7[0].level,
+                        is_pure_ltr: !level::has_rtl(&t.5),
+                    }
+                )
             }
         }
     }

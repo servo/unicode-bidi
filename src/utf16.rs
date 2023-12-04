@@ -430,7 +430,10 @@ impl<'text> ParagraphBidiInfo<'text> {
         let mut processing_classes = original_classes.clone();
 
         let para_info = ParagraphInfo {
-            range: Range{ start: 0, end: text.len() },
+            range: Range {
+                start: 0,
+                end: text.len(),
+            },
             level: paragraph_level,
         };
 
@@ -487,10 +490,7 @@ impl<'text> ParagraphBidiInfo<'text> {
     ///
     /// (This should be kept in sync with BidiInfo::reordered_levels_per_char.)
     #[cfg_attr(feature = "flame_it", flamer::flame)]
-    pub fn reordered_levels_per_char(
-        &self,
-        line: Range<usize>,
-    ) -> Vec<Level> {
+    pub fn reordered_levels_per_char(&self, line: Range<usize>) -> Vec<Level> {
         let levels = self.reordered_levels(line);
         self.text.char_indices().map(|(i, _)| levels[i]).collect()
     }
@@ -545,10 +545,7 @@ impl<'text> ParagraphBidiInfo<'text> {
     /// (This should be kept in sync with BidiInfo::visual_runs.)
     #[cfg_attr(feature = "flame_it", flamer::flame)]
     #[inline]
-    pub fn visual_runs(
-        &self,
-        line: Range<usize>,
-    ) -> (Vec<Level>, Vec<LevelRun>) {
+    pub fn visual_runs(&self, line: Range<usize>) -> (Vec<Level>, Vec<LevelRun>) {
         let levels = self.reordered_levels(line.clone());
         visual_runs_for_line(levels, &line)
     }
