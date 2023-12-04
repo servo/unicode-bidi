@@ -165,7 +165,7 @@ pub enum Direction {
 }
 
 /// Bidi information about a single paragraph
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ParagraphInfo {
     /// The paragraphs boundaries within the text, as byte indices.
     ///
@@ -264,32 +264,37 @@ impl<'text> InitialInfoExt<'text> {
         text: &'a str,
         default_para_level: Option<Level>,
     ) -> InitialInfoExt<'a> {
-        let (original_classes, paragraphs, pure_ltr) =
-            compute_initial_info(data_source, text, default_para_level);
+        let (original_classes, paragraphs, pure_ltr, _, _) =
+            compute_initial_info(data_source, text, default_para_level, true);
 
         InitialInfoExt {
             base: InitialInfo {
                 text,
                 original_classes,
-                paragraphs,
+                paragraphs: paragraphs.unwrap(),
             },
-            pure_ltr,
+            pure_ltr: pure_ltr.unwrap(),
         }
     }
 }
 
 /// Implementation of initial-info computation.
+/// This is used for both BidiInfo and ParagraphBidiInfo, with split_paragraphs=true
+/// indicating that it should split paragraphs and return the two Option<> results
+/// (for BidiInfo), and split_paragraphs=false indicating it should not split paras,
+/// and returns the single paragraph_level and is_pure_ltr values instead.
 fn compute_initial_info<'a, D: BidiDataSource, T: TextSource<'a> + ?Sized>(
     data_source: &D,
     text: &'a T,
     default_para_level: Option<Level>,
-) -> (Vec<BidiClass>, Vec<ParagraphInfo>, Vec<bool>) {
+    split_paragraphs: bool,
+) -> (Vec<BidiClass>, Option<Vec<ParagraphInfo>>, Option<Vec<bool>>, Level, bool) {
     let mut original_classes = Vec::with_capacity(text.len());
 
     // The stack contains the starting code unit index for each nested isolate we're inside.
     let mut isolate_stack = Vec::new();
-    let mut paragraphs = Vec::new();
-    let mut pure_ltr = Vec::new();
+    let mut paragraphs = if split_paragraphs { Some(Vec::new()) } else { None };
+    let mut pure_ltr = if split_paragraphs { Some(Vec::new()) } else { None };
 
     let mut para_start = 0;
     let mut para_level = default_para_level;
@@ -315,23 +320,27 @@ fn compute_initial_info<'a, D: BidiDataSource, T: TextSource<'a> + ?Sized>(
 
         match class {
             B => {
-                // P1. Split the text into separate paragraphs. The paragraph separator is kept
-                // with the previous paragraph.
-                let para_end = i + len;
-                paragraphs.push(ParagraphInfo {
-                    range: para_start..para_end,
-                    // P3. If no character is found in p2, set the paragraph level to zero.
-                    level: para_level.unwrap_or(LTR_LEVEL),
-                });
-                pure_ltr.push(is_pure_ltr);
-                // Reset state for the start of the next paragraph.
-                para_start = para_end;
-                // TODO: Support defaulting to direction of previous paragraph
-                //
-                // <http://www.unicode.org/reports/tr9/#HL1>
-                para_level = default_para_level;
-                is_pure_ltr = true;
-                isolate_stack.clear();
+                if split_paragraphs {
+                    // P1. Split the text into separate paragraphs. The paragraph separator is kept
+                    // with the previous paragraph.
+                    let para_end = i + len;
+                    paragraphs.as_mut().unwrap().push(ParagraphInfo {
+                        range: para_start..para_end,
+                        // P3. If no character is found in p2, set the paragraph level to zero.
+                        level: para_level.unwrap_or(LTR_LEVEL),
+                    });
+                    pure_ltr.as_mut().unwrap().push(is_pure_ltr);
+                    // Reset state for the start of the next paragraph.
+                    para_start = para_end;
+                    // TODO: Support defaulting to direction of previous paragraph
+                    //
+                    // <http://www.unicode.org/reports/tr9/#HL1>
+                    para_level = default_para_level;
+                    is_pure_ltr = true;
+                    isolate_stack.clear();
+                } else {
+                    // XXX Is there anything we should do here?
+                }
             }
 
             L | R | AL => {
@@ -376,20 +385,23 @@ fn compute_initial_info<'a, D: BidiDataSource, T: TextSource<'a> + ?Sized>(
             _ => {}
         }
     }
-    if para_start < text.len() {
-        paragraphs.push(ParagraphInfo {
-            range: para_start..text.len(),
-            level: para_level.unwrap_or(LTR_LEVEL),
-        });
-        pure_ltr.push(is_pure_ltr);
+
+    if split_paragraphs {
+        if para_start < text.len() {
+            paragraphs.as_mut().unwrap().push(ParagraphInfo {
+                range: para_start..text.len(),
+                level: para_level.unwrap_or(LTR_LEVEL),
+            });
+            pure_ltr.as_mut().unwrap().push(is_pure_ltr);
+        }
+        assert_eq!(paragraphs.as_ref().unwrap().len(), pure_ltr.as_ref().unwrap().len());
     }
     assert_eq!(original_classes.len(), text.len());
-    assert_eq!(paragraphs.len(), pure_ltr.len());
 
     #[cfg(feature = "flame_it")]
     flame::end("compute_initial_info(): iter text.char_indices()");
 
-    (original_classes, paragraphs, pure_ltr)
+    (original_classes, paragraphs, pure_ltr, para_level.unwrap_or(LTR_LEVEL), is_pure_ltr)
 }
 
 /// Bidi information of the text.
@@ -643,6 +655,196 @@ impl<'text> BidiInfo<'text> {
     #[inline]
     pub fn has_rtl(&self) -> bool {
         level::has_rtl(&self.levels)
+    }
+}
+
+/// Bidi information of text treated as a single paragraph.
+///
+/// The `original_classes` and `levels` vectors are indexed by byte offsets into the text.  If a
+/// character is multiple bytes wide, then its class and level will appear multiple times in these
+/// vectors.
+#[derive(Debug, PartialEq)]
+pub struct ParagraphBidiInfo<'text> {
+    /// The text
+    pub text: &'text str,
+
+    /// The BidiClass of the character at each byte in the text.
+    pub original_classes: Vec<BidiClass>,
+
+    /// The directional embedding level of each byte in the text.
+    pub levels: Vec<Level>,
+
+    /// The paragraph embedding level.
+    pub paragraph_level: Level,
+
+    /// Whether the paragraph is purely LTR.
+    pub is_pure_ltr: bool,
+}
+
+impl<'text> ParagraphBidiInfo<'text> {
+    /// Determine the bidi embedding level.
+    ///
+    ///
+    /// The `hardcoded-data` Cargo feature (enabled by default) must be enabled to use this.
+    ///
+    /// TODO: In early steps, check for special cases that allow later steps to be skipped. like
+    /// text that is entirely LTR.  See the `nsBidi` class from Gecko for comparison.
+    ///
+    /// TODO: Support auto-RTL base direction
+    #[cfg_attr(feature = "flame_it", flamer::flame)]
+    #[cfg(feature = "hardcoded-data")]
+    #[inline]
+    pub fn new(text: &str, default_para_level: Option<Level>) -> ParagraphBidiInfo<'_> {
+        Self::new_with_data_source(&HardcodedBidiData, text, default_para_level)
+    }
+
+    /// Determine the bidi embedding level, with a custom [`BidiDataSource`]
+    /// for Bidi data. If you just wish to use the hardcoded Bidi data, please use [`BidiInfo::new()`]
+    /// instead (enabled with tbe default `hardcoded-data` Cargo feature).
+    ///
+    /// (This is the single-paragraph equivalent of BidiInfo::new_with_data_source,
+    /// and should be kept in sync with it.
+    #[cfg_attr(feature = "flame_it", flamer::flame)]
+    pub fn new_with_data_source<'a, D: BidiDataSource>(
+        data_source: &D,
+        text: &'a str,
+        default_para_level: Option<Level>,
+    ) -> ParagraphBidiInfo<'a> {
+        // Here we could create a ParagraphInitialInfo struct to parallel the one
+        // used by BidiInfo, but there doesn't seem any compelling reason for it.
+        let (original_classes, _, _, paragraph_level, is_pure_ltr) =
+            compute_initial_info(data_source, text, default_para_level, false);
+
+        let mut levels = Vec::<Level>::with_capacity(text.len());
+        let mut processing_classes = original_classes.clone();
+
+        let para_info = ParagraphInfo {
+            range: Range{ start: 0, end: text.len() },
+            level: paragraph_level,
+        };
+
+        compute_bidi_info_for_para(
+            data_source,
+            &para_info,
+            is_pure_ltr,
+            text,
+            &original_classes,
+            &mut processing_classes,
+            &mut levels,
+        );
+
+        ParagraphBidiInfo {
+            text,
+            original_classes,
+            levels,
+            paragraph_level,
+            is_pure_ltr,
+        }
+    }
+
+    /// Produce the levels for this paragraph as needed for reordering, one level per *byte*
+    /// in the paragraph. The returned vector includes bytes that are not included
+    /// in the `line`, but will not adjust them.
+    ///
+    /// See BidiInfo::reordered_levels for details.
+    ///
+    /// (This should be kept in sync with BidiInfo::reordered_levels.)
+    #[cfg_attr(feature = "flame_it", flamer::flame)]
+    pub fn reordered_levels(&self, line: Range<usize>) -> Vec<Level> {
+        assert!(line.start <= self.levels.len());
+        assert!(line.end <= self.levels.len());
+
+        let mut levels = self.levels.clone();
+        let line_classes = &self.original_classes[line.clone()];
+        let line_levels = &mut levels[line.clone()];
+
+        reorder_levels(
+            line_classes,
+            line_levels,
+            self.text.subrange(line),
+            self.paragraph_level,
+        );
+
+        levels
+    }
+
+    /// Produce the levels for this paragraph as needed for reordering, one level per *character*
+    /// in the paragraph. The returned vector includes characters that are not included
+    /// in the `line`, but will not adjust them.
+    ///
+    /// See BidiInfo::reordered_levels_per_char for details.
+    ///
+    /// (This should be kept in sync with BidiInfo::reordered_levels_per_char.)
+    #[cfg_attr(feature = "flame_it", flamer::flame)]
+    pub fn reordered_levels_per_char(
+        &self,
+        line: Range<usize>,
+    ) -> Vec<Level> {
+        let levels = self.reordered_levels(line);
+        self.text.char_indices().map(|(i, _)| levels[i]).collect()
+    }
+
+    /// Re-order a line based on resolved levels and return the line in display order.
+    ///
+    /// See BidiInfo::reorder_line for details.
+    ///
+    /// (This should be kept in sync with BidiInfo::reorder_line.)
+    #[cfg_attr(feature = "flame_it", flamer::flame)]
+    pub fn reorder_line(&self, line: Range<usize>) -> Cow<'text, str> {
+        if !level::has_rtl(&self.levels[line.clone()]) {
+            return self.text[line].into();
+        }
+
+        let (levels, runs) = self.visual_runs(line.clone());
+
+        // If all isolating run sequences are LTR, no reordering is needed
+        if runs.iter().all(|run| levels[run.start].is_ltr()) {
+            return self.text[line].into();
+        }
+
+        let mut result = String::with_capacity(line.len());
+        for run in runs {
+            if levels[run.start].is_rtl() {
+                result.extend(self.text[run].chars().rev());
+            } else {
+                result.push_str(&self.text[run]);
+            }
+        }
+        result.into()
+    }
+
+    /// Reorders pre-calculated levels of a sequence of characters.
+    ///
+    /// See BidiInfo::reorder_visual for details.
+    #[cfg_attr(feature = "flame_it", flamer::flame)]
+    #[inline]
+    pub fn reorder_visual(levels: &[Level]) -> Vec<usize> {
+        reorder_visual(levels)
+    }
+
+    /// Find the level runs within a line and return them in visual order.
+    ///
+    /// `line` is a range of bytes indices within `levels`.
+    ///
+    /// See BidiInfo::visual_runs for details.
+    ///
+    /// (This should be kept in sync with BidiInfo::visual_runs.)
+    #[cfg_attr(feature = "flame_it", flamer::flame)]
+    #[inline]
+    pub fn visual_runs(
+        &self,
+        line: Range<usize>,
+    ) -> (Vec<Level>, Vec<LevelRun>) {
+        let levels = self.reordered_levels(line.clone());
+        visual_runs_for_line(levels, &line)
+    }
+
+    /// If processed text has any computed RTL levels
+    ///
+    /// This information is usually used to skip re-ordering of text when no RTL level is present
+    #[inline]
+    pub fn has_rtl(&self) -> bool {
+        !self.is_pure_ltr
     }
 }
 
@@ -1079,7 +1281,10 @@ mod tests {
     use super::*;
 
     use utf16::{
-        BidiInfo as BidiInfoU16, InitialInfo as InitialInfoU16, Paragraph as ParagraphU16,
+        BidiInfo as BidiInfoU16,
+        InitialInfo as InitialInfoU16,
+        Paragraph as ParagraphU16,
+        ParagraphBidiInfo as ParagraphBidiInfoU16,
     };
 
     #[test]
@@ -1388,19 +1593,130 @@ mod tests {
                 BidiInfo::new(t.0, t.1),
                 BidiInfo {
                     text: t.0,
-                    levels: t.2,
-                    original_classes: t.3,
-                    paragraphs: t.4,
+                    levels: t.2.clone(),
+                    original_classes: t.3.clone(),
+                    paragraphs: t.4.clone(),
                 }
             );
+            // If it was a single paragraph, also test ParagraphBidiInfo.
+            if t.4.len() == 1 {
+              assert_eq!(
+                  ParagraphBidiInfo::new(t.0, t.1),
+                  ParagraphBidiInfo {
+                      text: t.0,
+                      original_classes: t.3,
+                      levels: t.2.clone(),
+                      paragraph_level: t.4[0].level,
+                      is_pure_ltr: !level::has_rtl(&t.2),
+                  }
+              )
+            }
             let text = &to_utf16(t.0);
             assert_eq!(
                 BidiInfoU16::new(text, t.1),
                 BidiInfoU16 {
                     text,
+                    levels: t.5.clone(),
+                    original_classes: t.6.clone(),
+                    paragraphs: t.7.clone(),
+                }
+            );
+            if t.7.len() == 1 {
+              assert_eq!(
+                  ParagraphBidiInfoU16::new(text, t.1),
+                  ParagraphBidiInfoU16 {
+                      text: text,
+                      original_classes: t.6.clone(),
+                      levels: t.5.clone(),
+                      paragraph_level: t.7[0].level,
+                      is_pure_ltr: !level::has_rtl(&t.5),
+                  }
+              )
+            }
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "hardcoded-data")]
+    fn test_paragraph_bidi_info() {
+        // Passing text that includes a paragraph break to the ParagraphBidiInfo API:
+        // this is a misuse of the API by the client, but our behavior is safe &
+        // consistent. The embedded paragraph break acts like a separator (tab) would.
+        let tests = [
+            (
+                "a א.\nג",
+                None,
+                // utf-8 results:
+                vec![L, WS, R, R, CS, B, R, R],
+                Level::vec(&[0, 0, 1, 1, 1, 1, 1, 1]),
+                // utf-16 results:
+                vec![L, WS, R, CS, B, R],
+                Level::vec(&[0, 0, 1, 1, 1, 1]),
+                // paragraph level; is_pure_ltr
+                LTR_LEVEL,
+                false,
+            ),
+            (
+                "\u{5d1} a.\nb.",
+                None,
+                // utf-8 results:
+                vec![R, R, WS, L, CS, B, L, CS],
+                Level::vec(&[1, 1, 1, 2, 2, 2, 2, 1]),
+                // utf-16 results:
+                vec![R, WS, L, CS, B, L, CS],
+                Level::vec(&[1, 1, 2, 2, 2, 2, 1]),
+                // paragraph level; is_pure_ltr
+                RTL_LEVEL,
+                false,
+            ),
+            (
+                "a א.\tג",
+                None,
+                // utf-8 results:
+                vec![L, WS, R, R, CS, S, R, R],
+                Level::vec(&[0, 0, 1, 1, 1, 1, 1, 1]),
+                // utf-16 results:
+                vec![L, WS, R, CS, S, R],
+                Level::vec(&[0, 0, 1, 1, 1, 1]),
+                // paragraph level; is_pure_ltr
+                LTR_LEVEL,
+                false,
+            ),
+            (
+                "\u{5d1} a.\tb.",
+                None,
+                // utf-8 results:
+                vec![R, R, WS, L, CS, S, L, CS],
+                Level::vec(&[1, 1, 1, 2, 2, 2, 2, 1]),
+                // utf-16 results:
+                vec![R, WS, L, CS, S, L, CS],
+                Level::vec(&[1, 1, 2, 2, 2, 2, 1]),
+                // paragraph level; is_pure_ltr
+                RTL_LEVEL,
+                false,
+            ),
+        ];
+
+        for t in tests {
+            assert_eq!(
+                ParagraphBidiInfo::new(t.0, t.1),
+                ParagraphBidiInfo {
+                    text: t.0,
+                    original_classes: t.2,
+                    levels: t.3,
+                    paragraph_level: t.6,
+                    is_pure_ltr: t.7,
+                }
+            );
+            let text = &to_utf16(t.0);
+            assert_eq!(
+                ParagraphBidiInfoU16::new(text, t.1),
+                ParagraphBidiInfoU16 {
+                    text: text,
+                    original_classes: t.4,
                     levels: t.5,
-                    original_classes: t.6,
-                    paragraphs: t.7,
+                    paragraph_level: t.6,
+                    is_pure_ltr: t.7,
                 }
             );
         }

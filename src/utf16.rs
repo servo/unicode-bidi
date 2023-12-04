@@ -102,16 +102,16 @@ impl<'text> InitialInfoExt<'text> {
         text: &'a [u16],
         default_para_level: Option<Level>,
     ) -> InitialInfoExt<'a> {
-        let (original_classes, paragraphs, pure_ltr) =
-            compute_initial_info(data_source, text, default_para_level);
+        let (original_classes, paragraphs, pure_ltr, _, _) =
+            compute_initial_info(data_source, text, default_para_level, true);
 
         InitialInfoExt {
             base: InitialInfo {
                 text,
                 original_classes,
-                paragraphs,
+                paragraphs: paragraphs.unwrap(),
             },
-            pure_ltr,
+            pure_ltr: pure_ltr.unwrap(),
         }
     }
 }
@@ -366,6 +366,199 @@ impl<'text> BidiInfo<'text> {
     #[inline]
     pub fn has_rtl(&self) -> bool {
         level::has_rtl(&self.levels)
+    }
+}
+
+/// Bidi information of text treated as a single paragraph.
+///
+/// The `original_classes` and `levels` vectors are indexed by code unit offsets into the text.  If a
+/// character is multiple code units wide, then its class and level will appear multiple times in these
+/// vectors.
+#[derive(Debug, PartialEq)]
+pub struct ParagraphBidiInfo<'text> {
+    /// The text
+    pub text: &'text [u16],
+
+    /// The BidiClass of the character at each byte in the text.
+    pub original_classes: Vec<BidiClass>,
+
+    /// The directional embedding level of each byte in the text.
+    pub levels: Vec<Level>,
+
+    /// The paragraph embedding level.
+    pub paragraph_level: Level,
+
+    /// Whether the paragraph is purely LTR.
+    pub is_pure_ltr: bool,
+}
+
+impl<'text> ParagraphBidiInfo<'text> {
+    /// Determine the bidi embedding level.
+    ///
+    ///
+    /// The `hardcoded-data` Cargo feature (enabled by default) must be enabled to use this.
+    ///
+    /// TODO: In early steps, check for special cases that allow later steps to be skipped. like
+    /// text that is entirely LTR.  See the `nsBidi` class from Gecko for comparison.
+    ///
+    /// TODO: Support auto-RTL base direction
+    #[cfg_attr(feature = "flame_it", flamer::flame)]
+    #[cfg(feature = "hardcoded-data")]
+    #[inline]
+    pub fn new(text: &[u16], default_para_level: Option<Level>) -> ParagraphBidiInfo<'_> {
+        Self::new_with_data_source(&HardcodedBidiData, text, default_para_level)
+    }
+
+    /// Determine the bidi embedding level, with a custom [`BidiDataSource`]
+    /// for Bidi data. If you just wish to use the hardcoded Bidi data, please use [`BidiInfo::new()`]
+    /// instead (enabled with tbe default `hardcoded-data` Cargo feature).
+    ///
+    /// (This is the single-paragraph equivalent of BidiInfo::new_with_data_source,
+    /// and should be kept in sync with it.
+    #[cfg_attr(feature = "flame_it", flamer::flame)]
+    pub fn new_with_data_source<'a, D: BidiDataSource>(
+        data_source: &D,
+        text: &'a [u16],
+        default_para_level: Option<Level>,
+    ) -> ParagraphBidiInfo<'a> {
+        // Here we could create a ParagraphInitialInfo struct to parallel the one
+        // used by BidiInfo, but there doesn't seem any compelling reason for it.
+        let (original_classes, _, _, paragraph_level, is_pure_ltr) =
+            compute_initial_info(data_source, text, default_para_level, false);
+
+        let mut levels = Vec::<Level>::with_capacity(text.len());
+        let mut processing_classes = original_classes.clone();
+
+        let para_info = ParagraphInfo {
+            range: Range{ start: 0, end: text.len() },
+            level: paragraph_level,
+        };
+
+        compute_bidi_info_for_para(
+            data_source,
+            &para_info,
+            is_pure_ltr,
+            text,
+            &original_classes,
+            &mut processing_classes,
+            &mut levels,
+        );
+
+        ParagraphBidiInfo {
+            text,
+            original_classes,
+            levels,
+            paragraph_level,
+            is_pure_ltr,
+        }
+    }
+
+    /// Produce the levels for this paragraph as needed for reordering, one level per *code unit*
+    /// in the paragraph. The returned vector includes code units that are not included
+    /// in the `line`, but will not adjust them.
+    ///
+    /// See BidiInfo::reordered_levels for details.
+    ///
+    /// (This should be kept in sync with BidiInfo::reordered_levels.)
+    #[cfg_attr(feature = "flame_it", flamer::flame)]
+    pub fn reordered_levels(&self, line: Range<usize>) -> Vec<Level> {
+        assert!(line.start <= self.levels.len());
+        assert!(line.end <= self.levels.len());
+
+        let mut levels = self.levels.clone();
+        let line_classes = &self.original_classes[line.clone()];
+        let line_levels = &mut levels[line.clone()];
+
+        reorder_levels(
+            line_classes,
+            line_levels,
+            self.text.subrange(line),
+            self.paragraph_level,
+        );
+
+        levels
+    }
+
+    /// Produce the levels for this paragraph as needed for reordering, one level per *character*
+    /// in the paragraph. The returned vector includes characters that are not included
+    /// in the `line`, but will not adjust them.
+    ///
+    /// See BidiInfo::reordered_levels_per_char for details.
+    ///
+    /// (This should be kept in sync with BidiInfo::reordered_levels_per_char.)
+    #[cfg_attr(feature = "flame_it", flamer::flame)]
+    pub fn reordered_levels_per_char(
+        &self,
+        line: Range<usize>,
+    ) -> Vec<Level> {
+        let levels = self.reordered_levels(line);
+        self.text.char_indices().map(|(i, _)| levels[i]).collect()
+    }
+
+    /// Re-order a line based on resolved levels and return the line in display order.
+    ///
+    /// See BidiInfo::reorder_line for details.
+    ///
+    /// (This should be kept in sync with BidiInfo::reorder_line.)
+    #[cfg_attr(feature = "flame_it", flamer::flame)]
+    pub fn reorder_line(&self, line: Range<usize>) -> Cow<'text, [u16]> {
+        if !level::has_rtl(&self.levels[line.clone()]) {
+            return self.text[line].into();
+        }
+
+        let (levels, runs) = self.visual_runs(line.clone());
+
+        // If all isolating run sequences are LTR, no reordering is needed
+        if runs.iter().all(|run| levels[run.start].is_ltr()) {
+            return self.text[line].into();
+        }
+
+        let mut result = Vec::<u16>::with_capacity(line.len());
+        for run in runs {
+            if levels[run.start].is_rtl() {
+                let mut buf = [0; 2];
+                for c in self.text[run].chars().rev() {
+                    result.extend(c.encode_utf16(&mut buf).iter());
+                }
+            } else {
+                result.extend(self.text[run].iter());
+            }
+        }
+        result.into()
+    }
+
+    /// Reorders pre-calculated levels of a sequence of characters.
+    ///
+    /// See BidiInfo::reorder_visual for details.
+    #[cfg_attr(feature = "flame_it", flamer::flame)]
+    #[inline]
+    pub fn reorder_visual(levels: &[Level]) -> Vec<usize> {
+        reorder_visual(levels)
+    }
+
+    /// Find the level runs within a line and return them in visual order.
+    ///
+    /// `line` is a range of code-unit indices within `levels`.
+    ///
+    /// See `BidiInfo::visual_runs` for details.
+    ///
+    /// (This should be kept in sync with BidiInfo::visual_runs.)
+    #[cfg_attr(feature = "flame_it", flamer::flame)]
+    #[inline]
+    pub fn visual_runs(
+        &self,
+        line: Range<usize>,
+    ) -> (Vec<Level>, Vec<LevelRun>) {
+        let levels = self.reordered_levels(line.clone());
+        visual_runs_for_line(levels, &line)
+    }
+
+    /// If processed text has any computed RTL levels
+    ///
+    /// This information is usually used to skip re-ordering of text when no RTL level is present
+    #[inline]
+    pub fn has_rtl(&self) -> bool {
+        !self.is_pure_ltr
     }
 }
 
