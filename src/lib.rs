@@ -577,23 +577,8 @@ impl<'text> BidiInfo<'text> {
         if !level::has_rtl(&self.levels[line.clone()]) {
             return self.text[line].into();
         }
-
         let (levels, runs) = self.visual_runs(para, line.clone());
-
-        // If all isolating run sequences are LTR, no reordering is needed
-        if runs.iter().all(|run| levels[run.start].is_ltr()) {
-            return self.text[line].into();
-        }
-
-        let mut result = String::with_capacity(line.len());
-        for run in runs {
-            if levels[run.start].is_rtl() {
-                result.extend(self.text[run].chars().rev());
-            } else {
-                result.push_str(&self.text[run]);
-            }
-        }
-        result.into()
+        reorder_line(self.text, line, levels, runs)
     }
 
     /// Reorders pre-calculated levels of a sequence of characters.
@@ -820,20 +805,7 @@ impl<'text> ParagraphBidiInfo<'text> {
 
         let (levels, runs) = self.visual_runs(line.clone());
 
-        // If all isolating run sequences are LTR, no reordering is needed
-        if runs.iter().all(|run| levels[run.start].is_ltr()) {
-            return self.text[line].into();
-        }
-
-        let mut result = String::with_capacity(line.len());
-        for run in runs {
-            if levels[run.start].is_rtl() {
-                result.extend(self.text[run].chars().rev());
-            } else {
-                result.push_str(&self.text[run]);
-            }
-        }
-        result.into()
+        reorder_line(self.text, line, levels, runs)
     }
 
     /// Reorders pre-calculated levels of a sequence of characters.
@@ -866,6 +838,24 @@ impl<'text> ParagraphBidiInfo<'text> {
     pub fn has_rtl(&self) -> bool {
         !self.is_pure_ltr
     }
+}
+
+// Implementation of reorder_line for both BidiInfo and ParagraphBidiInfo.
+fn reorder_line<'text>(text: &'text str, line: Range<usize>, levels: Vec<Level>, runs: Vec<LevelRun>) -> Cow<'text, str> {
+    // If all isolating run sequences are LTR, no reordering is needed
+    if runs.iter().all(|run| levels[run.start].is_ltr()) {
+        return text[line].into();
+    }
+
+    let mut result = String::with_capacity(line.len());
+    for run in runs {
+        if levels[run.start].is_rtl() {
+            result.extend(text[run].chars().rev());
+        } else {
+            result.push_str(&text[run]);
+        }
+    }
+    result.into()
 }
 
 /// Find the level runs within a line and return them in visual order.

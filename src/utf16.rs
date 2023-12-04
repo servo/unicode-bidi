@@ -262,26 +262,8 @@ impl<'text> BidiInfo<'text> {
         if !level::has_rtl(&self.levels[line.clone()]) {
             return self.text[line].into();
         }
-
         let (levels, runs) = self.visual_runs(para, line.clone());
-
-        // If all isolating run sequences are LTR, no reordering is needed
-        if runs.iter().all(|run| levels[run.start].is_ltr()) {
-            return self.text[line].into();
-        }
-
-        let mut result = Vec::<u16>::with_capacity(line.len());
-        for run in runs {
-            if levels[run.start].is_rtl() {
-                let mut buf = [0; 2];
-                for c in self.text[run].chars().rev() {
-                    result.extend(c.encode_utf16(&mut buf).iter());
-                }
-            } else {
-                result.extend(self.text[run].iter());
-            }
-        }
-        result.into()
+        reorder_line(self.text, line, levels, runs)
     }
 
     /// Reorders pre-calculated levels of a sequence of characters.
@@ -505,26 +487,8 @@ impl<'text> ParagraphBidiInfo<'text> {
         if !level::has_rtl(&self.levels[line.clone()]) {
             return self.text[line].into();
         }
-
         let (levels, runs) = self.visual_runs(line.clone());
-
-        // If all isolating run sequences are LTR, no reordering is needed
-        if runs.iter().all(|run| levels[run.start].is_ltr()) {
-            return self.text[line].into();
-        }
-
-        let mut result = Vec::<u16>::with_capacity(line.len());
-        for run in runs {
-            if levels[run.start].is_rtl() {
-                let mut buf = [0; 2];
-                for c in self.text[run].chars().rev() {
-                    result.extend(c.encode_utf16(&mut buf).iter());
-                }
-            } else {
-                result.extend(self.text[run].iter());
-            }
-        }
-        result.into()
+        reorder_line(self.text, line, levels, runs)
     }
 
     /// Reorders pre-calculated levels of a sequence of characters.
@@ -557,6 +521,27 @@ impl<'text> ParagraphBidiInfo<'text> {
     pub fn has_rtl(&self) -> bool {
         !self.is_pure_ltr
     }
+}
+
+// Implementation of reorder_line for both BidiInfo and ParagraphBidiInfo.
+fn reorder_line<'text>(text: &'text [u16], line: Range<usize>, levels: Vec<Level>, runs: Vec<LevelRun>) -> Cow<'text, [u16]> {
+    // If all isolating run sequences are LTR, no reordering is needed
+    if runs.iter().all(|run| levels[run.start].is_ltr()) {
+        return text[line].into();
+    }
+
+    let mut result = Vec::<u16>::with_capacity(line.len());
+    for run in runs {
+        if levels[run.start].is_rtl() {
+            let mut buf = [0; 2];
+            for c in text[run].chars().rev() {
+                result.extend(c.encode_utf16(&mut buf).iter());
+            }
+        } else {
+            result.extend(text[run].iter());
+        }
+    }
+    result.into()
 }
 
 /// Contains a reference of `BidiInfo` and one of its `paragraphs`.
