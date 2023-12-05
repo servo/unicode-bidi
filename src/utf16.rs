@@ -521,6 +521,12 @@ impl<'text> ParagraphBidiInfo<'text> {
     pub fn has_rtl(&self) -> bool {
         !self.is_pure_ltr
     }
+
+    /// Return the paragraph's Direction (Ltr, Rtl, or Mixed) based on its levels.
+    #[inline]
+    pub fn direction(&self) -> Direction {
+        para_direction(&self.levels)
+    }
 }
 
 /// Return a line of the text in display order based on resolved levels.
@@ -582,7 +588,7 @@ impl<'a, 'text> Paragraph<'a, 'text> {
     /// Returns if the paragraph is Left direction, right direction or mixed.
     #[inline]
     pub fn direction(&self) -> Direction {
-        para_direction(&self.para, &self.info.levels)
+        para_direction(&self.info.levels[self.para.range.clone()])
     }
 
     /// Returns the `Level` of a certain character in the paragraph.
