@@ -523,7 +523,22 @@ impl<'text> ParagraphBidiInfo<'text> {
     }
 }
 
-// Implementation of reorder_line for both BidiInfo and ParagraphBidiInfo.
+/// Return a line of the text in display order based on resolved levels.
+///
+/// `text`   the full text passed to the `BidiInfo` or `ParagraphBidiInfo` for analysis
+/// `line`   a range of byte indices within `text` corresponding to one line
+/// `levels` array of `Level` values, with `line`'s levels reordered into visual order
+/// `runs`   array of `LevelRun`s in visual order
+///
+/// (`levels` and `runs` are the result of calling `BidiInfo::visual_runs()` or
+/// `ParagraphBidiInfo::visual_runs()` for the line of interest.)
+///
+/// Returns: the reordered text of the line.
+///
+/// This does not apply [Rule L3] or [Rule L4] around combining characters or mirroring.
+///
+/// [Rule L3]: https://www.unicode.org/reports/tr9/#L3
+/// [Rule L4]: https://www.unicode.org/reports/tr9/#L4
 fn reorder_line<'text>(
     text: &'text [u16],
     line: Range<usize>,
