@@ -264,51 +264,49 @@ impl<'text> InitialInfoExt<'text> {
         text: &'a str,
         default_para_level: Option<Level>,
     ) -> InitialInfoExt<'a> {
-        let (original_classes, paragraphs, pure_ltr, _, _) =
-            compute_initial_info(data_source, text, default_para_level, true);
+        let mut paragraphs = Vec::<ParagraphInfo>::new();
+        let mut pure_ltr = Vec::<bool>::new();
+        let (original_classes, _, _) = compute_initial_info(
+            data_source,
+            text,
+            default_para_level,
+            Some((&mut paragraphs, &mut pure_ltr)),
+        );
 
         InitialInfoExt {
             base: InitialInfo {
                 text,
                 original_classes,
-                paragraphs: paragraphs.unwrap(),
+                paragraphs,
             },
-            pure_ltr: pure_ltr.unwrap(),
+            pure_ltr,
         }
     }
 }
 
-/// Implementation of initial-info computation.
-/// This is used for both BidiInfo and ParagraphBidiInfo, with split_paragraphs=true
-/// indicating that it should split paragraphs and return the two Option<> results
-/// (for BidiInfo), and split_paragraphs=false indicating it should not split paras,
-/// and returns the single paragraph_level and is_pure_ltr values instead.
+/// Implementation of initial-info computation for both BidiInfo and ParagraphBidiInfo.
+/// To treat the text as (potentially) multiple paragraphs, the caller should pass the
+/// pair of optional outparam arrays to receive the ParagraphInfo and pure-ltr flags
+/// for each paragraph. Passing None for split_paragraphs will ignore any paragraph-
+/// separator characters in the text, treating it just as a single paragraph.
+/// Returns the array of BidiClass values for each code unit of the text, along with
+/// the embedding level and pure-ltr flag for the *last* (or only) paragraph.
 fn compute_initial_info<'a, D: BidiDataSource, T: TextSource<'a> + ?Sized>(
     data_source: &D,
     text: &'a T,
     default_para_level: Option<Level>,
-    split_paragraphs: bool,
-) -> (
-    Vec<BidiClass>,
-    Option<Vec<ParagraphInfo>>,
-    Option<Vec<bool>>,
-    Level,
-    bool,
-) {
+    mut split_paragraphs: Option<(&mut Vec<ParagraphInfo>, &mut Vec<bool>)>,
+) -> (Vec<BidiClass>, Level, bool) {
     let mut original_classes = Vec::with_capacity(text.len());
 
     // The stack contains the starting code unit index for each nested isolate we're inside.
     let mut isolate_stack = Vec::new();
-    let mut paragraphs = if split_paragraphs {
-        Some(Vec::new())
-    } else {
-        None
-    };
-    let mut pure_ltr = if split_paragraphs {
-        Some(Vec::new())
-    } else {
-        None
-    };
+
+    #[cfg(debug_assertions)]
+    if let Some((ref paragraphs, ref pure_ltr)) = split_paragraphs {
+        debug_assert!(paragraphs.is_empty());
+        debug_assert!(pure_ltr.is_empty());
+    }
 
     let mut para_start = 0;
     let mut para_level = default_para_level;
@@ -334,16 +332,16 @@ fn compute_initial_info<'a, D: BidiDataSource, T: TextSource<'a> + ?Sized>(
 
         match class {
             B => {
-                if split_paragraphs {
+                if let Some((ref mut paragraphs, ref mut pure_ltr)) = split_paragraphs {
                     // P1. Split the text into separate paragraphs. The paragraph separator is kept
                     // with the previous paragraph.
                     let para_end = i + len;
-                    paragraphs.as_mut().unwrap().push(ParagraphInfo {
+                    paragraphs.push(ParagraphInfo {
                         range: para_start..para_end,
                         // P3. If no character is found in p2, set the paragraph level to zero.
                         level: para_level.unwrap_or(LTR_LEVEL),
                     });
-                    pure_ltr.as_mut().unwrap().push(is_pure_ltr);
+                    pure_ltr.push(is_pure_ltr);
                     // Reset state for the start of the next paragraph.
                     para_start = para_end;
                     // TODO: Support defaulting to direction of previous paragraph
@@ -352,8 +350,6 @@ fn compute_initial_info<'a, D: BidiDataSource, T: TextSource<'a> + ?Sized>(
                     para_level = default_para_level;
                     is_pure_ltr = true;
                     isolate_stack.clear();
-                } else {
-                    // XXX Is there anything we should do here?
                 }
             }
 
@@ -400,28 +396,23 @@ fn compute_initial_info<'a, D: BidiDataSource, T: TextSource<'a> + ?Sized>(
         }
     }
 
-    if split_paragraphs {
+    if let Some((paragraphs, pure_ltr)) = split_paragraphs {
         if para_start < text.len() {
-            paragraphs.as_mut().unwrap().push(ParagraphInfo {
+            paragraphs.push(ParagraphInfo {
                 range: para_start..text.len(),
                 level: para_level.unwrap_or(LTR_LEVEL),
             });
-            pure_ltr.as_mut().unwrap().push(is_pure_ltr);
+            pure_ltr.push(is_pure_ltr);
         }
-        assert_eq!(
-            paragraphs.as_ref().unwrap().len(),
-            pure_ltr.as_ref().unwrap().len()
-        );
+        debug_assert_eq!(paragraphs.len(), pure_ltr.len());
     }
-    assert_eq!(original_classes.len(), text.len());
+    debug_assert_eq!(original_classes.len(), text.len());
 
     #[cfg(feature = "flame_it")]
     flame::end("compute_initial_info(): iter text.char_indices()");
 
     (
         original_classes,
-        paragraphs,
-        pure_ltr,
         para_level.unwrap_or(LTR_LEVEL),
         is_pure_ltr,
     )
@@ -720,8 +711,8 @@ impl<'text> ParagraphBidiInfo<'text> {
     ) -> ParagraphBidiInfo<'a> {
         // Here we could create a ParagraphInitialInfo struct to parallel the one
         // used by BidiInfo, but there doesn't seem any compelling reason for it.
-        let (original_classes, _, _, paragraph_level, is_pure_ltr) =
-            compute_initial_info(data_source, text, default_para_level, false);
+        let (original_classes, paragraph_level, is_pure_ltr) =
+            compute_initial_info(data_source, text, default_para_level, None);
 
         let mut levels = Vec::<Level>::with_capacity(text.len());
         let mut processing_classes = original_classes.clone();

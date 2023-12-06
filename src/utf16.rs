@@ -102,16 +102,22 @@ impl<'text> InitialInfoExt<'text> {
         text: &'a [u16],
         default_para_level: Option<Level>,
     ) -> InitialInfoExt<'a> {
-        let (original_classes, paragraphs, pure_ltr, _, _) =
-            compute_initial_info(data_source, text, default_para_level, true);
+        let mut paragraphs = Vec::<ParagraphInfo>::new();
+        let mut pure_ltr = Vec::<bool>::new();
+        let (original_classes, _, _) = compute_initial_info(
+            data_source,
+            text,
+            default_para_level,
+            Some((&mut paragraphs, &mut pure_ltr)),
+        );
 
         InitialInfoExt {
             base: InitialInfo {
                 text,
                 original_classes,
-                paragraphs: paragraphs.unwrap(),
+                paragraphs,
             },
-            pure_ltr: pure_ltr.unwrap(),
+            pure_ltr,
         }
     }
 }
@@ -405,8 +411,8 @@ impl<'text> ParagraphBidiInfo<'text> {
     ) -> ParagraphBidiInfo<'a> {
         // Here we could create a ParagraphInitialInfo struct to parallel the one
         // used by BidiInfo, but there doesn't seem any compelling reason for it.
-        let (original_classes, _, _, paragraph_level, is_pure_ltr) =
-            compute_initial_info(data_source, text, default_para_level, false);
+        let (original_classes, paragraph_level, is_pure_ltr) =
+            compute_initial_info(data_source, text, default_para_level, None);
 
         let mut levels = Vec::<Level>::with_capacity(text.len());
         let mut processing_classes = original_classes.clone();
