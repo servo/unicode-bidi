@@ -302,11 +302,13 @@ fn compute_initial_info<'a, D: BidiDataSource, T: TextSource<'a> + ?Sized>(
     // The stack contains the starting code unit index for each nested isolate we're inside.
     let mut isolate_stack = Vec::new();
 
-    #[cfg(debug_assertions)]
-    if let Some((ref paragraphs, ref pure_ltr)) = split_paragraphs {
-        debug_assert!(paragraphs.is_empty());
-        debug_assert!(pure_ltr.is_empty());
-    }
+    debug_assert!(
+        if let Some((ref paragraphs, ref pure_ltr)) = split_paragraphs {
+            paragraphs.is_empty() && pure_ltr.is_empty()
+        } else {
+            true
+        }
+    );
 
     let mut para_start = 0;
     let mut para_level = default_para_level;
