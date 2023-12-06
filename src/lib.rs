@@ -1000,6 +1000,49 @@ fn assign_levels_to_removed_chars(para_level: Level, classes: &[BidiClass], leve
     }
 }
 
+/// Get the base direction of the text provided according to the Unicode Bidirectional Algorithm.
+///
+/// See rules P2 and P3.
+///
+/// The base direction is derived from the first character in the string with bidi character type
+/// L, R, or AL. If the first such character has type L, Direction::Ltr is returned. If the first
+/// such character has type R or AL, Direction::Rtl is returned.
+///
+/// If the string does not contain any character of these types (outside of embedded isolate runs),
+/// then Direction::Mixed is returned (but should be considered as meaning "neutral" or "unknown",
+/// not in fact mixed directions).
+///
+/// This is a lightweight function for use when only the base direction is needed and no further
+/// bidi processing of the text is needed.
+///
+/// If the text contains paragraph separators, this function considers only the first paragraph.
+#[cfg(feature = "hardcoded-data")]
+#[inline]
+pub fn get_base_direction<'a, T: TextSource<'a> + ?Sized>(text: &'a T) -> Direction {
+    get_base_direction_with_data_source(&HardcodedBidiData, text)
+}
+
+pub fn get_base_direction_with_data_source<'a, D: BidiDataSource, T: TextSource<'a> + ?Sized>(
+    data_source: &D,
+    text: &'a T,
+) -> Direction {
+    let mut isolate_level = 0;
+    for c in text.chars() {
+        match data_source.bidi_class(c) {
+            LRI | RLI | FSI => isolate_level = isolate_level + 1,
+            PDI if isolate_level > 0 => isolate_level = isolate_level - 1,
+            L if isolate_level == 0 => return Direction::Ltr,
+            R | AL if isolate_level == 0 => return Direction::Rtl,
+            B => break,
+            _ => (),
+        }
+    }
+    // If no strong char was found, return Mixed. Normally this will be treated as Ltr by callers
+    // (see rule P3), but we don't map this to Ltr here so that a caller that wants to apply other
+    // heuristics to an all-neutral paragraph can tell the difference.
+    Direction::Mixed
+}
+
 /// Implementation of TextSource for UTF-8 text (a string slice).
 impl<'text> TextSource<'text> for str {
     type CharIter = core::str::Chars<'text>;
@@ -1735,6 +1778,25 @@ mod tests {
         assert_eq!(p_mixed.info.levels.len(), 40);
         assert_eq!(p_mixed.para.range.start, 21);
         assert_eq!(p_mixed.level_at(ltr_text.len()), RTL_LEVEL);
+    }
+
+    #[test]
+    fn test_get_base_direction() {
+        let tests = vec![
+            ("", Direction::Mixed), // return Mixed if no strong character found
+            ("123[]-+\u{2019}\u{2060}\u{00bf}?", Direction::Mixed),
+            ("3.14\npi", Direction::Mixed), // only first paragraph is considered
+            ("[123 'abc']", Direction::Ltr),
+            ("[123 '\u{0628}' abc", Direction::Rtl),
+            ("[123 '\u{2066}abc\u{2069}'\u{0628}]", Direction::Rtl), // embedded isolate is ignored
+            ("[123 '\u{2066}abc\u{2068}'\u{0628}]", Direction::Mixed),
+        ];
+
+        for t in tests {
+            assert_eq!(get_base_direction(t.0), t.1);
+            let text = &to_utf16(t.0);
+            assert_eq!(get_base_direction(text.as_slice()), t.1);
+        }
     }
 }
 
