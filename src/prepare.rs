@@ -89,7 +89,7 @@ pub fn isolating_run_sequences(
             sequences.push(sequence);
         }
     }
-    // Pop any remaning sequences off the stack.
+    // Pop any remaining sequences off the stack.
     sequences.extend(stack.into_iter().rev().filter(|seq| !seq.is_empty()));
 
     // Determine the `sos` and `eos` class for each sequence.
