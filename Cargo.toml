@@ -1,6 +1,6 @@
 [package]
 name = "unicode-bidi"
-version = "0.3.14"
+version = "0.3.15"
 authors = ["The Servo Project Developers"]
 license = "MIT OR Apache-2.0"
 description = "Implementation of the Unicode Bidirectional Algorithm"
