@@ -13,47 +13,26 @@ jobs:
         rust: [1.36.0, stable, beta, nightly]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
-          override: true
-          profile: minimal
       - name: Unpin dependencies except on MSRV
         if: matrix.rust != '1.36.0'
         run: cargo update
-      - uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --all-targets
-      - uses: actions-rs/cargo@v1
-        with:
-          command: test
-      - uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --features "serde"
-      - uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --no-default-features
-      - uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --no-default-features --features=hardcoded-data
+      - run: cargo build --all-targets
+      - run: cargo test
+      - run: cargo test --features "serde"
+      - run: cargo test --no-default-features
+      - run: cargo test --no-default-features --features=hardcoded-data
   Fmt:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          override: true
           components: rustfmt
-      - uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --check
+      - run: cargo fmt --check
 
   build_result:
     name: homu build finished
