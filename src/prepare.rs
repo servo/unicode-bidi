@@ -52,7 +52,7 @@ pub fn isolating_run_sequences(
 
     // When we encounter an isolate initiator, we push the current sequence onto the
     // stack so we can resume it after the matching PDI.
-    let mut stack = vec![Vec::new()];
+    let mut stack = vec![vec![]];
 
     for run in runs {
         assert!(!run.is_empty());
@@ -80,7 +80,7 @@ pub fn isolating_run_sequences(
 
         sequence.push(run);
 
-        if let RLI | LRI | FSI = end_class {
+        if matches!(end_class, RLI | LRI | FSI) {
             // Resume this sequence after the isolate.
             stack.push(sequence);
         } else {
@@ -122,11 +122,9 @@ pub fn isolating_run_sequences(
                 .unwrap_or(end_of_seq - 1)];
 
             #[cfg(test)]
-            for run in result.runs.clone() {
-                for idx in run {
-                    if not_removed_by_x9(&original_classes[idx]) {
-                        assert_eq!(seq_level, levels[idx]);
-                    }
+            for idx in result.runs.clone().into_iter().flatten() {
+                if not_removed_by_x9(&original_classes[idx]) {
+                    assert_eq!(seq_level, levels[idx]);
                 }
             }
 
