@@ -9,6 +9,7 @@ documentation = "https://docs.rs/unicode-bidi/"
 keywords = ["rtl", "unicode", "text", "layout", "bidi"]
 readme="README.md"
 edition = "2018"
+rust-version = "1.36.0"
 categories = [
     "no-std",
     "encoding",
