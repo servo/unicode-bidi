@@ -52,10 +52,7 @@ pub fn compute<'a, T: TextSource<'a> + ?Sized>(
                 levels[i] = last_level;
 
                 // X5a-X5c: Isolate initiators get the level of the last entry on the stack.
-                let is_isolate = match original_classes[i] {
-                    RLI | LRI | FSI => true,
-                    _ => false,
-                };
+                let is_isolate = matches!(original_classes[i], RLI | LRI | FSI);
                 if is_isolate {
                     // Redundant due to "Retaining explicit formatting characters" step.
                     // levels[i] = last_level;
