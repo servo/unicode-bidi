@@ -343,7 +343,7 @@ pub fn resolve_neutral<'a, D: BidiDataSource, T: TextSource<'a> + ?Sized>(
                 .unwrap_or(sequence.sos);
 
             // > Within this scope, bidirectional types EN and AN are treated as R.
-            if previous_strong == BidiClass::EN || previous_strong == BidiClass::AN {
+            if matches!(previous_strong, BidiClass::EN | BidiClass::AN) {
                 previous_strong = BidiClass::R;
             }
 
