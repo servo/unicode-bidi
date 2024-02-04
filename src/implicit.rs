@@ -306,7 +306,7 @@ pub fn resolve_neutral<'a, D: BidiDataSource, T: TextSource<'a> + ?Sized>(
                 found_e = true;
             } else if class == not_e {
                 found_not_e = true;
-            } else if class == BidiClass::EN || class == BidiClass::AN {
+            } else if matches!(class, BidiClass::EN | BidiClass::AN) {
                 // > Within this scope, bidirectional types EN and AN are treated as R.
                 if e == BidiClass::L {
                     found_not_e = true;
@@ -335,10 +335,10 @@ pub fn resolve_neutral<'a, D: BidiDataSource, T: TextSource<'a> + ?Sized>(
                 .iter_backwards_from(pair.start, pair.start_run)
                 .map(|i| processing_classes[i])
                 .find(|class| {
-                    *class == BidiClass::L
-                        || *class == BidiClass::R
-                        || *class == BidiClass::EN
-                        || *class == BidiClass::AN
+                    matches!(
+                        class,
+                        BidiClass::L | BidiClass::R | BidiClass::EN | BidiClass::AN
+                    )
                 })
                 .unwrap_or(sequence.sos);
 
