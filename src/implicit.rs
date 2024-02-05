@@ -224,22 +224,20 @@ pub fn resolve_weak<'a, T: TextSource<'a> + ?Sized>(
 
     // W7. If the previous strong char was L, change EN to L.
     let mut last_strong_is_l = sequence.sos == L;
-    for run in &sequence.runs {
-        for i in run.clone() {
-            match processing_classes[i] {
-                EN if last_strong_is_l => {
-                    processing_classes[i] = L;
-                }
-                L => {
-                    last_strong_is_l = true;
-                }
-                R | AL => {
-                    last_strong_is_l = false;
-                }
-                // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
-                // Already scanning past BN here.
-                _ => {}
+    for i in sequence.runs.iter().cloned().flatten() {
+        match processing_classes[i] {
+            EN if last_strong_is_l => {
+                processing_classes[i] = L;
             }
+            L => {
+                last_strong_is_l = true;
+            }
+            R | AL => {
+                last_strong_is_l = false;
+            }
+            // <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
+            // Already scanning past BN here.
+            _ => {}
         }
     }
 }
@@ -308,7 +306,7 @@ pub fn resolve_neutral<'a, D: BidiDataSource, T: TextSource<'a> + ?Sized>(
                 found_e = true;
             } else if class == not_e {
                 found_not_e = true;
-            } else if class == BidiClass::EN || class == BidiClass::AN {
+            } else if matches!(class, BidiClass::EN | BidiClass::AN) {
                 // > Within this scope, bidirectional types EN and AN are treated as R.
                 if e == BidiClass::L {
                     found_not_e = true;
@@ -337,15 +335,15 @@ pub fn resolve_neutral<'a, D: BidiDataSource, T: TextSource<'a> + ?Sized>(
                 .iter_backwards_from(pair.start, pair.start_run)
                 .map(|i| processing_classes[i])
                 .find(|class| {
-                    *class == BidiClass::L
-                        || *class == BidiClass::R
-                        || *class == BidiClass::EN
-                        || *class == BidiClass::AN
+                    matches!(
+                        class,
+                        BidiClass::L | BidiClass::R | BidiClass::EN | BidiClass::AN
+                    )
                 })
                 .unwrap_or(sequence.sos);
 
             // > Within this scope, bidirectional types EN and AN are treated as R.
-            if previous_strong == BidiClass::EN || previous_strong == BidiClass::AN {
+            if matches!(previous_strong, BidiClass::EN | BidiClass::AN) {
                 previous_strong = BidiClass::R;
             }
 
@@ -578,8 +576,5 @@ pub fn resolve_levels(original_classes: &[BidiClass], levels: &mut [Level]) -> L
 /// <http://www.unicode.org/reports/tr9/#NI>
 #[allow(non_snake_case)]
 fn is_NI(class: BidiClass) -> bool {
-    match class {
-        B | S | WS | ON | FSI | LRI | RLI | PDI => true,
-        _ => false,
-    }
+    matches!(class, B | S | WS | ON | FSI | LRI | RLI | PDI)
 }

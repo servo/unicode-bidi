@@ -10,7 +10,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        rust: [1.36.0, stable, beta, nightly]
+        rust: [1.47.0, stable, beta, nightly]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -18,7 +18,7 @@ jobs:
         with:
           toolchain: ${{ matrix.rust }}
       - name: Unpin dependencies except on MSRV
-        if: matrix.rust != '1.36.0'
+        if: matrix.rust != '1.47.0'
         run: cargo update
       - run: cargo build --all-targets
       - run: cargo test
