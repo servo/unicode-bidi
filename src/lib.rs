@@ -71,6 +71,8 @@
 extern crate std;
 #[macro_use]
 extern crate alloc;
+#[cfg(feature = "smallvec")]
+extern crate smallvec;
 
 pub mod data_source;
 pub mod deprecated;
@@ -99,6 +101,8 @@ use core::cmp;
 use core::iter::repeat;
 use core::ops::Range;
 use core::str::CharIndices;
+#[cfg(feature = "smallvec")]
+use smallvec::SmallVec;
 
 use crate::format_chars as chars;
 use crate::BidiClass::*;
@@ -300,6 +304,9 @@ fn compute_initial_info<'a, D: BidiDataSource, T: TextSource<'a> + ?Sized>(
     let mut original_classes = Vec::with_capacity(text.len());
 
     // The stack contains the starting code unit index for each nested isolate we're inside.
+    #[cfg(feature = "smallvec")]
+    let mut isolate_stack = SmallVec::<[usize; 8]>::new();
+    #[cfg(not(feature = "smallvec"))]
     let mut isolate_stack = Vec::new();
 
     debug_assert!(
