@@ -35,6 +35,7 @@ name = "unicode_bidi"
 flame = { version = "0.2", optional = true }
 flamer = { version = "0.4", optional = true }
 serde = { version = ">=0.8, <2.0", default-features = false, optional = true, features = ["derive"] }
+smallvec = { version = ">=1.13", optional = true, features = ["union"] }
 
 [dev-dependencies]
 serde_test = ">=0.8, <2.0"
