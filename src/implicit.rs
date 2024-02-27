@@ -567,11 +567,11 @@ fn identify_bracket_pairs<'a, T: TextSource<'a> + ?Sized, D: BidiDataSource>(
 ///
 /// <http://www.unicode.org/reports/tr9/#Resolving_Implicit_Levels>
 #[cfg_attr(feature = "flame_it", flamer::flame)]
-pub fn resolve_levels(original_classes: &[BidiClass], levels: &mut [Level]) -> Level {
+pub fn resolve_levels(processing_classes: &[BidiClass], levels: &mut [Level]) -> Level {
     let mut max_level = Level::ltr();
-    assert_eq!(original_classes.len(), levels.len());
+    assert_eq!(processing_classes.len(), levels.len());
     for i in 0..levels.len() {
-        match (levels[i].is_rtl(), original_classes[i]) {
+        match (levels[i].is_rtl(), processing_classes[i]) {
             (false, AN) | (false, EN) => levels[i].raise(2).expect("Level number error"),
             (false, R) | (true, L) | (true, EN) | (true, AN) => {
                 levels[i].raise(1).expect("Level number error")
