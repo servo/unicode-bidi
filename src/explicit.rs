@@ -12,7 +12,7 @@
 //! <http://www.unicode.org/reports/tr9/#Explicit_Levels_and_Directions>
 
 #[cfg(feature = "smallvec")]
-use smallvec::{SmallVec, smallvec};
+use smallvec::{smallvec, SmallVec};
 
 use super::char_data::{
     is_rtl,
@@ -37,7 +37,7 @@ pub fn compute<'a, T: TextSource<'a> + ?Sized>(
 
     // <http://www.unicode.org/reports/tr9/#X1>
     #[cfg(feature = "smallvec")]
-    let mut stack: SmallVec::<[Status; 8]> = smallvec![Status {
+    let mut stack: SmallVec<[Status; 8]> = smallvec![Status {
         level: para_level,
         status: OverrideStatus::Neutral,
     }];

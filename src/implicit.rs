@@ -252,9 +252,9 @@ pub fn resolve_weak<'a, T: TextSource<'a> + ?Sized>(
 }
 
 #[cfg(feature = "smallvec")]
-type BracketPairVec = SmallVec::<[BracketPair; 8]>;
+type BracketPairVec = SmallVec<[BracketPair; 8]>;
 #[cfg(not(feature = "smallvec"))]
-type BracketPairVec = Vec::<BracketPair>;
+type BracketPairVec = Vec<BracketPair>;
 
 /// 3.3.5 Resolving Neutral Types
 ///
@@ -280,7 +280,13 @@ pub fn resolve_neutral<'a, D: BidiDataSource, T: TextSource<'a> + ?Sized>(
     // > Identify the bracket pairs in the current isolating run sequence according to BD16.
     // We use processing_classes, not original_classes, due to BD14/BD15
     let mut bracket_pairs = BracketPairVec::new();
-    identify_bracket_pairs(text, data_source, sequence, processing_classes, &mut bracket_pairs);
+    identify_bracket_pairs(
+        text,
+        data_source,
+        sequence,
+        processing_classes,
+        &mut bracket_pairs,
+    );
 
     // > For each bracket-pair element in the list of pairs of text positions
     //

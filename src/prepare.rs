@@ -15,7 +15,7 @@ use alloc::vec::Vec;
 use core::cmp::max;
 use core::ops::Range;
 #[cfg(feature = "smallvec")]
-use smallvec::{SmallVec, smallvec};
+use smallvec::{smallvec, SmallVec};
 
 use super::level::Level;
 use super::BidiClass::{self, *};
@@ -55,7 +55,7 @@ pub fn isolating_run_sequences(
     // When we encounter an isolate initiator, we push the current sequence onto the
     // stack so we can resume it after the matching PDI.
     #[cfg(feature = "smallvec")]
-    let mut stack: SmallVec::<[Vec<Range<usize>>; 8]> = smallvec![vec![]];
+    let mut stack: SmallVec<[Vec<Range<usize>>; 8]> = smallvec![vec![]];
     #[cfg(not(feature = "smallvec"))]
     let mut stack = vec![vec![]];
 
