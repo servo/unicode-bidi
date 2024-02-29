@@ -11,6 +11,9 @@
 //!
 //! <http://www.unicode.org/reports/tr9/#Explicit_Levels_and_Directions>
 
+#[cfg(feature = "smallvec")]
+use smallvec::{smallvec, SmallVec};
+
 use super::char_data::{
     is_rtl,
     BidiClass::{self, *},
@@ -33,6 +36,12 @@ pub fn compute<'a, T: TextSource<'a> + ?Sized>(
     assert_eq!(text.len(), original_classes.len());
 
     // <http://www.unicode.org/reports/tr9/#X1>
+    #[cfg(feature = "smallvec")]
+    let mut stack: SmallVec<[Status; 8]> = smallvec![Status {
+        level: para_level,
+        status: OverrideStatus::Neutral,
+    }];
+    #[cfg(not(feature = "smallvec"))]
     let mut stack = vec![Status {
         level: para_level,
         status: OverrideStatus::Neutral,
