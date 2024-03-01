@@ -19,12 +19,16 @@ use super::char_data::{
     BidiClass::{self, *},
 };
 use super::level::Level;
+use super::prepare::removed_by_x9;
+use super::LevelRunVec;
 use super::TextSource;
 
 /// Compute explicit embedding levels for one paragraph of text (X1-X8).
 ///
 /// `processing_classes[i]` must contain the `BidiClass` of the char at byte index `i`,
 /// for each char in `text`.
+///
+/// `runs` returns the list of level runs (BD7) of the text.
 #[cfg_attr(feature = "flame_it", flamer::flame)]
 pub fn compute<'a, T: TextSource<'a> + ?Sized>(
     text: &'a T,
@@ -32,6 +36,7 @@ pub fn compute<'a, T: TextSource<'a> + ?Sized>(
     original_classes: &[BidiClass],
     levels: &mut [Level],
     processing_classes: &mut [BidiClass],
+    runs: &mut LevelRunVec,
 ) {
     assert_eq!(text.len(), original_classes.len());
 
@@ -50,6 +55,9 @@ pub fn compute<'a, T: TextSource<'a> + ?Sized>(
     let mut overflow_isolate_count = 0u32;
     let mut overflow_embedding_count = 0u32;
     let mut valid_isolate_count = 0u32;
+
+    let mut current_run_level = Level::ltr();
+    let mut current_run_start = 0;
 
     for (i, len) in text.indices_lengths() {
         let last = stack.last().unwrap();
@@ -182,6 +190,22 @@ pub fn compute<'a, T: TextSource<'a> + ?Sized>(
             levels[i + j] = levels[i];
             processing_classes[i + j] = processing_classes[i];
         }
+
+        // Check if we need to start a new level run.
+        if i == 0 {
+            current_run_level = levels[i];
+        } else {
+            if !removed_by_x9(original_classes[i]) && levels[i] != current_run_level {
+                // End the last run and start a new one.
+                runs.push(current_run_start..i);
+                current_run_level = levels[i];
+                current_run_start = i;
+            }
+        }
+    }
+
+    if levels.len() > current_run_start {
+        runs.push(current_run_start..levels.len());
     }
 }
 

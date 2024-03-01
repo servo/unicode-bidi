@@ -88,7 +88,7 @@ mod prepare;
 pub use crate::char_data::{BidiClass, UNICODE_VERSION};
 pub use crate::data_source::BidiDataSource;
 pub use crate::level::{Level, LTR_LEVEL, RTL_LEVEL};
-pub use crate::prepare::LevelRun;
+pub use crate::prepare::{LevelRun, LevelRunVec};
 
 #[cfg(feature = "hardcoded-data")]
 pub use crate::char_data::{bidi_class, HardcodedBidiData};
@@ -1099,6 +1099,7 @@ fn compute_bidi_info_for_para<'a, D: BidiDataSource, T: TextSource<'a> + ?Sized>
 
     let processing_classes = &mut processing_classes[para.range.clone()];
     let levels = &mut levels[para.range.clone()];
+    let mut level_runs = LevelRunVec::new();
 
     explicit::compute(
         text,
@@ -1106,6 +1107,7 @@ fn compute_bidi_info_for_para<'a, D: BidiDataSource, T: TextSource<'a> + ?Sized>
         original_classes,
         levels,
         processing_classes,
+        &mut level_runs,
     );
 
     let mut sequences = prepare::IsolatingRunSequenceVec::new();
@@ -1113,6 +1115,7 @@ fn compute_bidi_info_for_para<'a, D: BidiDataSource, T: TextSource<'a> + ?Sized>
         para.level,
         original_classes,
         levels,
+        level_runs,
         has_isolate_controls,
         &mut sequences,
     );
