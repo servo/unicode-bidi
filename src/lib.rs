@@ -1582,6 +1582,24 @@ mod tests {
         let tests = vec![
             (
                 // text
+                "",
+                // base level
+                Some(RTL_LEVEL),
+                // levels
+                Level::vec(&[]),
+                // original_classes
+                vec![],
+                // paragraphs
+                vec![],
+                // levels_u16
+                Level::vec(&[]),
+                // original_classes_u16
+                vec![],
+                // paragraphs_u16
+                vec![],
+            ),
+            (
+                // text
                 "abc123",
                 // base level
                 Some(LTR_LEVEL),
@@ -1741,6 +1759,19 @@ mod tests {
                     paragraphs: t.4.clone(),
                 }
             );
+            // If it was empty, also test that ParagraphBidiInfo handles it safely.
+            if t.4.len() == 0 {
+                assert_eq!(
+                    ParagraphBidiInfo::new(t.0, t.1),
+                    ParagraphBidiInfo {
+                        text: t.0,
+                        original_classes: t.3.clone(),
+                        levels: t.2.clone(),
+                        paragraph_level: RTL_LEVEL,
+                        is_pure_ltr: true,
+                    }
+                )
+            }
             // If it was a single paragraph, also test ParagraphBidiInfo.
             if t.4.len() == 1 {
                 assert_eq!(

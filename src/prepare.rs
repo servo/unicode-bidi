@@ -277,7 +277,7 @@ impl IsolatingRunSequence {
 ///
 /// <http://www.unicode.org/reports/tr9/#BD7>
 ///
-/// Only used for tests; runs are identified during explicit::compute.
+/// This is only used by tests; normally level runs are identified during explicit::compute.
 #[cfg(test)]
 fn level_runs(levels: &[Level], original_classes: &[BidiClass]) -> Vec<LevelRun> {
     assert_eq!(levels.len(), original_classes.len());

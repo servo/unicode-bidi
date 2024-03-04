@@ -23,7 +23,8 @@ use super::prepare::removed_by_x9;
 use super::LevelRunVec;
 use super::TextSource;
 
-/// Compute explicit embedding levels for one paragraph of text (X1-X8).
+/// Compute explicit embedding levels for one paragraph of text (X1-X8), and identify
+/// level runs (BD7) for use when determining Isolating Run Sequences (X10).
 ///
 /// `processing_classes[i]` must contain the `BidiClass` of the char at byte index `i`,
 /// for each char in `text`.
@@ -191,10 +192,13 @@ pub fn compute<'a, T: TextSource<'a> + ?Sized>(
             processing_classes[i + j] = processing_classes[i];
         }
 
-        // Check if we need to start a new level run.
+        // Identify level runs to be passed to prepare::isolating_run_sequences().
         if i == 0 {
+            // Initialize for the first (or only) run.
             current_run_level = levels[i];
         } else {
+            // Check if we need to start a new level run.
+            // <https://www.unicode.org/reports/tr9/#BD7>
             if !removed_by_x9(original_classes[i]) && levels[i] != current_run_level {
                 // End the last run and start a new one.
                 runs.push(current_run_start..i);
@@ -204,6 +208,7 @@ pub fn compute<'a, T: TextSource<'a> + ?Sized>(
         }
     }
 
+    // Append the trailing level run, if non-empty.
     if levels.len() > current_run_start {
         runs.push(current_run_start..levels.len());
     }
