@@ -101,7 +101,7 @@ pub fn isolating_run_sequences(
             };
 
             isolating_run_sequences.push(IsolatingRunSequence {
-                runs: vec![run.clone()],
+                runs: vec![run],
                 sos: max(seq_level, pred_level).bidi_class(),
                 eos: max(end_level, succ_level).bidi_class(),
             });
