@@ -33,7 +33,12 @@ jobs:
         with:
           components: rustfmt
       - run: cargo fmt --check
-
+  Verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify regenerated files
+        run:  ./tools/generate.py && git diff --exit-code -- src/char_data/tables.rs
   build_result:
     name: homu build finished
     runs-on: ubuntu-latest
