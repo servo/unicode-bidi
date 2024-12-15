@@ -1154,7 +1154,7 @@ fn reorder_levels<'a, T: TextSource<'a> + ?Sized>(
     let mut reset_from: Option<usize> = Some(0);
     let mut reset_to: Option<usize> = None;
     let mut prev_level = para_level;
-    for (i, c) in line_text.char_indices() {
+    for ((i, c), (_, length)) in line_text.char_indices().zip(line_text.indices_lengths()) {
         match line_classes[i] {
             // Segment separator, Paragraph separator
             B | S => {
@@ -1177,7 +1177,9 @@ fn reorder_levels<'a, T: TextSource<'a> + ?Sized>(
                     reset_from = Some(i);
                 }
                 // also set the level to previous
-                line_levels[i] = prev_level;
+                for level in &mut line_levels[i..i + length] {
+                    *level = prev_level;
+                }
             }
             _ => {
                 reset_from = None;
