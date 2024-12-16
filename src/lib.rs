@@ -1154,7 +1154,7 @@ fn reorder_levels<'a, T: TextSource<'a> + ?Sized>(
     let mut reset_from: Option<usize> = Some(0);
     let mut reset_to: Option<usize> = None;
     let mut prev_level = para_level;
-    for (i, c) in line_text.char_indices() {
+    for ((i, c), (_, length)) in line_text.char_indices().zip(line_text.indices_lengths()) {
         match line_classes[i] {
             // Segment separator, Paragraph separator
             B | S => {
@@ -1177,7 +1177,9 @@ fn reorder_levels<'a, T: TextSource<'a> + ?Sized>(
                     reset_from = Some(i);
                 }
                 // also set the level to previous
-                line_levels[i] = prev_level;
+                for level in &mut line_levels[i..i + length] {
+                    *level = prev_level;
+                }
             }
             _ => {
                 reset_from = None;
@@ -2037,6 +2039,23 @@ mod tests {
             .iter()
             .map(|para| bidi_info.reordered_levels_per_char(para, para.range.clone()))
             .collect()
+    }
+
+    #[test]
+    #[cfg(feature = "hardcoded-data")]
+    // See issue #138
+    fn test_reordered_levels_range() {
+        //                |---------------|
+        let s = "\u{202a}A\u{202c}\u{202a}A\u{202c}";
+        let range = 4..11;
+        assert!(s.get(range.clone()).is_some());
+
+        let bidi = BidiInfo::new(s, None);
+        let (_, runs) = bidi.visual_runs(&bidi.paragraphs[0], range);
+
+        for run in runs {
+            let _ = &s[run]; // should be valid slice of s
+        }
     }
 
     #[test]
