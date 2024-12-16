@@ -2043,6 +2043,7 @@ mod tests {
 
     #[test]
     #[cfg(feature = "hardcoded-data")]
+    // See issue #138
     fn test_reordered_levels_range() {
         //                |---------------|
         let s = "\u{202a}A\u{202c}\u{202a}A\u{202c}";
