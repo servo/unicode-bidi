@@ -2043,6 +2043,22 @@ mod tests {
 
     #[test]
     #[cfg(feature = "hardcoded-data")]
+    fn test_reordered_levels_range() {
+        //                |---------------|
+        let s = "\u{202a}A\u{202c}\u{202a}A\u{202c}";
+        let range = 4..11;
+        assert!(s.get(range.clone()).is_some());
+
+        let bidi = BidiInfo::new(s, None);
+        let (_, runs) = bidi.visual_runs(&bidi.paragraphs[0], range);
+
+        for run in runs {
+            let _ = &s[run]; // should be valid slice of s
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "hardcoded-data")]
     fn test_reordered_levels() {
         let tests = vec![
             // BidiTest:946 (LRI PDI)
