@@ -1154,12 +1154,12 @@ fn reorder_levels<'a, T: TextSource<'a> + ?Sized>(
     let mut reset_from: Option<usize> = Some(0);
     let mut reset_to: Option<usize> = None;
     let mut prev_level = para_level;
-    for ((i, c), (_, length)) in line_text.char_indices().zip(line_text.indices_lengths()) {
+    for (i, length) in line_text.indices_lengths() {
         match line_classes[i] {
             // Segment separator, Paragraph separator
             B | S => {
                 assert_eq!(reset_to, None);
-                reset_to = Some(i + T::char_len(c));
+                reset_to = Some(i + length);
                 if reset_from.is_none() {
                     reset_from = Some(i);
                 }
