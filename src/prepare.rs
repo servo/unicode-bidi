@@ -269,7 +269,7 @@ impl IsolatingRunSequence {
 
         (current.start..pos)
             .rev()
-            .chain(prev_runs.iter().rev().flat_map(Clone::clone))
+            .chain(prev_runs.iter().cloned().rev().flat_map(|r| r.rev()))
     }
 }
 
