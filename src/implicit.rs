@@ -430,12 +430,16 @@ pub fn resolve_neutral<'a, D: BidiDataSource, T: TextSource<'a> + ?Sized>(
     // Indices of every byte in this isolating run sequence
     let mut indices = sequence.runs.iter().flat_map(Clone::clone);
     let mut prev_class = sequence.sos;
+
+    // Hoisted out of the loop to reuse memory.
+    #[cfg(feature = "smallvec")]
+    let mut ni_run = SmallVec::<[usize; 8]>::new();
+    #[cfg(not(feature = "smallvec"))]
+    let mut ni_run = Vec::new();
+
     while let Some(mut i) = indices.next() {
         // Process sequences of NI characters.
-        #[cfg(feature = "smallvec")]
-        let mut ni_run = SmallVec::<[usize; 8]>::new();
-        #[cfg(not(feature = "smallvec"))]
-        let mut ni_run = Vec::new();
+
         // The BN is for <https://www.unicode.org/reports/tr9/#Retaining_Explicit_Formatting_Characters>
         if is_NI(processing_classes[i]) || processing_classes[i] == BN {
             // Consume a run of consecutive NI characters.
@@ -479,6 +483,7 @@ pub fn resolve_neutral<'a, D: BidiDataSource, T: TextSource<'a> + ?Sized>(
             for j in &ni_run {
                 processing_classes[*j] = new_class;
             }
+            // For memory reuse.
             ni_run.clear();
         }
         prev_class = processing_classes[i];
