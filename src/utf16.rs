@@ -230,7 +230,7 @@ impl<'text> BidiInfo<'text> {
         let mut levels = self.levels.clone();
         let line_classes = &self.original_classes[line.clone()];
         let line_levels = &mut levels[line.clone()];
-        let line_str: &[u16] = &self.text[line.clone()];
+        let line_str: &[u16] = &self.text[line];
 
         reorder_levels(line_classes, line_levels, line_str, para.level);
 
