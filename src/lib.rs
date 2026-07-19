@@ -952,6 +952,13 @@ fn visual_runs_for_line(levels: Vec<Level>, line: &Range<usize>) -> (Vec<Level>,
     // Re-order the odd runs.
     // <http://www.unicode.org/reports/tr9/#L2>
 
+    // A uniform, even (LTR) level needs no reordering; mirroring the guard in
+    // `reorder_visual` also avoids overflowing `new_lowest_ge_rtl` when the line
+    // sits at the maximum implicit level 126 (#145).
+    if min_level == max_level && min_level.is_ltr() {
+        return (levels, runs);
+    }
+
     // Stop at the lowest *odd* level.
     min_level = min_level.new_lowest_ge_rtl().expect("Level error");
     // This loop goes through contiguous chunks of level runs that have a level
@@ -2056,6 +2063,34 @@ mod tests {
         for run in runs {
             let _ = &s[run]; // should be valid slice of s
         }
+    }
+
+    #[test]
+    #[cfg(feature = "hardcoded-data")]
+    // Regression test for issue #145: a line at the maximum implicit level (126)
+    // must not overflow the L2 reordering step.
+    fn test_visual_runs_max_implicit_level() {
+        // Nesting isolates drives the explicit level to its 125 ceiling; the
+        // trailing digit is then raised to implicit level 126 by rule I2.
+        let mut text = String::new();
+        for i in 0..140 {
+            text.push(if i % 2 == 0 { '\u{2067}' } else { '\u{2066}' });
+        }
+        let digit = text.len();
+        text.push('9');
+
+        let bidi = BidiInfo::new(&text, Some(Level::ltr()));
+        assert_eq!(bidi.levels[digit].number(), 126);
+        let (_, runs) = bidi.visual_runs(&bidi.paragraphs[0], digit..digit + 1);
+        assert_eq!(runs, vec![digit..digit + 1]);
+
+        // utf-16 routes through the same helper.
+        let text16 = to_utf16(&text);
+        let bidi16 = BidiInfoU16::new(&text16, Some(Level::ltr()));
+        let digit16 = text16.len() - 1;
+        assert_eq!(bidi16.levels[digit16].number(), 126);
+        let (_, runs16) = bidi16.visual_runs(&bidi16.paragraphs[0], digit16..digit16 + 1);
+        assert_eq!(runs16, vec![digit16..digit16 + 1]);
     }
 
     #[test]
