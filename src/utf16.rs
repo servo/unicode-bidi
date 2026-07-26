@@ -629,7 +629,7 @@ impl<'text> TextSource<'text> for [u16] {
 
     #[inline]
     fn len(&self) -> usize {
-        (self as &[u16]).len()
+        self.len()
     }
     fn char_at(&self, index: usize) -> Option<(char, usize)> {
         if index >= self.len() {
@@ -668,7 +668,7 @@ impl<'text> TextSource<'text> for [u16] {
     }
     #[inline]
     fn subrange(&self, range: Range<usize>) -> &Self {
-        &(self as &[u16])[range]
+        &self[range]
     }
     #[inline]
     fn chars(&'text self) -> Self::CharIter {

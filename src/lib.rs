@@ -1357,7 +1357,7 @@ impl<'text> TextSource<'text> for str {
 
     #[inline]
     fn len(&self) -> usize {
-        (self as &str).len()
+        self.len()
     }
     #[inline]
     fn char_at(&self, index: usize) -> Option<(char, usize)> {
@@ -1370,15 +1370,15 @@ impl<'text> TextSource<'text> for str {
     }
     #[inline]
     fn subrange(&self, range: Range<usize>) -> &Self {
-        &(self as &str)[range]
+        &self[range]
     }
     #[inline]
     fn chars(&'text self) -> Self::CharIter {
-        (self as &str).chars()
+        self.chars()
     }
     #[inline]
     fn char_indices(&'text self) -> Self::CharIndexIter {
-        (self as &str).char_indices()
+        self.char_indices()
     }
     #[inline]
     fn indices_lengths(&'text self) -> Self::IndexLenIter {
