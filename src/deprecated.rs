@@ -55,6 +55,13 @@ pub fn visual_runs(line: Range<usize>, levels: &[Level]) -> Vec<LevelRun> {
     // Re-order the odd runs.
     // <http://www.unicode.org/reports/tr9/#L2>
 
+    // A uniform, even (LTR) level needs no reordering; mirroring the guard in
+    // `reorder_visual` also avoids overflowing `new_lowest_ge_rtl` when the line
+    // sits at the maximum implicit level 126 (#145).
+    if min_level == max_level && min_level.is_ltr() {
+        return runs;
+    }
+
     // Stop at the lowest *odd* level.
     min_level = min_level.new_lowest_ge_rtl().expect("Level error");
 
@@ -86,4 +93,18 @@ pub fn visual_runs(line: Range<usize>, levels: &[Level]) -> Vec<LevelRun> {
     }
 
     runs
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    // Regression test for issue #145: a uniform line at the maximum implicit
+    // level (126) must not overflow the L2 reordering step.
+    fn test_visual_runs_max_implicit_level() {
+        #[allow(deprecated)]
+        let runs = visual_runs(0..1, &[Level::new(126).unwrap()]);
+        assert_eq!(runs, vec![0..1]);
+    }
 }
