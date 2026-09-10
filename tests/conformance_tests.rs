@@ -201,9 +201,36 @@ fn gen_base_levels_for_base_tests(bitset: u8) -> Vec<Option<Level>> {
     const VALUES: &[Option<Level>] = &[None, Some(level::LTR_LEVEL), Some(level::RTL_LEVEL)];
     assert!(bitset < (1 << VALUES.len()));
     (0..VALUES.len())
-        .filter(|bit| bitset & (1u8 << bit) == 1)
+        .filter(|bit| bitset & (1u8 << bit) != 0)
         .map(|idx| VALUES[idx])
         .collect()
+}
+
+#[test]
+fn test_gen_base_levels_for_base_tests() {
+    // Per the BidiTest.txt header, the bitset field is
+    // "1 = auto-LTR, 2 = LTR, 4 = RTL", and any combination may be set.
+    assert_eq!(gen_base_levels_for_base_tests(1), vec![None]);
+    assert_eq!(
+        gen_base_levels_for_base_tests(2),
+        vec![Some(level::LTR_LEVEL)]
+    );
+    assert_eq!(
+        gen_base_levels_for_base_tests(4),
+        vec![Some(level::RTL_LEVEL)]
+    );
+    assert_eq!(
+        gen_base_levels_for_base_tests(3),
+        vec![None, Some(level::LTR_LEVEL)]
+    );
+    assert_eq!(
+        gen_base_levels_for_base_tests(5),
+        vec![None, Some(level::RTL_LEVEL)]
+    );
+    assert_eq!(
+        gen_base_levels_for_base_tests(7),
+        vec![None, Some(level::LTR_LEVEL), Some(level::RTL_LEVEL)]
+    );
 }
 
 #[test]
