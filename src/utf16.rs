@@ -529,7 +529,7 @@ impl<'text> ParagraphBidiInfo<'text> {
     /// This information is usually used to skip re-ordering of text when no RTL level is present
     #[inline]
     pub fn has_rtl(&self) -> bool {
-        !self.is_pure_ltr
+        level::has_rtl(&self.levels)
     }
 
     /// Return the paragraph's Direction (Ltr, Rtl, or Mixed) based on its levels.
