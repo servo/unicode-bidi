@@ -2382,6 +2382,23 @@ mod tests {
         assert_eq!(info_64_u16.levels, info_64.levels);
         let para_64_u16 = ParagraphBidiInfoU16::new(&text_64_u16, Some(RTL_LEVEL));
         assert_eq!(para_64_u16.levels, info_64.levels);
+
+        // Multi-run isolating run sequence: overflow in an earlier level run must stop BD16
+        // for the entire isolating run sequence (`return` rather than `break`).
+        // Input: "a" + "(" * 64 + LRI + "x" + PDI + "b)"
+        // The final ')' must receive level 1 (RTL_LEVEL).
+        let multi_run = format!("a{}\u{2066}x\u{2069}b)", "(".repeat(64));
+        let info_multi = BidiInfo::new(&multi_run, Some(RTL_LEVEL));
+        assert_eq!(*info_multi.levels.last().unwrap(), RTL_LEVEL);
+
+        let para_multi = ParagraphBidiInfo::new(&multi_run, Some(RTL_LEVEL));
+        assert_eq!(para_multi.levels, info_multi.levels);
+
+        let multi_run_u16 = to_utf16(&multi_run);
+        let info_multi_u16 = BidiInfoU16::new(&multi_run_u16, Some(RTL_LEVEL));
+        assert_eq!(*info_multi_u16.levels.last().unwrap(), RTL_LEVEL);
+        let para_multi_u16 = ParagraphBidiInfoU16::new(&multi_run_u16, Some(RTL_LEVEL));
+        assert_eq!(para_multi_u16.levels, info_multi_u16.levels);
     }
 }
 
