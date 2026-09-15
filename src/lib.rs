@@ -2357,7 +2357,7 @@ mod tests {
         // paren at index 3 gets level 2.
         let text_63 = format!("a(b){}", "(".repeat(63));
         let info_63 = BidiInfo::new(&text_63, Some(RTL_LEVEL));
-        assert_eq!(info_63.levels[0..4], Level::vec(&[2, 2, 2, 2]));
+        assert_eq!(&info_63.levels[0..4], &Level::vec(&[2, 2, 2, 2])[..]);
         assert!(info_63.levels[4..].iter().all(|&l| l == RTL_LEVEL));
 
         // With 64 trailing '('s (overflow):
@@ -2366,7 +2366,7 @@ mod tests {
         // the closing paren at index 3 resolves to R (level 1).
         let text_64 = format!("a(b){}", "(".repeat(64));
         let info_64 = BidiInfo::new(&text_64, Some(RTL_LEVEL));
-        assert_eq!(info_64.levels[0..4], Level::vec(&[2, 2, 2, 1]));
+        assert_eq!(&info_64.levels[0..4], &Level::vec(&[2, 2, 2, 1])[..]);
         assert!(info_64.levels[4..].iter().all(|&l| l == RTL_LEVEL));
 
         let mut expected_visual: Vec<usize> = (3..68).rev().collect();
