@@ -2345,6 +2345,61 @@ mod tests {
             assert_eq!(get_base_direction_full(text.as_slice()), t.1);
         }
     }
+
+    #[test]
+    #[cfg(feature = "hardcoded-data")]
+    fn test_bd16_bracket_stack_overflow() {
+        // BD16 requires returning an empty list for the entire isolating run sequence
+        // if an opening bracket overflows the 63-entry stack, discarding earlier pairs.
+        //
+        // With 63 trailing '('s (no overflow):
+        // The earlier (b) pair is retained and resolved to L under N0, so the closing
+        // paren at index 3 gets level 2.
+        let text_63 = format!("a(b){}", "(".repeat(63));
+        let info_63 = BidiInfo::new(&text_63, Some(RTL_LEVEL));
+        assert_eq!(&info_63.levels[0..4], &Level::vec(&[2, 2, 2, 2])[..]);
+        assert!(info_63.levels[4..].iter().all(|&l| l == RTL_LEVEL));
+
+        // With 64 trailing '('s (overflow):
+        // The 64th '(' overflows the stack, so BD16 returns an empty list for the
+        // isolating run sequence. The earlier (b) pair is discarded. Without N0 pairing,
+        // the closing paren at index 3 resolves to R (level 1).
+        let text_64 = format!("a(b){}", "(".repeat(64));
+        let info_64 = BidiInfo::new(&text_64, Some(RTL_LEVEL));
+        assert_eq!(&info_64.levels[0..4], &Level::vec(&[2, 2, 2, 1])[..]);
+        assert!(info_64.levels[4..].iter().all(|&l| l == RTL_LEVEL));
+
+        let mut expected_visual: Vec<usize> = (3..68).rev().collect();
+        expected_visual.extend(&[0, 1, 2]);
+        assert_eq!(BidiInfo::reorder_visual(&info_64.levels), expected_visual);
+
+        // Also verify ParagraphBidiInfo and UTF-16 equivalents.
+        let para_64 = ParagraphBidiInfo::new(&text_64, Some(RTL_LEVEL));
+        assert_eq!(para_64.levels, info_64.levels);
+
+        let text_64_u16 = to_utf16(&text_64);
+        let info_64_u16 = BidiInfoU16::new(&text_64_u16, Some(RTL_LEVEL));
+        assert_eq!(info_64_u16.levels, info_64.levels);
+        let para_64_u16 = ParagraphBidiInfoU16::new(&text_64_u16, Some(RTL_LEVEL));
+        assert_eq!(para_64_u16.levels, info_64.levels);
+
+        // Multi-run isolating run sequence: overflow in an earlier level run must stop BD16
+        // for the entire isolating run sequence (`return` rather than `break`).
+        // Input: "a" + "(" * 64 + LRI + "x" + PDI + "b)"
+        // The final ')' must receive level 1 (RTL_LEVEL).
+        let multi_run = format!("a{}\u{2066}x\u{2069}b)", "(".repeat(64));
+        let info_multi = BidiInfo::new(&multi_run, Some(RTL_LEVEL));
+        assert_eq!(*info_multi.levels.last().unwrap(), RTL_LEVEL);
+
+        let para_multi = ParagraphBidiInfo::new(&multi_run, Some(RTL_LEVEL));
+        assert_eq!(para_multi.levels, info_multi.levels);
+
+        let multi_run_u16 = to_utf16(&multi_run);
+        let info_multi_u16 = BidiInfoU16::new(&multi_run_u16, Some(RTL_LEVEL));
+        assert_eq!(*info_multi_u16.levels.last().unwrap(), RTL_LEVEL);
+        let para_multi_u16 = ParagraphBidiInfoU16::new(&multi_run_u16, Some(RTL_LEVEL));
+        assert_eq!(para_multi_u16.levels, info_multi_u16.levels);
+    }
 }
 
 #[cfg(all(feature = "serde", feature = "hardcoded-data", test))]
