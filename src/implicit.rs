@@ -535,9 +535,11 @@ fn identify_bracket_pairs<'a, T: TextSource<'a> + ?Sized, D: BidiDataSource>(
                     // > If an opening paired bracket is found ...
 
                     // > ... and there is no room in the stack,
-                    // > stop processing BD16 for the remainder of the isolating run sequence.
+                    // > stop processing BD16 for the remainder of the isolating run sequence
+                    // > and return an empty list.
                     if stack.len() >= 63 {
-                        break;
+                        bracket_pairs.clear();
+                        return;
                     }
                     // > ... push its Bidi_Paired_Bracket property value and its text position onto the stack
                     stack.push((matched.opening, actual_index, run_index))
