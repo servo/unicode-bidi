@@ -703,7 +703,14 @@ pub struct ParagraphBidiInfo<'text> {
     /// The paragraph embedding level.
     pub paragraph_level: Level,
 
-    /// Whether the paragraph is purely LTR.
+    /// Whether no RTL characters or bidi control characters were encountered during
+    /// the initial character scan.
+    ///
+    /// Note: This only reflects character content and does not account for
+    /// [`paragraph_level`](Self::paragraph_level). For example, neutral-only text in an RTL
+    /// paragraph will have `is_pure_ltr: true` even though the resolved levels are all RTL.
+    /// To check whether the paragraph actually contains RTL levels or requires reordering,
+    /// use [`has_rtl()`](Self::has_rtl) or [`direction()`](Self::direction) instead.
     pub is_pure_ltr: bool,
 }
 
@@ -855,7 +862,12 @@ impl<'text> ParagraphBidiInfo<'text> {
     /// This information is usually used to skip re-ordering of text when no RTL level is present
     #[inline]
     pub fn has_rtl(&self) -> bool {
-        !self.is_pure_ltr
+        // Fast path: if the paragraph base level is LTR and no RTL characters or bidi controls
+        // were encountered during the initial scan, all resolved levels remain at LTR_LEVEL (0).
+        if self.paragraph_level == LTR_LEVEL && self.is_pure_ltr {
+            return false;
+        }
+        level::has_rtl(&self.levels)
     }
 
     /// Return the paragraph's Direction (Ltr, Rtl, or Mixed) based on its levels.
@@ -1928,11 +1940,24 @@ mod tests {
             ("\u{05D0}\u{05D1}\u{05BC}\u{05D2}\nabc", None, true),
             ("\u{05D0}\u{05D1}\u{05BC}\u{05D2} 123", None, true),
             ("\u{05D0}\u{05D1}\u{05BC}\u{05D2}\n123", None, true),
+            // Neutrals only: no RTL character, but an RTL paragraph level makes
+            // every resolved level RTL.
+            ("()", Some(RTL_LEVEL), true),
+            ("()", Some(LTR_LEVEL), false),
+            ("()", None, false),
         ];
 
         for t in tests {
             assert_eq!(BidiInfo::new(t.0, t.1).has_rtl(), t.2);
             assert_eq!(BidiInfoU16::new(&to_utf16(t.0), t.1).has_rtl(), t.2);
+            // ParagraphBidiInfo is single-paragraph.
+            if !t.0.contains('\n') {
+                assert_eq!(ParagraphBidiInfo::new(t.0, t.1).has_rtl(), t.2);
+                assert_eq!(
+                    ParagraphBidiInfoU16::new(&to_utf16(t.0), t.1).has_rtl(),
+                    t.2
+                );
+            }
         }
     }
 
