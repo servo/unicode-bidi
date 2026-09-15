@@ -20,6 +20,7 @@ use crate::{
 };
 use crate::{
     BidiClass, BidiDataSource, Direction, Level, LevelRun, ParagraphInfo, ParagraphInfoFlags,
+    LTR_LEVEL,
 };
 
 #[cfg(feature = "hardcoded-data")]
@@ -379,7 +380,14 @@ pub struct ParagraphBidiInfo<'text> {
     /// The paragraph embedding level.
     pub paragraph_level: Level,
 
-    /// Whether the paragraph is purely LTR.
+    /// Whether no RTL characters or bidi control characters were encountered during
+    /// the initial character scan.
+    ///
+    /// Note: This only reflects character content and does not account for
+    /// [`paragraph_level`](Self::paragraph_level). For example, neutral-only text in an RTL
+    /// paragraph will have `is_pure_ltr: true` even though the resolved levels are all RTL.
+    /// To check whether the paragraph actually contains RTL levels or requires reordering,
+    /// use [`has_rtl()`](Self::has_rtl) or [`direction()`](Self::direction) instead.
     pub is_pure_ltr: bool,
 }
 
@@ -529,7 +537,12 @@ impl<'text> ParagraphBidiInfo<'text> {
     /// This information is usually used to skip re-ordering of text when no RTL level is present
     #[inline]
     pub fn has_rtl(&self) -> bool {
-        !self.is_pure_ltr
+        // Fast path: if the paragraph base level is LTR and no RTL characters or bidi controls
+        // were encountered during the initial scan, all resolved levels remain at LTR_LEVEL (0).
+        if self.paragraph_level == LTR_LEVEL && self.is_pure_ltr {
+            return false;
+        }
+        level::has_rtl(&self.levels)
     }
 
     /// Return the paragraph's Direction (Ltr, Rtl, or Mixed) based on its levels.
