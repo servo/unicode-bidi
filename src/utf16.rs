@@ -269,7 +269,7 @@ impl<'text> BidiInfo<'text> {
     /// [Rule L4]: https://www.unicode.org/reports/tr9/#L4
     #[cfg_attr(feature = "flame_it", flamer::flame)]
     pub fn reorder_line(&self, para: &ParagraphInfo, line: Range<usize>) -> Cow<'text, [u16]> {
-        if !level::has_rtl(&self.levels[line.clone()]) {
+        if para.level.is_ltr() && !level::has_rtl(&self.levels[line.clone()]) {
             return self.text[line].into();
         }
         let (levels, runs) = self.visual_runs(para, line.clone());
@@ -502,7 +502,7 @@ impl<'text> ParagraphBidiInfo<'text> {
     /// (This should be kept in sync with BidiInfo::reorder_line.)
     #[cfg_attr(feature = "flame_it", flamer::flame)]
     pub fn reorder_line(&self, line: Range<usize>) -> Cow<'text, [u16]> {
-        if !level::has_rtl(&self.levels[line.clone()]) {
+        if self.paragraph_level.is_ltr() && !level::has_rtl(&self.levels[line.clone()]) {
             return self.text[line].into();
         }
         let (levels, runs) = self.visual_runs(line.clone());
