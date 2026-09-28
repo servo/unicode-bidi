@@ -592,7 +592,7 @@ impl<'text> BidiInfo<'text> {
     /// [Rule L4]: https://www.unicode.org/reports/tr9/#L4
     #[cfg_attr(feature = "flame_it", flamer::flame)]
     pub fn reorder_line(&self, para: &ParagraphInfo, line: Range<usize>) -> Cow<'text, str> {
-        if !level::has_rtl(&self.levels[line.clone()]) {
+        if para.level.is_ltr() && !level::has_rtl(&self.levels[line.clone()]) {
             return self.text[line].into();
         }
         let (levels, runs) = self.visual_runs(para, line.clone());
@@ -825,7 +825,7 @@ impl<'text> ParagraphBidiInfo<'text> {
     /// (This should be kept in sync with BidiInfo::reorder_line.)
     #[cfg_attr(feature = "flame_it", flamer::flame)]
     pub fn reorder_line(&self, line: Range<usize>) -> Cow<'text, str> {
-        if !level::has_rtl(&self.levels[line.clone()]) {
+        if self.paragraph_level.is_ltr() && !level::has_rtl(&self.levels[line.clone()]) {
             return self.text[line].into();
         }
 
@@ -2034,6 +2034,26 @@ mod tests {
             assert_eq!(reorder_paras(t.0), t.1);
             let expect_utf16 = t.1.iter().map(|v| to_utf16(v)).collect::<Vec<_>>();
             assert_eq!(reorder_paras_u16(&to_utf16(t.0)), expect_utf16);
+        }
+
+        // Rule L1 resets segment separators and trailing whitespace to the
+        // paragraph level, so lines of LTR text in an RTL paragraph still reorder.
+        let tests = vec![("a\tb", 0..3, "b\ta"), ("a b", 0..2, " a")];
+        for (text, line, expected) in tests {
+            let bidi_info = BidiInfo::new(text, Some(RTL_LEVEL));
+            let para = &bidi_info.paragraphs[0];
+            assert_eq!(bidi_info.reorder_line(para, line.clone()), expected);
+            let para = ParagraphBidiInfo::new(text, Some(RTL_LEVEL));
+            assert_eq!(para.reorder_line(line.clone()), expected);
+            let text = &to_utf16(text);
+            let bidi_info = BidiInfoU16::new(text, Some(RTL_LEVEL));
+            let para = &bidi_info.paragraphs[0];
+            assert_eq!(
+                bidi_info.reorder_line(para, line.clone()),
+                to_utf16(expected)
+            );
+            let para = ParagraphBidiInfoU16::new(text, Some(RTL_LEVEL));
+            assert_eq!(para.reorder_line(line), to_utf16(expected));
         }
     }
 
